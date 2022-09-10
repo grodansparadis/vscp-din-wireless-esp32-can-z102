@@ -1,0 +1,22 @@
+{
+    "project_name":       "bootloader",
+    "project_path":       "/usr/local/src/esp/esp-idf/components/bootloader/subproject",
+    "build_dir":          "/usr/local/src/VSCP/vscp-din-wireless-esp32-can-z102/firmware/twai_network_listen_only/build/bootloader",
+    "config_file":        "/usr/local/src/VSCP/vscp-din-wireless-esp32-can-z102/firmware/twai_network_listen_only/sdkconfig",
+    "config_defaults":    "",
+    "app_elf":            "bootloader.elf",
+    "app_bin":            "bootloader.bin",
+    "git_revision":       "v5.1-dev-644-g867745a05c",
+    "target":             "esp32c3",
+    "rev":                "",
+    "phy_data_partition": "",
+    "monitor_baud" :      "115200",
+    "monitor_toolprefix": "riscv32-esp-elf-",
+    "config_environment" : {
+        "COMPONENT_KCONFIGS" : "/usr/local/src/esp/esp-idf/components/efuse/Kconfig;/usr/local/src/esp/esp-idf/components/esp_common/Kconfig;/usr/local/src/esp/esp-idf/components/esp_hw_support/Kconfig;/usr/local/src/esp/esp-idf/components/esp_system/Kconfig;/usr/local/src/esp/esp-idf/components/freertos/Kconfig;/usr/local/src/esp/esp-idf/components/hal/Kconfig;/usr/local/src/esp/esp-idf/components/log/Kconfig;/usr/local/src/esp/esp-idf/components/newlib/Kconfig;/usr/local/src/esp/esp-idf/components/spi_flash/Kconfig",
+        "COMPONENT_KCONFIGS_PROJBUILD" : "/usr/local/src/esp/esp-idf/components/bootloader/Kconfig.projbuild;/usr/local/src/esp/esp-idf/components/esp_app_format/Kconfig.projbuild;/usr/local/src/esp/esp-idf/components/esp_rom/Kconfig.projbuild;/usr/local/src/esp/esp-idf/components/esptool_py/Kconfig.projbuild;/usr/local/src/esp/esp-idf/components/partition_table/Kconfig.projbuild"
+    },
+    "build_components" : [ "bootloader", "bootloader_support", "efuse", "esp_app_format", "esp_common", "esp_hw_support", "esp_rom", "esp_system", "esptool_py", "freertos", "hal", "log", "main", "micro-ecc", "newlib", "partition_table", "riscv", "soc", "spi_flash", "" ],
+    "build_component_paths" : [ "/usr/local/src/esp/esp-idf/components/bootloader", "/usr/local/src/esp/esp-idf/components/bootloader_support", "/usr/local/src/esp/esp-idf/components/efuse", "/usr/local/src/esp/esp-idf/components/esp_app_format", "/usr/local/src/esp/esp-idf/components/esp_common", "/usr/local/src/esp/esp-idf/components/esp_hw_support", "/usr/local/src/esp/esp-idf/components/esp_rom", "/usr/local/src/esp/esp-idf/components/esp_system", "/usr/local/src/esp/esp-idf/components/esptool_py", "/usr/local/src/esp/esp-idf/components/freertos", "/usr/local/src/esp/esp-idf/components/hal", "/usr/local/src/esp/esp-idf/components/log", "/usr/local/src/esp/esp-idf/components/bootloader/subproject/main", "/usr/local/src/esp/esp-idf/components/bootloader/subproject/components/micro-ecc", "/usr/local/src/esp/esp-idf/components/newlib", "/usr/local/src/esp/esp-idf/components/partition_table", "/usr/local/src/esp/esp-idf/components/riscv", "/usr/local/src/esp/esp-idf/components/soc", "/usr/local/src/esp/esp-idf/components/spi_flash", "" ],
+    "debug_prefix_map_gdbinit": ""
+}

@@ -85,6 +85,9 @@ static void twai_receive_task(void *arg)
             ESP_LOGI(EXAMPLE_TAG, "Received slave stop response");
             stop_resp = true;
         }
+        else {
+            ESP_LOGI(EXAMPLE_TAG, "---------------------> CAN");
+        }
         if (start_cmd && stop_resp) {
             //Each iteration is complete after a start command and stop response is received
             iterations++;

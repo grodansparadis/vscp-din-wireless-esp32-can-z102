@@ -1,0 +1,6 @@
+source "/usr/local/src/esp/esp-idf/components/bootloader/Kconfig.projbuild"
+source "/usr/local/src/esp/esp-idf/components/esp_app_format/Kconfig.projbuild"
+source "/usr/local/src/esp/esp-idf/components/esp_rom/Kconfig.projbuild"
+source "/usr/local/src/esp/esp-idf/components/esptool_py/Kconfig.projbuild"
+source "/usr/local/src/esp/esp-idf/components/partition_table/Kconfig.projbuild"
+source "/usr/local/src/VSCP/vscp-din-wireless-esp32-can-z102/firmware/twai_network_listen_only/main/Kconfig.projbuild"
