@@ -2,9 +2,11 @@
 
 This board has secure wireless wifi and Bluetooth BLE functionality for a remote **CAN4VSCP** bus.
 
-![](images/front_flat_rev_a.png)
+![](images/schema-rev-b.png)
 
-![](images/bottom_flat_rev_a.png)
+![](images/front_flat_rev_b.png)
+
+![](images/bottom_flat_rev_b.png)
 
 
 Part of the [VSCP Project](https://www.vscp.org).
