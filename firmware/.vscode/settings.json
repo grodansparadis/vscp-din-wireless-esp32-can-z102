@@ -64,5 +64,13 @@
   },
   "cSpell.words": [
     "conviniently"
-  ]
+  ],
+  "C_Cpp.errorSquiggles": "Enabled",
+  "files.associations": {
+    "esp_wifi.h": "c",
+    "qrcode.h": "c",
+    "esp_event_base.h": "c",
+    "esp_compiler.h": "c",
+    "vscp.h": "c"
+  }
 }
