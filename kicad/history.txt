@@ -2,6 +2,7 @@ HISTORY
 -------
 
 
+220920 - J4 moved closer to edge.
 220910 - Rev B started. 
 220910 - rxcan moved from IO10 to IO3
 220916 - txcan routed to Flash pin instead of io8
