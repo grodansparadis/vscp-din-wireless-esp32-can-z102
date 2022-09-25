@@ -1,6 +1,6 @@
 HISTORY
 -------
-220925 - Added connector and resistopr for BUS_OFF LED connector.
+220925 - Added connector and resistor for BUS_OFF LED connector.
 220923 - Changed Diod connecter ro common catode
 220923 - Populated J7 (IO3/IO4/IO5/RX/TX)
 220923 - rxcan moved back to IO10 from IO3
