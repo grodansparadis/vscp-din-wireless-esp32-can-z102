@@ -2485,7 +2485,7 @@
     (property "Footprint" "Connector_Phoenix_MC:PhoenixContact_MC_1,5_4-G-3.81_1x04_P3.81mm_Horizontal" (id 2) (at 194.31 119.38 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "Datasheet" "~" (id 3) (at 194.31 119.38 0)
+    (property "Datasheet" "https://lcsc.com/product-detail/Pluggable-System-Terminal-Block_Phoenix-Contact-1803293_C480536.html" (id 3) (at 194.31 119.38 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (pin "1" (uuid 8ac400bf-c9b3-4af4-b0a7-9aa9ab4ad17e))

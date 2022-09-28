@@ -4,7 +4,7 @@
   "tasks": [
     // Start openocd
     {
-      "label": "openocd",
+      "label": "Start-OpenOCD",
       "type": "shell",
       "isBackground": true,
       "command": "openocd",
@@ -12,7 +12,7 @@
       "args": [
         "-c", "set ESP_RTOS none",
         "-f", "board/${config:esp32.openocd.board}"
-      ]      
+      ]
     },
     {
       "label": "ESP32: Build Firmware",
@@ -44,7 +44,7 @@
       "options": {
         "cwd": "${workspaceRoot}",
       },
-      "command": "openocd -f board/${config:esp32.openocd.board} -c \"program_esp build/blink.bin 0x10000 verify exit\" ",
+      "command": "openocd -f board/${config:esp32.openocd.board} -c \"program_esp build/vscp-can-gw.bin 0x10000 verify exit\" ",
       "problemMatcher": []
     },
     {

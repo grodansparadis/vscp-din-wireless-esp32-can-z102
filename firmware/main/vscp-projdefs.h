@@ -190,4 +190,11 @@
 #define THIS_FIRMWARE_FAMILY_TYPE             (0)
 
 
+/**
+ * @brief Maximum number of simultanonus TCP/IP connections
+ * This is the maximum simultaneous number
+ * of connections to the server
+ */
+#define MAX_TCP_CONNECTIONS                 2
+
 #endif // _VSCP_PROJDEFS_H_

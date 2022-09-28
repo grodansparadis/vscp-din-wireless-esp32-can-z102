@@ -28,6 +28,10 @@
 #ifndef __VSCP_WCANG_H__
 #define __VSCP_WCANG_H__
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/queue.h>
+
 #include "vscp.h"
 #include "can4vscp.h"
 
@@ -91,6 +95,10 @@ typedef struct {
 #define DEFAULT_TCPIP_USER        "vscp"
 #define DEFAULT_TCPIP_PASSWORD    "secret"
 #define DEFAULT_TCPIP_VER         4       // Ipv6 = 6 or Ipv4 = 4
+#define TCPSRV_WELCOME_MSG        "Welcome to the Wireless CAN4VSCP Gateway\r\n"                    \
+                                  "Copyright (C) 2000-2022 Grodans Paradis AB\r\n"                  \
+                                  "https://www.grodansparadis.com\r\n"                              \
+                                  "+OK\r\n"
 
 // UDP interface
 #define DEFAULT_UDP_ENABLE        true   // Enabled
@@ -117,5 +125,30 @@ typedef struct {
 // SMTP
 #define DEFAULT_SMTP_ENABLE       false
 
+/**
+ * @brief Read preocessor on chip temperature
+ * @return Temperature as floating point value
+ */
+float read_onboard_temperature(void);
+
+
+/**
+ * @fn getMilliSeconds
+ * @brief Get system time in Milliseconds 
+ * 
+ * @return Systemtime in milliseconds
+ */
+uint32_t getMilliSeconds(void);
+
+/**
+ * @fn validate_user
+ * @brief Validate user
+ * 
+ * @param user Username to check
+ * @param password Password to check
+ * @return True if user is valid, False if not.
+ */
+bool
+validate_user(const char *user, const char *password);
 
 #endif

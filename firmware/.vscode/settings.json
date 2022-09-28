@@ -71,6 +71,10 @@
     "qrcode.h": "c",
     "esp_event_base.h": "c",
     "esp_compiler.h": "c",
-    "vscp.h": "c"
+    "vscp.h": "c",
+    "vscp-firmware-level2.h": "c",
+    "vscp-projdefs.h": "c",
+    "vscp-compiler.h": "c",
+    "vscp-link-protocol.h": "c"
   }
 }

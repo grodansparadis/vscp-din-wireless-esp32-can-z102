@@ -38,12 +38,8 @@
 
 
 
-// This is the maximum simultainious number
-// of connections to the server
-#define MAX_TCP_CONNECTIONS          2
-
 // Buffer 
-#define ETHERNET_BUF_MAX_SIZE (1024 * 2)
+#define TCPIP_BUF_MAX_SIZE (1024)
 
 /** 
  * VSCP TCP link protocol character buffer size
@@ -62,22 +58,17 @@
  */
 #define TRANSMIT_FIFO_SIZE 16
 
-#define DEMO_WELCOME_MSG "Welcome to the Wireless CAN4VSCP Gateway\r\n" \
-                         "Copyright (C) 2000-2022 Grodans Paradis AB\r\n"                  \
-                         "https://www.grodansparadis.com\r\n"                              \
-                         "+OK\r\n"
-
-
 /* 
   Socket context 
   This is the context for each open socket/channel.
 */
 typedef struct _ctx {
-  uint8_t sock;                                 // Socket
+  int sock;                                     // Socket
   size_t size;                                  // Number of characters in buffer
-  char buf[ETHERNET_BUF_MAX_SIZE];              // Command Buffer
+  char buf[TCPIP_BUF_MAX_SIZE];                 // Command Buffer
   char user[VSCP_LINK_MAX_USER_NAME_LENGTH];    // Username storage
-  vscp_fifo_t fifoEventsOut;                    // VSCP event send fifo
+  //vscp_fifo_t fifoEventsOut;                  // VSCP event send fifo
+  QueueHandle_t xmsg_Out;
   int bValidated;                               // User is validated
   uint8_t privLevel;                            // User privilege level 0-15
   int bRcvLoop;                                 // Receive loop is enabled if non zero
@@ -86,6 +77,14 @@ typedef struct _ctx {
   VSCPStatus status;                            // VSCP status
   uint32_t last_rcvloop_time;                   // Time of last received event
 } ctx_t;
+
+/**
+ * @brief Set defaults for the Context Defaults object
+ * 
+ * @param pctx Pointer to context
+ */
+void
+setContextDefaults(ctx_t *pctx);
 
 /*!
   VSCP tcp/ip link protocol task

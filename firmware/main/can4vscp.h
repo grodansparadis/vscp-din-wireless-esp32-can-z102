@@ -38,7 +38,6 @@
 #define CAN4VSCP_500K			        8
 #define CAN4VSCP_800K			        9
 #define CAN4VSCP_1000K			     10
-#define CAN4VSCP_AUTO			       11
 
 
 typedef struct {

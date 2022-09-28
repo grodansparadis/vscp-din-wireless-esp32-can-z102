@@ -41,17 +41,19 @@
 #include "esp_netif.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "nvs_flash.h"
+#include <esp_timer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <nvs_flash.h>
 #include <string.h>
 #include <sys/param.h>
 
-#include "lwip/err.h"
-#include "lwip/sockets.h"
-#include "lwip/sys.h"
+#include <lwip/err.h>
 #include <lwip/netdb.h>
+#include <lwip/sockets.h>
+#include <lwip/sys.h>
 
+#include "main.h"
 #include <vscp.h>
 
 #include "tcpsrv.h"
@@ -65,32 +67,32 @@ static const char *TAG = "tcpsrv";
 
 #define MSG_MAX_CLIENTS "Max number of clients reached. Disconnecting-\r\n"
 
-static uint8_t cntClients = 0;  // Holds current number of clients
+static uint8_t cntClients = 0; // Holds current number of clients
 
 /**
-  Received event are written to this fifo 
-  from all channels and events is consumed by the 
+  Received event are written to this fifo
+  from all channels and events is consumed by the
   VSCP protocol handler.
 */
-vscp_fifo_t fifoEventsIn;
+// vscp_fifo_t fifoEventsIn;
 
-struct _ctx ctx[MAX_TCP_CONNECTIONS]; // Socket context
+static ctx_t ctx[MAX_TCP_CONNECTIONS]; // Socket context
 
 ///////////////////////////////////////////////////////////////////////////////
 // setContextDefaults
-// 
+//
 
-static void
-setContextDefaults(struct _ctx* pctx)
+void
+setContextDefaults(ctx_t *pctx)
 {
   pctx->bValidated        = 0;
   pctx->privLevel         = 0;
   pctx->bRcvLoop          = 0;
   pctx->size              = 0;
-  //pctx->last_rcvloop_time = time_us_32(); TODO
-  vscp_fifo_clear(&pctx->fifoEventsOut);
-  memset(pctx->buf, 0, ETHERNET_BUF_MAX_SIZE);
-  memset(pctx->user, 0, VSCP_LINK_MAX_USER_NAME_LENGTH);  
+  pctx->last_rcvloop_time = esp_timer_get_time();
+  // vscp_fifo_clear(&pctx->fifoEventsOut);
+  memset(pctx->buf, 0, TCPIP_BUF_MAX_SIZE);
+  memset(pctx->user, 0, VSCP_LINK_MAX_USER_NAME_LENGTH);
   // Filter: All events received
   memset(&pctx->filter, 0, sizeof(vscpEventFilter));
   memset(&pctx->statistics, 0, sizeof(VSCPStatistics));
@@ -101,37 +103,37 @@ setContextDefaults(struct _ctx* pctx)
 // do_retransmit
 //
 
-static void
-do_retransmit(const int sock)
-{
-  int len;
-  char rx_buffer[128];
+//static void
+// do_retransmit(const int sock)
+// {
+//   int len;
+//   char rx_buffer[128];
 
-  do {
-    len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
-    if (len < 0) {
-      ESP_LOGE(TAG, "Error occurred during receiving: errno %d", errno);
-    }
-    else if (len == 0) {
-      ESP_LOGW(TAG, "Connection closed");
-    }
-    else {
-      rx_buffer[len] = 0; // Null-terminate whatever is received and treat it like a string
-      ESP_LOGI(TAG, "Received %d bytes: %s", len, rx_buffer);
+//   do {
+//     len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
+//     if (len < 0) {
+//       ESP_LOGE(TAG, "Error occurred during receiving: errno %d", errno);
+//     }
+//     else if (len == 0) {
+//       ESP_LOGW(TAG, "Connection closed");
+//     }
+//     else {
+//       rx_buffer[len] = 0; // Null-terminate whatever is received and treat it like a string
+//       ESP_LOGI(TAG, "Received %d bytes: %s", len, rx_buffer);
 
-      // send() can return less bytes than supplied length.
-      // Walk-around for robust implementation.
-      int to_write = len;
-      while (to_write > 0) {
-        int written = send(sock, rx_buffer + (len - to_write), to_write, 0);
-        if (written < 0) {
-          ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
-        }
-        to_write -= written;
-      }
-    }
-  } while (len > 0);
-}
+//       // send() can return less bytes than supplied length.
+//       // Walk-around for robust implementation.
+//       int to_write = len;
+//       while (to_write > 0) {
+//         int written = send(sock, rx_buffer + (len - to_write), to_write, 0);
+//         if (written < 0) {
+//           ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+//         }
+//         to_write -= written;
+//       }
+//     }
+//   } while (len > 0);
+// }
 
 ///////////////////////////////////////////////////////////////////////////////
 // client_task
@@ -142,54 +144,90 @@ client_task(void *pvParameters)
 {
   int rv;
   size_t len;
+  ctx_t ctx;
   char rxbuf[128];
 
-  //int sock = (int)*((int *)pvParameters);
-  ctx_t *pctx = (ctx_t*)pvParameters;
+  // Set default
+  //setContextDefaults(&ctx);
+  ctx.bValidated        = 0;
+  ctx.privLevel         = 0;
+  ctx.bRcvLoop          = 0;
+  ctx.size              = 0;
+  ctx.last_rcvloop_time = esp_timer_get_time();
+  memset(ctx.buf, 0, TCPIP_BUF_MAX_SIZE);
+  memset(ctx.user, 0, VSCP_LINK_MAX_USER_NAME_LENGTH);
+  // Filter: All events received
+  memset(&ctx.filter, 0, sizeof(vscpEventFilter));
+  memset(&ctx.statistics, 0, sizeof(VSCPStatistics));
+  memset(&ctx.status, 0, sizeof(VSCPStatus));
+
+  // int sock = (int)*((int *)pvParameters);
+  ctx.sock = *((int *)pvParameters);
   cntClients++;
 
   ESP_LOGI(TAG, "Client worker");
 
-  do {
-    len = (rv = recv(pctx->sock, rxbuf, sizeof(rxbuf) - 1, 0));
+  // Greet client
+  send(ctx.sock, TCPSRV_WELCOME_MSG, sizeof(TCPSRV_WELCOME_MSG), 0);
+
+  while (1) {
+
+    memset(rxbuf, 0, sizeof(rxbuf));
+    len = (rv = recv(ctx.sock, rxbuf, sizeof(rxbuf) - 1, 0));
     if (rv < 0) {
       ESP_LOGE(TAG, "Error occurred during receiving: errno %d", errno);
     }
     else if (len == 0) {
-      ESP_LOGW(TAG, "Connection closed");
+      ESP_LOGI(TAG, "Connection closed");
+      break;
     }
     else {
+
       // Check that the buffer can hold the new data
-      if (pctx->size + len > sizeof(pctx->buf)) {
-        len = sizeof(pctx->buf) - pctx->size;
+      if (ctx.size + len > sizeof(ctx.buf)) {
+        len = sizeof(ctx.buf) - ctx.size;
       }
-      strncat(pctx->buf, rxbuf, len);
 
       rxbuf[len] = 0; // Null-terminate whatever is received and treat it like a string
+      strncat(ctx.buf, rxbuf, len);
+
       ESP_LOGI(TAG, "Received %d bytes: %s", len, rxbuf);
 
       // Parse VSCP command
-      vscp_link_parser(pctx, rxbuf, &len);
+      vscp_link_parser(&ctx, rxbuf, &len);
+
+      // If socket gets closed ("quit" command)
+      // pctx->sock is zero
+      if (!ctx.sock) {
+        break;
+      }
 
       // Get event from input fifo
-      vscpEvent *pev = NULL;
-      vscp_fifo_read(&fifoEventsIn, &pev);
+      // vscpEvent *pev = NULL;
+      // vscp_fifo_read(&fifoEventsIn, &pev);
 
       // pev is NULL if no event is available here
       // The worker is still called.
-      // if pev != NULL the worker is responsible for 
+      // if pev != NULL the worker is responsible for
       // freeing the event
 
       // Do protocol work here
-      vscp2_do_work(pev);
+      // vscp2_do_work(pev);
 
       // Handle rcvloop etc
-      vscp_link_idle_worker(pctx);
-    }
-  } while (len > 0);
+      // vscp_link_idle_worker(pctx);
 
-  shutdown(pctx->sock, 0);
-  close(pctx->sock);  
+      ESP_LOGI(TAG, "Command handled");
+    }
+  };
+
+  ESP_LOGI(TAG, "Closing down tcp/ip client");
+
+  // If not shutdown all ready do it here
+  if (!ctx.sock) {
+    shutdown(ctx.sock, 0);
+    close(ctx.sock);
+  }
 
   cntClients--;
   vTaskDelete(NULL);
@@ -212,13 +250,13 @@ tcpsrv_task(void *pvParameters)
   struct sockaddr_storage dest_addr;
 
   for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
-    ctx[i].sock          = 0;
-    vscp_fifo_init(&ctx[i].fifoEventsOut, TRANSMIT_FIFO_SIZE);
+    ctx[i].sock = 0;
+    // vscp_fifo_init(&gctx[i].fifoEventsOut, TRANSMIT_FIFO_SIZE);
     setContextDefaults(&ctx[i]);
   }
 
   // Initialize the input fifo
-  vscp_fifo_init(&fifoEventsIn, RECEIVE_FIFO_SIZE);  
+  // vscp_fifo_init(&fifoEventsIn, RECEIVE_FIFO_SIZE);
 
   if (addr_family == AF_INET) {
     struct sockaddr_in *dest_addr_ip4 = (struct sockaddr_in *) &dest_addr;
@@ -257,7 +295,7 @@ tcpsrv_task(void *pvParameters)
     ESP_LOGE(TAG, "IPPROTO: %d", addr_family);
     goto CLEAN_UP;
   }
-  ESP_LOGI(TAG, "Socket bound, port %d", VSCP_DEFAULT_UDP_PORT);
+  ESP_LOGI(TAG, "Socket bound, port %d", VSCP_DEFAULT_TCP_PORT);
 
   err = listen(listen_sock, 1);
   if (err != 0) {
@@ -272,7 +310,7 @@ tcpsrv_task(void *pvParameters)
 
     struct sockaddr_storage source_addr; // Large enough for both IPv4 or IPv6
     socklen_t addr_len = sizeof(source_addr);
-    sock           = accept(listen_sock, (struct sockaddr *) &source_addr, &addr_len);
+    sock               = accept(listen_sock, (struct sockaddr *) &source_addr, &addr_len);
     if (sock < 0) {
       ESP_LOGE(TAG, "Unable to accept connection: errno %d", errno);
       break;
@@ -283,6 +321,7 @@ tcpsrv_task(void *pvParameters)
     setsockopt(sock, IPPROTO_TCP, TCP_KEEPIDLE, &keepIdle, sizeof(int));
     setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, &keepInterval, sizeof(int));
     setsockopt(sock, IPPROTO_TCP, TCP_KEEPCNT, &keepCount, sizeof(int));
+
     // Convert ip address to string
     if (source_addr.ss_family == PF_INET) {
       inet_ntoa_r(((struct sockaddr_in *) &source_addr)->sin_addr, addr_str, sizeof(addr_str) - 1);
@@ -292,15 +331,17 @@ tcpsrv_task(void *pvParameters)
     }
 
     ESP_LOGI(TAG, "Socket accepted ip address: %s", addr_str);
-    
+
     if (cntClients > MAX_TCP_CONNECTIONS) {
+      ESP_LOGI(TAG, "Max number of clients. Closing connection");
       send(sock, MSG_MAX_CLIENTS, sizeof(MSG_MAX_CLIENTS), 0);
       shutdown(sock, 0);
-      close(sock); 
+      close(sock);
+      cntClients--;
       continue;
     }
 
-    xTaskCreate(client_task, "client", 4096, (void*)&sock, 5, NULL);
+    xTaskCreate(client_task, "link-client", 0x2000, (void *)&sock, 5, NULL);
   }
 
 CLEAN_UP:
