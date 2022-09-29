@@ -63,6 +63,7 @@
   This is the context for each open socket/channel.
 */
 typedef struct _ctx {
+  int id;
   int sock;                                     // Socket
   size_t size;                                  // Number of characters in buffer
   char buf[TCPIP_BUF_MAX_SIZE];                 // Command Buffer
@@ -77,6 +78,8 @@ typedef struct _ctx {
   VSCPStatus status;                            // VSCP status
   uint32_t last_rcvloop_time;                   // Time of last received event
 } ctx_t;
+
+#define MSG_MAX_CLIENTS "Max number of clients reached. Disconnecting.\r\n"
 
 /**
  * @brief Set defaults for the Context Defaults object

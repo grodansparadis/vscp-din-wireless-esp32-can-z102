@@ -35,6 +35,9 @@
 #include "vscp.h"
 #include "can4vscp.h"
 
+#define TWAI_TX_GPIO_NUM          GPIO_NUM_9  // CONFIG_EXAMPLE_TX_GPIO_NUM
+#define TWAI_RX_GPIO_NUM          GPIO_NUM_10  // GPIO_NUM_3 CONFIG_EXAMPLE_RX_GPIO_NUM
+
 #define CONNECTED_LED_GPIO_NUM		0
 #define ACTIVE_LED_GPIO_NUM			  1
 #define GPIO_OUTPUT_PIN_SEL       ((1ULL<<CONNECTED_LED_GPIO_NUM) | (1ULL<<ACTIVE_LED_GPIO_NUM) )
@@ -58,9 +61,9 @@ typedef enum
 typedef struct {
   union {
     struct {
-      uint32_t active: 1;     /**< Transport active if set to one */
-      uint32_t open: 1;       /**< Transport open if set to one */
-      uint32_t reserved: 30;  /**< Reserved bits */
+      uint32_t active: 1;       /**< Transport active if set to one */
+      uint32_t open: 1;         /**< Transport open if set to one */
+      uint32_t reserved: 30;    /**< Reserved bits */
     };
     uint32_t flags;             /**< Don't use */ 
   };

@@ -24,6 +24,9 @@
   Part of the VSCP project (https://www.vcsp.org)
 */
 
+#include "vscp-compiler.h"
+#include "vscp-projdefs.h"
+
 #include "driver/gpio.h"
 #include "driver/twai.h"
 
@@ -31,23 +34,32 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+
 #include "nvs_flash.h"
-#include <string.h>
+
+#include <driver/temperature_sensor.h>
 
 #include "lwip/sockets.h"
 #include "main.h"
 #include "can4vscp.h"
 
+#include <string.h>
+
 static EventGroupHandle_t s_can4vscp_event_group;
 #define CAN4VSCP_ENABLE_BIT     BIT0
 
 extern SemaphoreHandle_t ctrl_task_sem;
-extern QueueHandle_t xmsg_Rx_Queue; 
+//extern QueueHandle_t xmsg_Rx_Queue; 
+
+// Global stuff
+extern transport_t tr_twai_rx;
+extern transport_t tr_tcpsrv[MAX_TCP_CONNECTIONS];
 
 #define TAG __func__
 enum bus_state { OFF_BUS, ON_BUS };
@@ -65,6 +77,8 @@ static const twai_timing_config_t can4vscp_timing_config[] = {
   { .brp = 4, .tseg_1 = 15, .tseg_2 = 4, .sjw = 3, .triple_sampling = false }
 };
 
+temperature_sensor_handle_t temp_handle = NULL;
+
 // static EventGroupHandle_t s_twai_event_group;
 //
 static TimerHandle_t xCAN4VSCP_EN_Timer;
@@ -79,10 +93,10 @@ static can4vscp_cfg_t can4vscp_cfg;
   }
 
 static const twai_general_config_t g_config_normal =
-  TWAI_GENERAL_CONFIG_DEFAULT(CAN4VSCP_TX_GPIO_NUM, CAN4VSCP_RX_GPIO_NUM, TWAI_MODE_NORMAL);
+  TWAI_GENERAL_CONFIG_DEFAULT(TWAI_TX_GPIO_NUM, TWAI_RX_GPIO_NUM, TWAI_MODE_NORMAL);
 
 static const twai_general_config_t g_config_silent =
-  TWAI_GENERAL_CONFIG_DEFAULT(CAN4VSCP_TX_GPIO_NUM, CAN4VSCP_RX_GPIO_NUM, TWAI_MODE_LISTEN_ONLY);
+  TWAI_GENERAL_CONFIG_DEFAULT(TWAI_TX_GPIO_NUM, TWAI_RX_GPIO_NUM, TWAI_MODE_LISTEN_ONLY);
 
 static twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
 
@@ -284,14 +298,19 @@ can4vscp_getBitrate(void)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// CAN4VSCP_Timer_Callback
+// can4vscp_Timer_Callback
 //
 
 static void
-CAN4VSCP_Timer_Callback(TimerHandle_t xTimer)
+can4vscp_Timer_Callback(TimerHandle_t xTimer)
 {
   xEventGroupSetBits(s_can4vscp_event_group, CAN4VSCP_ENABLE_BIT);
   //ESP_LOGI(TAG, "CAN4VSCP Timer Callback");
+
+  // Get converted sensor data
+  float tsens_out;
+  ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_handle, &tsens_out));
+  printf("Temperature is %0.2f °C\n", tsens_out);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -301,6 +320,12 @@ CAN4VSCP_Timer_Callback(TimerHandle_t xTimer)
 void
 can4vscp_init(uint8_t bitrate)
 {
+  // Tempsensor  
+  temperature_sensor_config_t temp_sensor = TEMPERAUTRE_SENSOR_CONFIG_DEFAULT(-10, 50);
+  ESP_ERROR_CHECK(temperature_sensor_install(&temp_sensor, &temp_handle));
+
+  ESP_ERROR_CHECK(temperature_sensor_enable(temp_handle));
+
   s_can4vscp_event_group = xEventGroupCreate();
   xCAN4VSCP_EN_Timer     = xTimerCreate(
     // Just a text name, not used by the RTOS kernel. 
@@ -313,7 +338,7 @@ can4vscp_init(uint8_t bitrate)
     // has expired, which is initialised to 0. 
     (void *) 0,
     // Each timer calls the same callback when it expires. 
-    CAN4VSCP_Timer_Callback);
+    can4vscp_Timer_Callback);
 
   if (xTimerIsTimerActive(xCAN4VSCP_EN_Timer) != pdFALSE) {
     xTimerStop(xCAN4VSCP_EN_Timer, 0);
@@ -337,11 +362,11 @@ can4vscp_isEnabled(void)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// can4vscp_msgs_to_rx
+// can4vscp_getRxMsgCount
 //
 
 uint32_t
-can4vscp_msgs_to_rx(void)
+can4vscp_getRxMsgCount(void)
 {
   twai_status_info_t status_info;
   twai_get_status_info(&status_info);
@@ -355,22 +380,38 @@ can4vscp_msgs_to_rx(void)
 void twai_receive_task(void *arg)
 {
   esp_err_t rv;
-  transport_t *ptrport_twai_rx = (transport_t *)arg;
+  //transport_t *ptr = (transport_t *)arg;
+  //QueueHandle_t h = ptr->msg_queue;
+  
+  ESP_LOGI(TAG, "TWAI receive driver started");
+
+  //QueueHandle_t h = xQueueCreate(10, sizeof( twai_message_t) ); 
   
   while (1) {
     
     twai_message_t rxmsg = {};
 
     if (ESP_OK == (rv = twai_receive(&rxmsg, portMAX_DELAY))) {
-      ESP_LOGI(TAG, "TWAI msg received id= %lu", rxmsg.identifier);
+      ESP_LOGI(TAG, "TWAI msg received id= %X", (unsigned int)rxmsg.identifier);
       // Must be extended msg to be VSCP event
       if (rxmsg.extd) {
+
         ESP_LOGI(TAG, "VSCP Event received");
-        if( (rv = xQueueSendToBack( ptrport_twai_rx->msg_queue,
-                                    (void *)&rxmsg,
-                                    (TickType_t)10)) != pdPASS) {
-          ESP_LOGI(TAG, "Buffer full: Failed to save message");
+
+        for (int i=0; i<MAX_TCP_CONNECTIONS; i++) {
+          // If not open take next
+          if (!tr_tcpsrv[i].open) continue;
+          // Put message in queue for task to handle
+          if( pdPASS != (rv = xQueueSendToBack( tr_tcpsrv[i].msg_queue,
+                                                (void *)&rxmsg,
+                                                (TickType_t)10)) ) {
+            tr_tcpsrv[i].overruns++;                                    
+            ESP_LOGI(TAG, "VSCP link protocol buffer full: Failed to save message to queue");
+          }
         }
+        
+        // UBaseType_t cnt = uxQueueMessagesWaiting(ptr->msg_queue);
+        // ESP_LOGI(TAG,"count=%u %d",cnt,rv);
         xSemaphoreTake(ctrl_task_sem, portMAX_DELAY);
         // Tell the controller that there is a received event
         xSemaphoreGive(ctrl_task_sem);

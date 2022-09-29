@@ -31,22 +31,23 @@
 #include <string.h>
 
 #include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-#include <freertos/queue.h>
-#include "freertos/semphr.h"
 #include <freertos/event_groups.h>
+#include <freertos/queue.h>
+#include <freertos/task.h>
+#include "freertos/semphr.h"
 
-#include <esp_mac.h>
+#include <driver/gpio.h>
+#include <driver/temperature_sensor.h>
+#include <driver/twai.h>
 #include <esp_event.h>
-#include <nvs_flash.h>
-#include <esp_timer.h>
+#include <esp_http_server.h>
 #include <esp_log.h>
+#include <esp_mac.h>
+#include <esp_timer.h>
+#include <esp_tls_crypto.h>
 #include <esp_wifi.h>
 #include <lwip/sockets.h>
-#include <esp_tls_crypto.h>
-#include <esp_http_server.h>
-#include <driver/gpio.h>
-#include <driver/twai.h>
+#include <nvs_flash.h>
 
 #include <wifi_provisioning/manager.h>
 
@@ -60,46 +61,45 @@
 #include "qrcode.h"
 
 #include "can4vscp.h"
-#include "websrv.h"
 #include "tcpsrv.h"
-#include "udpsrv.h"
 #include "udpclient.h"
-#include "tcpsrv.h"
+#include "udpsrv.h"
+#include "websrv.h"
 
 #include "main.h"
 
 static const char *TAG = "main";
 
+/**!
+ * Configer temperature sensor
+ */
+temperature_sensor_config_t cfgTempSensor = {
+  .range_min = 20,
+  .range_max = 50,
+};
+
 // Handle for nvs storage
-nvs_handle_t nvsHandle; 
+nvs_handle_t nvsHandle;
 
 // GUID for unit
 uint8_t device_guid[16];
 
-transport_t trport_twai_tx = {};    // Twai output 
-transport_t trport_twai_rx = {};    // Twai input
-transport_t trport_tcpsrv = {};     // VSCP tcp/ip link protocol
-transport_t trport_udpsrv = {};     // UDP server
-transport_t trport_udpclient = {};  // UDP client
-transport_t trport_mqtt = {};       // MQTT
-transport_t trport_ws = {};         // Websockets   
-transport_t trport_ble = {};        // BLE
-transport_t trport_uart = {};       // UART
-
-// Function queues
-// QueueHandle_t xmsg_Tx_Queue;       
-// QueueHandle_t xmsg_Rx_Queue;       // Twai input events
-// QueueHandle_t xmsg_link_tx_queue;  // VSCP link output events
-// QueueHandle_t xmsg_udp_tx_queue;   // UDP output events
-// QueueHandle_t xmsg_mqtt_tx_queue;  // MQTT output events
-// QueueHandle_t xmsg_ws_tx_queue;    // Websocket output events
-// QueueHandle_t xmsg_ble_tx_queue;   // BLE output events
-// QueueHandle_t xmsg_uart_tx_queue;  // UART output events
+// transport_t tr_twai_tx = {};    // TWAI output
+// transport_t tr_twai_rx = {};    // TWAI input
+transport_t tr_tcpsrv[MAX_TCP_CONNECTIONS] = {};
+// transport_t tr_tcpsrv0 = {};    // VSCP tcp/ip link protocol - channel 0
+// transport_t tr_tcpsrv1 = {};    // VSCP tcp/ip link protocol - channel 1
+transport_t tr_udpsrv    = {}; // UDP server
+transport_t tr_udpclient = {}; // UDP client
+transport_t tr_mqtt      = {}; // MQTT
+transport_t tr_ws        = {}; // Websockets
+transport_t tr_ble       = {}; // BLE
+transport_t tr_uart      = {}; // UART
 
 SemaphoreHandle_t ctrl_task_sem;
 
-//static xdev_buffer ucTCP_RX_Buffer;
-//static xdev_buffer ucTCP_TX_Buffer;
+// static xdev_buffer ucTCP_RX_Buffer;
+// static xdev_buffer ucTCP_TX_Buffer;
 
 // Web server
 static httpd_handle_t server = NULL;
@@ -193,7 +193,7 @@ static EventGroupHandle_t wifi_event_group;
 // read_onboard_temperature
 //
 
-float 
+float
 read_onboard_temperature(void)
 {
   // TODO
@@ -204,10 +204,10 @@ read_onboard_temperature(void)
 // getMilliSeconds
 //
 
-uint32_t 
-getMilliSeconds(void) 
+uint32_t
+getMilliSeconds(void)
 {
-  return (esp_timer_get_time()/1000);
+  return (esp_timer_get_time() / 1000);
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -223,7 +223,7 @@ validate_user(const char *user, const char *pw)
   char password[VSCP_LINK_MAX_PASSWORD_LENGTH];
 
   length = sizeof(username);
-  rv = nvs_get_str(nvsHandle, "username", username, &length);
+  rv     = nvs_get_str(nvsHandle, "username", username, &length);
   switch (rv) {
 
     case ESP_OK:
@@ -239,7 +239,7 @@ validate_user(const char *user, const char *pw)
   }
 
   length = sizeof(password);
-  rv = nvs_get_str(nvsHandle, "password", password, &length);
+  rv     = nvs_get_str(nvsHandle, "password", password, &length);
   switch (rv) {
 
     case ESP_OK:
@@ -263,7 +263,7 @@ validate_user(const char *user, const char *pw)
 }
 
 bool
-get_device_guid(uint8_t* pguid) 
+get_device_guid(uint8_t *pguid)
 {
   esp_err_t rv;
   size_t length = 16;
@@ -286,7 +286,7 @@ get_device_guid(uint8_t* pguid)
     default:
       printf("Error (%s) reading username f900rom nvs!\n", esp_err_to_name(rv));
       return false;
-  } 
+  }
 
   return true;
 }
@@ -388,7 +388,6 @@ get_device_service_name(char *service_name, size_t max)
   snprintf(service_name, max, "%s%02X%02X%02X", ssid_prefix, eth_mac[3], eth_mac[4], eth_mac[5]);
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 // custom_prov_data_handler
 //
@@ -476,8 +475,6 @@ wifi_prov_print_qr(const char *name, const char *username, const char *pop, cons
            payload);
 }
 
-
-
 ///////////////////////////////////////////////////////////////////////////////
 // app_main
 //
@@ -485,7 +482,7 @@ wifi_prov_print_qr(const char *name, const char *username, const char *pop, cons
 void
 app_main(void)
 {
-  //static uint8_t uid[33];
+  // static uint8_t uid[33];
 
   // Initialize NVS partition
   esp_err_t rv = nvs_flash_init();
@@ -497,14 +494,13 @@ app_main(void)
 
     // Retry nvs_flash_init
     ESP_ERROR_CHECK(nvs_flash_init());
-
   }
 
   // Create microsecond timer
-  //ESP_ERROR_CHECK(esp_timer_create());
+  // ESP_ERROR_CHECK(esp_timer_create());
 
   // Start timer
-  //esp_timer_start_periodic();
+  // esp_timer_start_periodic();
 
   // Initialize TCP/IP
   ESP_ERROR_CHECK(esp_netif_init());
@@ -517,34 +513,39 @@ app_main(void)
 
   // Disable interrupt
   io_conf.intr_type = GPIO_INTR_DISABLE;
-  
+
   // Set as output mode
   io_conf.mode = GPIO_MODE_OUTPUT;
-  
+
   // Bit mask of the pins that you want to be able to set
   io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL;
-  
+
   // Disable pull-down mode
   io_conf.pull_down_en = 0;
-  
+
   // Disable pull-up mode
   io_conf.pull_up_en = 0;
-  
+
   // Configure GPIO with the given settings
   gpio_config(&io_conf);
 
-	gpio_set_level(CONNECTED_LED_GPIO_NUM, 1);
-	gpio_set_level(ACTIVE_LED_GPIO_NUM, 1);
+  gpio_set_level(CONNECTED_LED_GPIO_NUM, 1);
+  gpio_set_level(ACTIVE_LED_GPIO_NUM, 1);
 
   // TWAI message buffers
-  trport_twai_rx.msg_queue = xQueueCreate(40, sizeof( twai_message_t) );    // Incoming CAN
-  trport_twai_tx.msg_queue = xQueueCreate(40, sizeof( twai_message_t) );    // Outgoing CAN (All fills)
-  trport_tcpsrv.msg_queue = xQueueCreate(10, sizeof( twai_message_t) );     // tcp/ip link
-  trport_udpsrv.msg_queue = xQueueCreate(10, sizeof( twai_message_t) );     // UDP srv 
-  trport_udpclient.msg_queue = xQueueCreate(10, sizeof( twai_message_t) );  // UDP client
-  trport_mqtt.msg_queue = xQueueCreate(10, sizeof( twai_message_t) );       // MQTT empties
-  trport_ws.msg_queue = xQueueCreate(10, sizeof( twai_message_t) );         // websocket empties
-  trport_ble.msg_queue = xQueueCreate(10, sizeof( twai_message_t) );        // BLE empties 
+  // tr_twai_rx.msg_queue = xQueueCreate(10, sizeof( twai_message_t) );    // Incoming CAN
+  // tr_twai_tx.msg_queue = xQueueCreate(40, sizeof( twai_message_t) );    // Outgoing CAN (All fills)
+  for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
+    tr_tcpsrv[i].msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // tcp/ip link channel i
+  }
+  // tr_tcpsrv0.msg_queue = xQueueCreate(10, sizeof( twai_message_t) );     // tcp/ip link channel 0
+  // tr_tcpsrv1.msg_queue = xQueueCreate(10, sizeof( twai_message_t) );     // tcp/ip link channel 1
+  tr_udpsrv.msg_queue    = xQueueCreate(10, sizeof(twai_message_t)); // UDP srv
+  tr_udpclient.msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // UDP client
+  tr_mqtt.msg_queue      = xQueueCreate(10, sizeof(twai_message_t)); // MQTT empties
+  tr_ws.msg_queue        = xQueueCreate(10, sizeof(twai_message_t)); // websocket empties
+  tr_ble.msg_queue       = xQueueCreate(10, sizeof(twai_message_t)); // BLE empties
+  // QueueHandle_t test = xQueueCreate(10, sizeof( twai_message_t) );
 
   ctrl_task_sem = xSemaphoreCreateBinary();
 
@@ -578,7 +579,7 @@ app_main(void)
     .scheme = wifi_prov_scheme_softap,
 #endif // CONFIG_WCANG_PROV_TRANSPORT_SOFTAP
 
-  /* 
+  /*
    * Any default scheme specific event handler that you would
    * like to choose. Since our example application requires
    * neither BT nor BLE, we can choose to release the associated
@@ -636,7 +637,7 @@ app_main(void)
      *      - this should be a string with length > 0
      *      - NULL if not used
      */
-    const char *pop = "VSCP-WCANG";
+    const char *pop = "VSCP-Frankfurt-WiFi";
     /* If the pop is allocated dynamically, then it should be valid till the provisioning process is running.
      * it can be only freed when the WIFI_PROV_END event is triggered */
 
@@ -753,10 +754,8 @@ app_main(void)
   /* Wait for Wi-Fi connection */
   xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_EVENT, false, true, portMAX_DELAY);
 
-
-
   // Init persistent storage
-  
+
   rv = nvs_open("config", NVS_READWRITE, &nvsHandle);
   if (rv != ESP_OK) {
     printf("Error (%s) opening NVS handle!\n", esp_err_to_name(rv));
@@ -795,27 +794,39 @@ app_main(void)
     printf("Committing updates in NVS ... ");
     rv = nvs_commit(nvsHandle);
     printf((rv != ESP_OK) ? "Failed!\n" : "Done\n");
-    
+
     // TODO remove
     char username[32];
     size_t length = sizeof(username);
-    rv = nvs_get_str(nvsHandle, "username", username, &length);
+    rv            = nvs_get_str(nvsHandle, "username", username, &length);
     ESP_LOGI(TAG, "Username_: %s", username);
     length = sizeof(username);
-    rv = nvs_get_str(nvsHandle, "password", username, &length);
+    rv     = nvs_get_str(nvsHandle, "password", username, &length);
     ESP_LOGI(TAG, "Password: %s", username);
     length = 16;
-    rv = nvs_get_blob(nvsHandle, "guid", device_guid, &length);
-    ESP_LOGI(TAG, "GUID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", 
-                device_guid[0],device_guid[1],device_guid[2],device_guid[3],
-                device_guid[4],device_guid[5],device_guid[6],device_guid[7],
-                device_guid[8],device_guid[9],device_guid[10],device_guid[11],
-                device_guid[12],device_guid[13],device_guid[14],device_guid[15]);
+    rv     = nvs_get_blob(nvsHandle, "guid", device_guid, &length);
+    ESP_LOGI(TAG,
+             "GUID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
+             device_guid[0],
+             device_guid[1],
+             device_guid[2],
+             device_guid[3],
+             device_guid[4],
+             device_guid[5],
+             device_guid[6],
+             device_guid[7],
+             device_guid[8],
+             device_guid[9],
+             device_guid[10],
+             device_guid[11],
+             device_guid[12],
+             device_guid[13],
+             device_guid[14],
+             device_guid[15]);
     // If GUID is all zero construct GUID
-    if (!(device_guid[0] | device_guid[1] | device_guid[2] | device_guid[3] |
-                device_guid[4] | device_guid[5] | device_guid[6] | device_guid[7] |
-                device_guid[8] | device_guid[9] | device_guid[10] | device_guid[11] |
-                device_guid[12] | device_guid[13] | device_guid[14] | device_guid[15])) {
+    if (!(device_guid[0] | device_guid[1] | device_guid[2] | device_guid[3] | device_guid[4] | device_guid[5] |
+          device_guid[6] | device_guid[7] | device_guid[8] | device_guid[9] | device_guid[10] | device_guid[11] |
+          device_guid[12] | device_guid[13] | device_guid[14] | device_guid[15])) {
       device_guid[0] = 0xff;
       device_guid[1] = 0xff;
       device_guid[2] = 0xff;
@@ -824,76 +835,97 @@ app_main(void)
       device_guid[5] = 0xff;
       device_guid[6] = 0xff;
       device_guid[7] = 0xfe;
-      rv = esp_efuse_mac_get_default(device_guid + 8);
-      ESP_LOGI(TAG, "Constructed GUID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", 
-                device_guid[0],device_guid[1],device_guid[2],device_guid[3],
-                device_guid[4],device_guid[5],device_guid[6],device_guid[7],
-                device_guid[8],device_guid[9],device_guid[10],device_guid[11],
-                device_guid[12],device_guid[13],device_guid[14],device_guid[15]);
-    }            
+      rv             = esp_efuse_mac_get_default(device_guid + 8);
+      ESP_LOGI(TAG,
+               "Constructed GUID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
+               device_guid[0],
+               device_guid[1],
+               device_guid[2],
+               device_guid[3],
+               device_guid[4],
+               device_guid[5],
+               device_guid[6],
+               device_guid[7],
+               device_guid[8],
+               device_guid[9],
+               device_guid[10],
+               device_guid[11],
+               device_guid[12],
+               device_guid[13],
+               device_guid[14],
+               device_guid[15]);
+    }
   }
 
   // First start of web server
   server = start_webserver();
 
+  // ***************************************************************************
+  //                                   TWAI
+  // ***************************************************************************
+
+  // Install TWAI driver
+  // ESP_ERROR_CHECK(twai_driver_install(&g_config, &t_config, &f_config));
+  // ESP_LOGI(EXAMPLE_TAG, "Driver installed");
+
   // Start TWAI
   can4vscp_init(CAN4VSCP_125K);
 
-	// if (config_server_get_can_mode() == VSCP2CAN_NORMAL) {
-	// 	can4vscp_set_silent(0);
-	// }
-	// else
-	// {
-	// 	can4vscp_set_silent(1);
-	// }
+  // if (config_server_get_can_mode() == VSCP2CAN_NORMAL) {
+  // 	can4vscp_set_silent(0);
+  // }
+  // else
+  // {
+  // 	can4vscp_set_silent(1);
+  // }
 
   can4vscp_setBitrate(CAN4VSCP_125K);
   can4vscp_enable();
 
-  xTaskCreate(twai_receive_task, "can4vscp", 4096, (void*)&trport_twai_rx, 5, NULL);
+  xTaskCreate(twai_receive_task, "can4vscp", 4096, NULL /*&tr_twai_rx*/, 5, NULL);
   xSemaphoreGive(ctrl_task_sem);
 
   // Start UDP server
-  //xTaskCreate(udpsrv_task, "udpsrv", 4096, (void*)AF_INET, 5, NULL);
+  // xTaskCreate(udpsrv_task, "udpsrv", 4096, (void*)AF_INET, 5, NULL);
 
   // Start the tcp/ip link server
-  xTaskCreate(tcpsrv_task, "tcpsrv", 4096, (void*)AF_INET, 5, NULL);
+  xTaskCreate(tcpsrv_task, "tcpsrv", 4096, (void *) AF_INET, 5, NULL);
 
 #ifdef CONFIG_EXAMPLE_IPV6
-    xTaskCreate(udpsrv_task, "udpsrv", 4096, (void*)AF_INET6, 5, NULL);
-    xTaskCreate(tcpsrv_task, "tcpsrv", 4096, (void*)AF_INET6, 5, NULL);
+  xTaskCreate(udpsrv_task, "udpsrv", 4096, (void *) AF_INET6, 5, NULL);
+  xTaskCreate(tcpsrv_task, "tcpsrv", 4096, (void *) AF_INET6, 5, NULL);
 #endif
 
-
-  /* 
-    Start main application loop now 
+  /*
+    Start main application loop now
   */
-
 
   while (1) {
 
     twai_message_t msg = {};
 
     // Check if there is a TWAI message in the receive queue
-    if( xQueueReceive( trport_twai_rx.msg_queue,
-                         &msg,
-                         portMAX_DELAY) == pdPASS ) {
+    // if( xQueueReceive( tr_twai_rx.msg_queue,
+    //                      &msg,
+    //                      portMAX_DELAY) == pdPASS ) {
 
-      ESP_LOGI(TAG, "--> Event fetched");
+    //   ESP_LOGI(TAG, "--> Event fetched %X", (unsigned int)msg.identifier);
+    //   UBaseType_t cnt = uxQueueMessagesWaiting(tr_twai_rx.msg_queue);
+    //   ESP_LOGI(TAG,"count=%u %d",cnt,rv);
 
-      // Now put the message in all open client queues
+    //   // Now put the message in all open client queues
 
-    }
+    // }
 
-    //xSemaphoreTake(ctrl_task_sem, portMAX_DELAY);
-    
-    //ESP_LOGI(TAG, "Loop");
-    //xSemaphoreGive(ctrl_task_sem);
-    //vTaskDelay(1000 / portTICK_PERIOD_MS);
+    // xSemaphoreTake(ctrl_task_sem, portMAX_DELAY);
+
+    // ESP_LOGI(TAG, "Loop");
+    // xSemaphoreGive(ctrl_task_sem);
+    // vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 
   // Clean up
 
   // Close
-    nvs_close(nvsHandle);
+  nvs_close(nvsHandle);
 }

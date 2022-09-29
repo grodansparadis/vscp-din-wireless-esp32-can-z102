@@ -2,7 +2,7 @@
  * This file is part of the WiCAN project.
  *
  * Copyright (C) 2022  Meatpi Electronics.
- * Written by Ali Slim <ali@meatpi.com>
+ * Original written by Ali Slim <ali@meatpi.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,119 +24,134 @@
 
 #include "driver/twai.h"
 
-#define CAN4VSCP_TX_GPIO_NUM      9
-#define CAN4VSCP_RX_GPIO_NUM      3
+#define CAN4VSCP_5K				        0   /**< TWAI bus-speed 5K */
+#define CAN4VSCP_10K				      1   /**< TWAI bus-speed 10K */
+#define CAN4VSCP_20K				      2   /**< TWAI bus-speed 20K */
+#define CAN4VSCP_25K				      3   /**< TWAI bus-speed 25K */
+#define CAN4VSCP_50K				      4   /**< TWAI bus-speed 50K */
+#define CAN4VSCP_100K			        5   /**< TWAI bus-speed 100K */
+#define CAN4VSCP_125K			        6   /**< TWAI bus-speed 125K CAN4VSCP speed */
+#define CAN4VSCP_250K			        7   /**< TWAI bus-speed 250K */
+#define CAN4VSCP_500K			        8   /**< TWAI bus-speed 500K */
+#define CAN4VSCP_800K			        9   /**< TWAI bus-speed 800K */
+#define CAN4VSCP_1000K			     10   /**< TWAI bus-speed 1M */
+#define CAN4VSCP_AUTO            99   /**< TWAI autodetect speed */
 
-#define CAN4VSCP_5K				        0
-#define CAN4VSCP_10K				      1
-#define CAN4VSCP_20K				      2
-#define CAN4VSCP_25K				      3
-#define CAN4VSCP_50K				      4
-#define CAN4VSCP_100K			        5
-#define CAN4VSCP_125K			        6
-#define CAN4VSCP_250K			        7
-#define CAN4VSCP_500K			        8
-#define CAN4VSCP_800K			        9
-#define CAN4VSCP_1000K			     10
-
-
+/**!
+ * @brief TWAI bus speed structure
+ */
 typedef struct {
-	uint8_t bus_state;
-	uint8_t silent;
-	uint8_t loopback;
-	uint16_t brp;
-	uint8_t phase_seg1;
-	uint8_t phase_seg2;
-	uint8_t sjw;
-	uint32_t filter;
-	uint32_t mask;
-} can4vscp_cfg_t;
+	uint8_t bus_state;    /**< State of the bus */
+	uint8_t silent;       /**< Silent mode */
+	uint8_t loopback;     /**< Loopback mode */
+	uint16_t brp;         /**< Bitrate */
+	uint8_t phase_seg1;   /**< Phase segment 1 */
+	uint8_t phase_seg2;   /**< Phase segment 2 */
+	uint8_t sjw;          /**< SJW */
+	uint32_t filter;      /**< Message filter */
+	uint32_t mask;        /**< Message mask */
+} can4vscp_cfg_t;       
 
 
 /*!
-  Block transmission/reception
+  @fn can4vscp_block
+  @brief Block transmission/reception
 */
 void
 can4vscp_block(void);
 
 /*!
-  Unblock transmission/reception
+  @fn can4vscp_unblock
+  @brief Unblock transmission/reception
 */
 void
 can4vscp_unblock(void);
 
 /*!
-  Enable TWAI
+  @fn can4vscp_enable
+  @brief Enable TWAI
   Filtering is set so all TWAI messages are received.
 */
 void can4vscp_enable(void);
 
 /*!
-  Disable TWAI  
+  @fn can4vscp_disable
+  @brief Disable TWAI  
 */
 void can4vscp_disable(void);
 
 /*!
-  Handle silent mode
+  @fn can4vscp_setSilent
+  @brief Handle silent mode
   I/f must be disabled to set/reset silent mode
   @param flag Set to 1 for silent, 0 for active.
 */
 void can4vscp_setSilent(uint8_t flag);
 
 /*!
-  Check if CAN i/f is silent
+  @fn can4vscp_isSilent
+  @brief Check if CAN i/f is silent
   @return true if enabled
 */
 uint8_t can4vscp_isSilent(void);
 
 /*!
-  Handle loopback mode
+  @fn can4vscp_setLoopback
+  @brief Handle loopback mode
   I/f must be disabled to set/reset silent mode
   @param flag Set to 1 for loopback, 0 for normal mode.
 */
 void can4vscp_setLoopback(uint8_t flag);
 
 /*!
-  Check if CAN i/f is in loopback mode
+  @fn can4vscp_isLoopback
+  @brief Check if CAN i/f is in loopback mode
   @return true if enabled
 */
 uint8_t can4vscp_isLoopback(void);
 
 /*!
-  Set filter
+  @fn can4vscp_setFilter
+  @brief Set filter
   I/f must be disabled to set filter.
   @param filter 32-bit filter value to set
 */
 void can4vscp_setFilter(uint32_t filter);
 
 /*!
-  Set mask
+  @fn can4vscp_setMask
+  @brief Set mask
   I/f must be disabled to set mask.
   @param mask 32-bit mask value to set
 */
 void can4vscp_setMask(uint32_t mask);
 
 /*!
-  Set bitrate for TWAI bus
+  @fn can4vscp_setBitrate
+  @brief Set bitrate for TWAI bus
   I/f must be disabled to set bitrate.
   @param rate Code for bitrate
 */
 void can4vscp_setBitrate(uint8_t rate);
 
 /*!
-  Get bitrate for TWAI bus
+  @fn can4vscp_getBitrate
+  @brief Get bitrate for TWAI bus
   @return Code for set bitrate
 */
 uint8_t can4vscp_getBitrate(void);
 
 /*!
-  Initialize the TWAI interface
+  @fn can4vscp_init
+  @brief Initialize the TWAI interface
   @param bitrate to use
 */
 void can4vscp_init(uint8_t bitrate);
 
 /*!
-  Receive TWAI message w/ auto bauderate
+  @fn can4vscp_receive
+  @brief Receive TWAI message w/ auto bauderate
+  
   @param message Pointer to message that will get receive data
   @param ticks_to_wait Timeout 
   @return ESP_OK if all is OK else error code.
@@ -144,7 +159,9 @@ void can4vscp_init(uint8_t bitrate);
 esp_err_t can4vscp_receive(twai_message_t *message, TickType_t ticks_to_wait);
 
 /*!
-  Send TWAI message
+  @fn can4vscp_send
+  @brief Send TWAI message
+  
   @param message Pointer to message that will be sent
   @param ticks_to_wait Timeout 
   @return ESP_OK if all is OK else error code.
@@ -152,25 +169,34 @@ esp_err_t can4vscp_receive(twai_message_t *message, TickType_t ticks_to_wait);
 esp_err_t can4vscp_send(twai_message_t *message, TickType_t ticks_to_wait);
 
 /*!
-  Check if CAN is enabled
+  @fn can4vscp_isEnabled
+  @brief Check if CAN is enabled
   @return true if enabled
 */
 bool can4vscp_isEnabled(void);
 
 /*!
-  Get Bitrate
+  @fn can4vscp_get_bitrate
+  @brief Get Bitrate
   @return Code for set bitrate
 */
 uint8_t can4vscp_get_bitrate(void);
 
 /*!
+  @fn can4vscp_getRxMsgCount
+  @brief Get receive message queue count
 
+  @return Receive Queue count
 */
-uint32_t can4vscp_msgs_to_rx(void);
+uint32_t can4vscp_getRxMsgCount(void);
+
+
 
 // ----------------------------------------------------------------------------
 //                                     Tasks
 // ----------------------------------------------------------------------------
+
+
 
 /*!
   Task that handle receive of messages and fills the 

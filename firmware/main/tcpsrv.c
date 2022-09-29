@@ -42,16 +42,22 @@
 #include "esp_system.h"
 #include "esp_wifi.h"
 #include <esp_timer.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+
 #include <nvs_flash.h>
-#include <string.h>
-#include <sys/param.h>
 
 #include <lwip/err.h>
 #include <lwip/netdb.h>
 #include <lwip/sockets.h>
 #include <lwip/sys.h>
+
+#include <string.h>
+#include <sys/param.h>
 
 #include "main.h"
 #include <vscp.h>
@@ -63,9 +69,13 @@
 #define KEEPALIVE_INTERVAL 5 // Keep-alive probe packet interval time.
 #define KEEPALIVE_COUNT    3 // Keep-alive probe packet retry count.
 
+// Global stuff
+extern transport_t tr_twai_rx;
+extern transport_t tr_tcpsrv[MAX_TCP_CONNECTIONS];
+
 static const char *TAG = "tcpsrv";
 
-#define MSG_MAX_CLIENTS "Max number of clients reached. Disconnecting-\r\n"
+
 
 static uint8_t cntClients = 0; // Holds current number of clients
 
@@ -163,12 +173,24 @@ client_task(void *pvParameters)
 
   // int sock = (int)*((int *)pvParameters);
   ctx.sock = *((int *)pvParameters);
-  cntClients++;
+  ctx.id = cntClients++;
 
-  ESP_LOGI(TAG, "Client worker");
+  // Mark transport channel as open
+  tr_tcpsrv[ctx.id].open = true;
+
+  ESP_LOGI(TAG, "Client worker socket=%d id=%d", ctx.sock, ctx.id );
 
   // Greet client
   send(ctx.sock, TCPSRV_WELCOME_MSG, sizeof(TCPSRV_WELCOME_MSG), 0);
+
+  // twai_message_t rxmsg = {};
+  // rxmsg.identifier = 0x12345;
+  // if( pdPASS != (rv = xQueueSendToBack( tr_twai_rx.msg_queue,
+  //                                       (void *)&rxmsg,
+  //                                       (TickType_t)10)) ) {
+  //   ESP_LOGI(TAG, "Buffer full: Failed to save message toRX queue");
+  // }
+
 
   while (1) {
 
@@ -221,6 +243,12 @@ client_task(void *pvParameters)
     }
   };
 
+  // Mark transport channel as closed
+  tr_tcpsrv[ctx.id].open = false;
+
+  // Empty the queue
+  xQueueReset(tr_tcpsrv[ctx.id].msg_queue);
+
   ESP_LOGI(TAG, "Closing down tcp/ip client");
 
   // If not shutdown all ready do it here
@@ -250,6 +278,7 @@ tcpsrv_task(void *pvParameters)
   struct sockaddr_storage dest_addr;
 
   for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
+    ctx[i].id = i;
     ctx[i].sock = 0;
     // vscp_fifo_init(&gctx[i].fifoEventsOut, TRANSMIT_FIFO_SIZE);
     setContextDefaults(&ctx[i]);
