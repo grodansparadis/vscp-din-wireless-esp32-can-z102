@@ -82,7 +82,7 @@ temperature_sensor_config_t cfgTempSensor = {
 nvs_handle_t nvsHandle;
 
 // GUID for unit
-uint8_t device_guid[16];
+uint8_t g_node_guid[16];
 
 // transport_t tr_twai_tx = {};    // TWAI output
 // transport_t tr_twai_rx = {};    // TWAI input
@@ -593,12 +593,14 @@ app_main(void)
     .scheme_event_handler = WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM
 #endif /* CONFIG_WCANG_PROV_TRANSPORT_BLE */
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_SOFTAP
-                              .scheme_event_handler = WIFI_PROV_EVENT_HANDLER_NONE
+    .scheme_event_handler = WIFI_PROV_EVENT_HANDLER_NONE
 #endif /* CONFIG_WCANG_PROV_TRANSPORT_SOFTAP */
   };
 
-  /* Initialize provisioning manager with the
-   * configuration parameters set above */
+  /* 
+   * Initialize provisioning manager with the
+   * configuration parameters set above 
+   */
   ESP_ERROR_CHECK(wifi_prov_mgr_init(config));
 
   bool provisioned = false;
@@ -612,9 +614,12 @@ app_main(void)
 
   /* If device is not yet provisioned start provisioning service */
   if (!provisioned) {
+
     ESP_LOGI(TAG, "Starting provisioning");
 
-    /* What is the Device Service Name that we want
+    /* 
+     * What is the Device Service Name that we want
+     *
      * This translates to :
      *     - Wi-Fi SSID when scheme is wifi_prov_scheme_softap
      *     - device name when scheme is wifi_prov_scheme_ble
@@ -623,54 +628,62 @@ app_main(void)
     get_device_service_name(service_name, sizeof(service_name));
 
 #ifdef CONFIG_WCANG_PROV_SECURITY_VERSION_1
-    /* What is the security level that we want (0, 1, 2):
-     *      - WIFI_PROV_SECURITY_0 is simply plain text communication.
-     *      - WIFI_PROV_SECURITY_1 is secure communication which consists of secure handshake
-     *          using X25519 key exchange and proof of possession (pop) and AES-CTR
-     *          for encryption/decryption of messages.
-     *      - WIFI_PROV_SECURITY_2 SRP6a based authentication and key exchange
-     *        + AES-GCM encryption/decryption of messages
+    /* 
+     * What is the security level that we want (0, 1, 2):
+     *
+     *   - WIFI_PROV_SECURITY_0 is simply plain text communication.
+     *   - WIFI_PROV_SECURITY_1 is secure communication which consists of secure handshake
+     *      using X25519 key exchange and proof of possession (pop) and AES-CTR
+     *      for encryption/decryption of messages.
+     *   - WIFI_PROV_SECURITY_2 SRP6a based authentication and key exchange
+     *      + AES-GCM encryption/decryption of messages
      */
     wifi_prov_security_t security = WIFI_PROV_SECURITY_1;
 
-    /* Do we want a proof-of-possession (ignored if Security 0 is selected):
-     *      - this should be a string with length > 0
-     *      - NULL if not used
+    /* 
+     * Do we want a proof-of-possession (ignored if Security 0 is selected):
+     *   - this should be a string with length > 0
+     *   - NULL if not used
      */
     const char *pop = "VSCP-Frankfurt-WiFi";
-    /* If the pop is allocated dynamically, then it should be valid till the provisioning process is running.
-     * it can be only freed when the WIFI_PROV_END event is triggered */
+    /* 
+     * If the pop is allocated dynamically, then it should be valid till 
+     * the provisioning process is running.
+     * it can be only freed when the WIFI_PROV_END event is triggered 
+     */
 
-    /* This is the structure for passing security parameters
+    /* 
+     * This is the structure for passing security parameters
      * for the protocomm security 1.
      * This does not need not be static i.e. could be dynamically allocated
      */
-    wifi_prov_security1_params_t sec1_params = {
-      .data = (const uint8_t *) pop,
-      .len  = strlen(pop),
-    };
+    wifi_prov_security1_params_t *sec_params = pop;
 
-    wifi_prov_security1_params_t *sec_params = &sec1_params;
-    const char *username                     = NULL;
+    const char *username  = NULL;
 
 #elif CONFIG_WCANG_PROV_SECURITY_VERSION_2
     wifi_prov_security_t security = WIFI_PROV_SECURITY_2;
-    /* The username must be the same one, which has been used in the generation of salt and verifier */
+    // The username must be the same one, which has been used in the generation of salt and verifier 
 
 #if CONFIG_WCANG_PROV_SEC2_DEV_MODE
-    /* This pop field represents the password that will be used to generate salt and verifier.
+    /* 
+     * This pop field represents the password that will be used to generate salt and verifier.
      * The field is present here in order to generate the QR code containing password.
-     * In production this password field shall not be stored on the device */
+     * In production this password field shall not be stored on the device 
+     */
     const char *username = WCANG_PROV_SEC2_USERNAME;
     const char *pop = WCANG_PROV_SEC2_PWD;
 #elif CONFIG_WCANG_PROV_SEC2_PROD_MODE
-    /* The username and password shall not be embedded in the firmware,
+    /* 
+     * The username and password shall not be embedded in the firmware,
      * they should be provided to the user by other means.
-     * e.g. QR code sticker */
+     * e.g. QR code sticker 
+     */
     const char *username = NULL;
     const char *pop      = NULL;
 #endif
-    /* This is the structure for passing security parameters
+    /* 
+     * This is the structure for passing security parameters
      * for the protocomm security 2.
      * This does not need not be static i.e. could be dynamically allocated
      */
@@ -682,7 +695,8 @@ app_main(void)
     wifi_prov_security2_params_t *sec_params = &sec2_params;
 #endif
 
-    /* What is the service key (could be NULL)
+    /* 
+     * What is the service key (could be NULL)
      * This translates to :
      *     - Wi-Fi password when scheme is wifi_prov_scheme_softap
      *          (Minimum expected length: 8, maximum 64 for WPA2-PSK)
@@ -691,7 +705,8 @@ app_main(void)
     const char *service_key = NULL;
 
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_BLE
-    /* This step is only useful when scheme is wifi_prov_scheme_ble. This will
+    /* 
+     * This step is only useful when scheme is wifi_prov_scheme_ble. This will
      * set a custom 128 bit UUID which will be included in the BLE advertisement
      * and will correspond to the primary GATT service that provides provisioning
      * endpoints as GATT characteristics. Each GATT characteristic will be
@@ -699,20 +714,26 @@ app_main(void)
      * 12th and 13th bytes (assume counting starts from 0th byte). The client side
      * applications must identify the endpoints by reading the User Characteristic
      * Description descriptor (0x2901) for each characteristic, which contains the
-     * endpoint name of the characteristic */
+     * endpoint name of the characteristic 
+     */
     uint8_t custom_service_uuid[] = {
-      /* LSB <---------------------------------------
-       * ---------------------------------------> MSB */
+      /* 
+       * LSB <---------------------------------------
+       * ---------------------------------------> MSB 
+       */
       0xb4, 0xdf, 0x5a, 0x1c, 0x3f, 0x6b, 0xf4, 0xbf, 0xea, 0x4a, 0x82, 0x03, 0x04, 0x90, 0x1a, 0x02,
     };
 
-    /* If your build fails with linker errors at this point, then you may have
+    /* 
+     * If your build fails with linker errors at this point, then you may have
      * forgotten to enable the BT stack or BTDM BLE settings in the SDK (e.g. see
-     * the sdkconfig.defaults in the example project) */
+     * the sdkconfig.defaults in the example project) 
+     */
     wifi_prov_scheme_ble_set_service_uuid(custom_service_uuid);
 #endif /* CONFIG_WCANG_PROV_TRANSPORT_BLE */
 
-    /* An optional endpoint that applications can create if they expect to
+    /* 
+     * An optional endpoint that applications can create if they expect to
      * get some additional custom data during provisioning workflow.
      * The endpoint name can be anything of your choice.
      * This call must be made before starting the provisioning.
@@ -722,17 +743,21 @@ app_main(void)
     /* Start provisioning service */
     ESP_ERROR_CHECK(wifi_prov_mgr_start_provisioning(security, (const void *) sec_params, service_name, service_key));
 
-    /* The handler for the optional endpoint created above.
+    /* 
+     * The handler for the optional endpoint created above.
      * This call must be made after starting the provisioning, and only if the endpoint
      * has already been created above.
      */
     wifi_prov_mgr_endpoint_register("VSCP-WCANG", custom_prov_data_handler, NULL);
 
-    /* Uncomment the following to wait for the provisioning to finish and then release
+    /* 
+     * Uncomment the following to wait for the provisioning to finish and then release
      * the resources of the manager. Since in this case de-initialization is triggered
-     * by the default event loop handler, we don't need to call the following */
+     * by the default event loop handler, we don't need to call the following 
+     */
     // wifi_prov_mgr_wait();
     // wifi_prov_mgr_deinit();
+
     /* Print QR code for provisioning */
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_BLE
     wifi_prov_print_qr(service_name, username, pop, PROV_TRANSPORT_BLE);
@@ -743,8 +768,10 @@ app_main(void)
   else {
     ESP_LOGI(TAG, "Already provisioned, starting Wi-Fi STA");
 
-    /* We don't need the manager as device is already provisioned,
-     * so let's release it's resources */
+    /* 
+     * We don't need the manager as device is already provisioned,
+     * so let's release it's resources 
+     */
     wifi_prov_mgr_deinit();
 
     /* Start Wi-Fi station */
@@ -753,6 +780,14 @@ app_main(void)
 
   /* Wait for Wi-Fi connection */
   xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_EVENT, false, true, portMAX_DELAY);
+
+
+
+  // **************************************************************************
+  //                        NVS - Persistent storage
+  // **************************************************************************
+
+
 
   // Init persistent storage
 
@@ -795,7 +830,7 @@ app_main(void)
     rv = nvs_commit(nvsHandle);
     printf((rv != ESP_OK) ? "Failed!\n" : "Done\n");
 
-    // TODO remove
+    // TODO remove !!!!
     char username[32];
     size_t length = sizeof(username);
     rv            = nvs_get_str(nvsHandle, "username", username, &length);

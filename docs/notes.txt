@@ -10,3 +10,9 @@ Open standard for connecting devices to Wi-Fi using Bluetooth LE or Serial
 --------------------------------------------------------------------------
 https://www.improv-wifi.com/
 
+BOX Z-102
+=========
+
+Etikett: 35 x 40 mm
+HIM-card (upper card): 48 x 64
+

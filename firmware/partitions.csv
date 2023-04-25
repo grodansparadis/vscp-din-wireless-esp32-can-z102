@@ -1,9 +1,13 @@
-# Name,   Type, SubType, Offset,  Size, Flags
-# Note: if you have increased the bootloader size, make sure to update the offsets to avoid overlap
-nvs,      data, nvs,     0x9000,  0x4000,
-otadata,  data, ota,     0xd000,  0x2000,
-phy_init, data, phy,     0xf000,  0x1000,
-factory,  app,  factory, 0x10000, 3M,
-#ota_0,    app,  ota_0,   , 1M,
-#ota_1,    app,  ota_1,   , 1M,
-nvs_key,  data, nvs_keys, ,        0x1000
+# Note: Firmware partition offset needs to be 64K aligned, initial 36K (9 sectors) are reserved for bootloader and partition table
+# Name,     Type, SubType,  Offset,     Size,   Flags
+nvs,        data, nvs,      0xd000,     32K,
+fctry,      data, nvs,      0x15000,    16K,
+log_status, data, nvs,      0x19000,    16K,
+otadata,    data, ota,      0x1d000,    8K,
+phy_init,   data, phy,      0x1f000,    4K,
+ota_0,      app,  ota_0,    0x20000,    1856K,
+ota_1,      app,  ota_1,    0x1f0000,   1856K,
+coredump,   data, coredump, 0x3c0000,   64K,
+log_info,   data, 0xfe,     0x3d0000,   64K,
+console,    data, spiffs,   0x3e0000,   64K,
+reserved,   data, 0xff,     0x3f0000,   64K,
