@@ -4,7 +4,7 @@
   This file is part of the VSCP (https://www.vscp.org)
 
   The MIT License (MIT)
-  Copyright © 2022 Ake Hedman, the VSCP project <info@vscp.org>
+  Copyright © 2022-2025 Ake Hedman, the VSCP project <info@vscp.org>
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -99,7 +99,7 @@ typedef struct {
 #define DEFAULT_TCPIP_PASSWORD    "secret"
 #define DEFAULT_TCPIP_VER         4       // Ipv6 = 6 or Ipv4 = 4
 #define TCPSRV_WELCOME_MSG        "Welcome to the Wireless CAN4VSCP Gateway\r\n"                    \
-                                  "Copyright (C) 2000-2022 Grodans Paradis AB\r\n"                  \
+                                  "Copyright (C) 2000-2025 Grodans Paradis AB\r\n"                  \
                                   "https://www.grodansparadis.com\r\n"                              \
                                   "+OK\r\n"
 

@@ -11,6 +11,6 @@ This board has secure wireless wifi and Bluetooth BLE functionality for a remote
 
 Part of the [VSCP Project](https://www.vscp.org).
 
-Copyright 2021-2023 © Åke Hedman, (Grodans Paradis AB)[https://www.grodansparadis.com]
+Copyright 2021-2025 © Åke Hedman, (Grodans Paradis AB)[https://www.grodansparadis.com]
 
 

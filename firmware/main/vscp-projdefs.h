@@ -197,4 +197,8 @@
  */
 #define MAX_TCP_CONNECTIONS                 2
 
+/// TODO !!!!!!!!!
+#define THIS_FIRMWARE_TCPIP_LINK_MAX_BUFFER  2048
+#define THIS_FIRMWARE_TCPIP_LINK_ENABLE_RCVLOOP_CMD 1
+
 #endif // _VSCP_PROJDEFS_H_

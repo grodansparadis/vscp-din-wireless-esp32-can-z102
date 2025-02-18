@@ -321,7 +321,7 @@ void
 can4vscp_init(uint8_t bitrate)
 {
   // Tempsensor  
-  temperature_sensor_config_t temp_sensor = TEMPERAUTRE_SENSOR_CONFIG_DEFAULT(-10, 50);
+  temperature_sensor_config_t temp_sensor = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 50);
   ESP_ERROR_CHECK(temperature_sensor_install(&temp_sensor, &temp_handle));
 
   ESP_ERROR_CHECK(temperature_sensor_enable(temp_handle));

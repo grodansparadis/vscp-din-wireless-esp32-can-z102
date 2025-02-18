@@ -6,7 +6,7 @@
   This file is part of the VSCP (https://www.vscp.org)
 
   The MIT License (MIT)
-  Copyright © 2022 Ake Hedman, the VSCP project <info@vscp.org>
+  Copyright © 2022-2025 Ake Hedman, the VSCP project <info@vscp.org>
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -839,56 +839,56 @@ app_main(void)
     rv     = nvs_get_str(nvsHandle, "password", username, &length);
     ESP_LOGI(TAG, "Password: %s", username);
     length = 16;
-    rv     = nvs_get_blob(nvsHandle, "guid", device_guid, &length);
+    rv     = nvs_get_blob(nvsHandle, "guid", g_node_guid, &length);
     ESP_LOGI(TAG,
              "GUID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
-             device_guid[0],
-             device_guid[1],
-             device_guid[2],
-             device_guid[3],
-             device_guid[4],
-             device_guid[5],
-             device_guid[6],
-             device_guid[7],
-             device_guid[8],
-             device_guid[9],
-             device_guid[10],
-             device_guid[11],
-             device_guid[12],
-             device_guid[13],
-             device_guid[14],
-             device_guid[15]);
+             g_node_guid[0],
+             g_node_guid[1],
+             g_node_guid[2],
+             g_node_guid[3],
+             g_node_guid[4],
+             g_node_guid[5],
+             g_node_guid[6],
+             g_node_guid[7],
+             g_node_guid[8],
+             g_node_guid[9],
+             g_node_guid[10],
+             g_node_guid[11],
+             g_node_guid[12],
+             g_node_guid[13],
+             g_node_guid[14],
+             g_node_guid[15]);
     // If GUID is all zero construct GUID
-    if (!(device_guid[0] | device_guid[1] | device_guid[2] | device_guid[3] | device_guid[4] | device_guid[5] |
-          device_guid[6] | device_guid[7] | device_guid[8] | device_guid[9] | device_guid[10] | device_guid[11] |
-          device_guid[12] | device_guid[13] | device_guid[14] | device_guid[15])) {
-      device_guid[0] = 0xff;
-      device_guid[1] = 0xff;
-      device_guid[2] = 0xff;
-      device_guid[3] = 0xff;
-      device_guid[4] = 0xff;
-      device_guid[5] = 0xff;
-      device_guid[6] = 0xff;
-      device_guid[7] = 0xfe;
-      rv             = esp_efuse_mac_get_default(device_guid + 8);
+    if (!(g_node_guid[0] | g_node_guid[1] | g_node_guid[2] | g_node_guid[3] | g_node_guid[4] | g_node_guid[5] |
+      g_node_guid[6] | g_node_guid[7] | g_node_guid[8] | g_node_guid[9] | g_node_guid[10] | g_node_guid[11] |
+      g_node_guid[12] | g_node_guid[13] | g_node_guid[14] | g_node_guid[15])) {
+        g_node_guid[0] = 0xff;
+        g_node_guid[1] = 0xff;
+        g_node_guid[2] = 0xff;
+        g_node_guid[3] = 0xff;
+        g_node_guid[4] = 0xff;
+        g_node_guid[5] = 0xff;
+        g_node_guid[6] = 0xff;
+        g_node_guid[7] = 0xfe;
+      rv             = esp_efuse_mac_get_default(g_node_guid + 8);
       ESP_LOGI(TAG,
                "Constructed GUID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
-               device_guid[0],
-               device_guid[1],
-               device_guid[2],
-               device_guid[3],
-               device_guid[4],
-               device_guid[5],
-               device_guid[6],
-               device_guid[7],
-               device_guid[8],
-               device_guid[9],
-               device_guid[10],
-               device_guid[11],
-               device_guid[12],
-               device_guid[13],
-               device_guid[14],
-               device_guid[15]);
+               g_node_guid[0],
+               g_node_guid[1],
+               g_node_guid[2],
+               g_node_guid[3],
+               g_node_guid[4],
+               g_node_guid[5],
+               g_node_guid[6],
+               g_node_guid[7],
+               g_node_guid[8],
+               g_node_guid[9],
+               g_node_guid[10],
+               g_node_guid[11],
+               g_node_guid[12],
+               g_node_guid[13],
+               g_node_guid[14],
+               g_node_guid[15]);
     }
   }
 

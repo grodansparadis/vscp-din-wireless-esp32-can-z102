@@ -8,7 +8,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2000-2022 Ake Hedman, Grodans Paradis AB <info@grodansparadis.com>
+ * Copyright (c) 2000-202 Ake Hedman, Grodans Paradis AB <info@grodansparadis.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -69,15 +69,14 @@ extern struct _eeprom_ eeprom;
 //                        VSCP protocol callbacks
 // ****************************************************************************
 
-
 ///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_get_ms
+// vscp_frmw2_callback_get_ms
 //
 
 int
-vscp2_callback_get_ms(const void *pdata, uint32_t *ptime)
+vscp_frmw2_callback_get_ms(void* const puserdata, uint32_t *ptime)
 {
-  if ((NULL == pdata) || (NULL == ptime)) {
+  if ((NULL == puserdata) || (NULL == ptime)) {
     return VSCP_ERROR_INVALID_POINTER;
   }
 
@@ -85,13 +84,12 @@ vscp2_callback_get_ms(const void *pdata, uint32_t *ptime)
   return VSCP_ERROR_SUCCESS;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_get_guid
+// vscp_frmw2_callback_get_guid
 //
 
 const uint8_t *
-vscp2_callback_get_guid(const void *pdata)
+vscp_frmw2_callback_get_guid(void* const puserdata)
 {
   return device_guid;
 }
@@ -99,11 +97,11 @@ vscp2_callback_get_guid(const void *pdata)
 #ifdef THIS_FIRMWARE_ENABLE_WRITE_2PROTECTED_LOCATIONS
 
 ///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_write_manufacturer_id
+// vscp_frmw2_callback_write_manufacturer_id
 //
 
 int
-vscp2_callback_write_manufacturer_id(const void *pdata, uint8_t pos, uint8_t val)
+vscp_frmw2_callback_write_manufacturer_id(void* const puserdata, uint8_t pos, uint8_t val)
 {
   if (pos < 4) {
     // TODO // TODO eeprom_write(&eeprom, STDREG_MANUFACTURER_ID0 + pos, val);
@@ -118,13 +116,12 @@ vscp2_callback_write_manufacturer_id(const void *pdata, uint8_t pos, uint8_t val
   return VSCP_ERROR_SUCCESS;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_write_guid
+// vscp_frmw2_callback_write_guid
 //
 
 int
-vscp2_callback_write_guid(const void *pdata, uint8_t pos, uint8_t val)
+vscp_frmw2_callback_write_guid(void* const puserdata, uint8_t pos, uint8_t val)
 {
   // TODO eeprom_write(&eeprom, STDREG_GUID0 + pos, val);
 
@@ -136,14 +133,12 @@ vscp2_callback_write_guid(const void *pdata, uint8_t pos, uint8_t val)
 
 #endif
 
-
-
 ///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_read_user_reg
+// vscp_frmw2_callback_read_user_reg
 //
 
 int
-vscp2_callback_read_user_reg(const void *pdata, uint32_t reg, uint8_t *pval)
+vscp_frmw2_callback_read_user_reg(void* const puserdata, uint32_t reg, uint8_t *pval)
 {
   // Check pointers (pdata allowed to be NULL)
   if (NULL == pval) {
@@ -242,14 +237,12 @@ vscp2_callback_read_user_reg(const void *pdata, uint32_t reg, uint8_t *pval)
   return VSCP_ERROR_SUCCESS;
 }
 
-
-
 ///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_write_user_reg
+// vscp_frmw2_callback_write_user_reg
 //
 
 int
-vscp2_callback_write_user_reg(const void *pdata, uint32_t reg, uint8_t val)
+vscp_frmw2_callback_write_user_reg(void* const puserdata, uint32_t reg, uint8_t val)
 {
   if (REG_DEVICE_ZONE == reg) {
     // TODO eeprom_write(&eeprom, REG_DEVICE_ZONE, val);
@@ -310,84 +303,72 @@ vscp2_callback_write_user_reg(const void *pdata, uint32_t reg, uint8_t val)
   return VSCP_ERROR_SUCCESS;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// vscp_frmw2_callback_enter_bootloader
+//
+
+void
+vscp_frmw2_callback_enter_bootloader(void *const puserdata)
+{
+  
+}
 
 ///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_enter_bootloader
+// vscp_frmw2_callback_report_dmatrix
 //
 
 int
-vscp2_callback_enter_bootloader(const void *pdata)
+vscp_frmw2_callback_report_dmatrix(void* const puserdata)
 {
   return VSCP_ERROR_SUCCESS;
 }
 
-
-
 ///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_report_dmatrix
+// vscp_frmw2_callback_report_mdf
 //
 
 int
-vscp2_callback_report_dmatrix(const void *pdata)
+vscp_frmw2_callback_report_mdf(void* const puserdata)
 {
   return VSCP_ERROR_SUCCESS;
 }
 
-
-
 ///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_report_mdf
+// vscp_frmw2_callback_report_events_of_interest
 //
 
 int
-vscp2_callback_report_mdf(const void *pdata)
+vscp_frmw2_callback_report_events_of_interest(void* const puserdata)
 {
   return VSCP_ERROR_SUCCESS;
 }
 
-
-
 ///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_report_events_of_interest
+// vscp_frmw2_callback_get_timestamp
 //
 
-int
-vscp2_callback_report_events_of_interest(const void *pdata)
-{
-  return VSCP_ERROR_SUCCESS;
-}
-
-
-///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_get_timestamp
-//
-
-uint32_t
-vscp2_callback_get_timestamp(const void *pdata)
+uint64_t
+vscp_frmw2_callback_get_timestamp(void* const puserdata)
 {
   return esp_timer_get_time();
 }
 
-
-
 ///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_get_time
+// vscp_frmw2_callback_get_time
 //
 
 int
-vscp2_callback_get_time(const void *pdata, const vscpEventEx *pex)
+vscp_frmw2_callback_get_time(void* const puserdata, const vscpEventEx *pex)
 {
   return VSCP_ERROR_SUCCESS;
 }
 
-
-
 ///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_send_event
+// vscp_frmw2_callback_send_event_ex
 //
 
 int
-vscp2_callback_send_event(const void *pdata, vscpEventEx *pex)
+vscp_frmw2_callback_send_event_ex(void *const puserdata, vscpEventEx *pex)
 {
   for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
 
@@ -411,23 +392,19 @@ vscp2_callback_send_event(const void *pdata, vscpEventEx *pex)
   }
 
   // Remove original event
-  //vscp_fwhlp_deleteEvent(&pex);
+  // vscp_fwhlp_deleteEvent(&pex);
 
   return VSCP_ERROR_SUCCESS;
 }
 
-
-
-
 ///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_send_eventEx
+// vscp_frmw2_callback_send_eventEx
 //
 
 int
-vscp2_callback_send_eventEx(const void *pdata, vscpEventEx *pex)
+vscp_frmw2_callback_send_eventEx(void* const puserdata, vscpEventEx *pex)
 {
   for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
-
     // // Only if user is validated
     // if (gctx[i].bValidated) {
     //   vscpEvent *pnew = vscp_fwhlp_mkEventCopy(pex);
@@ -448,31 +425,27 @@ vscp2_callback_send_eventEx(const void *pdata, vscpEventEx *pex)
   }
 
   // Remove original event
-  //vscp_fwhlp_deleteEvent(&pex);
+  // vscp_fwhlp_deleteEvent(&pex);
 
   return VSCP_ERROR_SUCCESS;
 }
 
-
-
 ///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_restore_defaults
+// vscp_frmw2_callback_restore_defaults
 //
 
 int
-vscp2_callback_restore_defaults(const void *pdata)
+vscp_frmw2_callback_restore_defaults(void *const puserdata)
 {
   return VSCP_ERROR_SUCCESS;
 }
 
-
-
 ///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_write_user_id
+// vscp_frmw2_callback_write_user_id
 //
 
 int
-vscp2_callback_write_user_id(const void *pdata, uint8_t pos, uint8_t val)
+vscp_frmw2_callback_write_user_id(void* const puserdata, uint8_t pos, uint8_t val)
 {
   // TODO // TODO eeprom_write(&eeprom, STDREG_USER_ID0 + pos, val);
 
@@ -482,14 +455,12 @@ vscp2_callback_write_user_id(const void *pdata, uint8_t pos, uint8_t val)
   return VSCP_ERROR_SUCCESS;
 }
 
-
-
 ///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_get_ip_addr
+// vscp_frmw2_callback_get_ip_addr
 //
 
 int
-vscp2_callback_get_ip_addr(const void *pUserData, uint8_t *pipaddr)
+vscp_frmw2_callback_get_ip_addr(void *const puserdata, uint8_t *pipaddr, uint8_t size)
 {
   if (NULL == pipaddr) {
     return VSCP_ERROR_PARAMETER;
@@ -501,16 +472,24 @@ vscp2_callback_get_ip_addr(const void *pUserData, uint8_t *pipaddr)
   return VSCP_ERROR_SUCCESS;
 }
 
+int
+vscp_frmw2_callback_set_event_time(void* const puserdata, vscpEventEx* const pex)
+{
+  if (NULL == pex) {
+    return VSCP_ERROR_PARAMETER;
+  }
 
+  return VSCP_ERROR_SUCCESS;
+}
 
 #ifdef THIS_FIRMWARE_VSCP_DISCOVER_SERVER
 
 ///////////////////////////////////////////////////////////////////////////////
-// vscp2_callback_high_end_server_response
+// vscp_frmw2_callback_high_end_server_response
 //
 
 int
-vscp2_callback_high_end_server_response(const void *pUserData)
+vscp_frmw2_callback_high_end_server_response(const void *pUserData)
 {
   return VSCP_ERROR_SUCCESS;
 }

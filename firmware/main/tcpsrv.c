@@ -6,7 +6,7 @@
   This file is part of the VSCP (https://www.vscp.org)
 
   The MIT License (MIT)
-  Copyright © 2022 Ake Hedman, the VSCP project <info@vscp.org>
+  Copyright © 2022-2025 Ake Hedman, the VSCP project <info@vscp.org>
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -64,8 +64,11 @@
 
 #include "tcpsrv.h"
 
-#define KEEPALIVE_IDLE                                                                                                 \
-  5 // Keep-alive idle time. In idle time without receiving any data from peer, will send keep-alive probe packet
+/*
+  Keep-alive idle time. In idle time without receiving any data from peer,
+  will send keep-alive probe packet
+ */
+#define KEEPALIVE_IDLE     5
 #define KEEPALIVE_INTERVAL 5 // Keep-alive probe packet interval time.
 #define KEEPALIVE_COUNT    3 // Keep-alive probe packet retry count.
 
@@ -74,8 +77,6 @@ extern transport_t tr_twai_rx;
 extern transport_t tr_tcpsrv[MAX_TCP_CONNECTIONS];
 
 static const char *TAG = "tcpsrv";
-
-
 
 static uint8_t cntClients = 0; // Holds current number of clients
 
@@ -113,11 +114,11 @@ setContextDefaults(ctx_t *pctx)
 // do_retransmit
 //
 
-//static void
-// do_retransmit(const int sock)
-// {
-//   int len;
-//   char rx_buffer[128];
+// static void
+//  do_retransmit(const int sock)
+//  {
+//    int len;
+//    char rx_buffer[128];
 
 //   do {
 //     len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
@@ -158,7 +159,7 @@ client_task(void *pvParameters)
   char rxbuf[128];
 
   // Set default
-  //setContextDefaults(&ctx);
+  // setContextDefaults(&ctx);
   ctx.bValidated        = 0;
   ctx.privLevel         = 0;
   ctx.bRcvLoop          = 0;
@@ -172,13 +173,13 @@ client_task(void *pvParameters)
   memset(&ctx.status, 0, sizeof(VSCPStatus));
 
   // int sock = (int)*((int *)pvParameters);
-  ctx.sock = *((int *)pvParameters);
-  ctx.id = cntClients++;
+  ctx.sock = *((int *) pvParameters);
+  ctx.id   = cntClients++;
 
   // Mark transport channel as open
   tr_tcpsrv[ctx.id].open = true;
 
-  ESP_LOGI(TAG, "Client worker socket=%d id=%d", ctx.sock, ctx.id );
+  ESP_LOGI(TAG, "Client worker socket=%d id=%d", ctx.sock, ctx.id);
 
   // Greet client
   send(ctx.sock, TCPSRV_WELCOME_MSG, sizeof(TCPSRV_WELCOME_MSG), 0);
@@ -190,7 +191,6 @@ client_task(void *pvParameters)
   //                                       (TickType_t)10)) ) {
   //   ESP_LOGI(TAG, "Buffer full: Failed to save message toRX queue");
   // }
-
 
   while (1) {
 
@@ -216,7 +216,8 @@ client_task(void *pvParameters)
       ESP_LOGI(TAG, "Received %d bytes: %s", len, rxbuf);
 
       // Parse VSCP command
-      vscp_link_parser(&ctx, rxbuf, &len);
+      char *p = NULL;
+      vscp_link_parser(&ctx, rxbuf, &p);
 
       // If socket gets closed ("quit" command)
       // pctx->sock is zero
@@ -278,7 +279,7 @@ tcpsrv_task(void *pvParameters)
   struct sockaddr_storage dest_addr;
 
   for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
-    ctx[i].id = i;
+    ctx[i].id   = i;
     ctx[i].sock = 0;
     // vscp_fifo_init(&gctx[i].fifoEventsOut, TRANSMIT_FIFO_SIZE);
     setContextDefaults(&ctx[i]);
@@ -370,7 +371,7 @@ tcpsrv_task(void *pvParameters)
       continue;
     }
 
-    xTaskCreate(client_task, "link-client", 0x2000, (void *)&sock, 5, NULL);
+    xTaskCreate(client_task, "link-client", 0x2000, (void *) &sock, 5, NULL);
   }
 
 CLEAN_UP:
