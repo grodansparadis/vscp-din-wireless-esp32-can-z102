@@ -472,6 +472,10 @@ vscp_frmw2_callback_get_ip_addr(void *const puserdata, uint8_t *pipaddr, uint8_t
   return VSCP_ERROR_SUCCESS;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// vscp_frmw2_callback_set_event_time
+//
+
 int
 vscp_frmw2_callback_set_event_time(void* const puserdata, vscpEventEx* const pex)
 {
