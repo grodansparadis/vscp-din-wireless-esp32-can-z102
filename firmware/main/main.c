@@ -38,6 +38,7 @@
 
 #include <driver/gpio.h>
 #include <driver/temperature_sensor.h>
+#include "esp_task_wdt.h"
 #include <driver/twai.h>
 #include <esp_event.h>
 #include <esp_http_server.h>
@@ -280,11 +281,11 @@ get_device_guid(uint8_t *pguid)
       break;
 
     case ESP_ERR_NVS_NOT_FOUND:
-      printf("Username not found in nvs\n");
+      printf("guid not found in nvs\n");
       return false;
 
     default:
-      printf("Error (%s) reading username f900rom nvs!\n", esp_err_to_name(rv));
+      printf("Error (%s) reading guid from nvs!\n", esp_err_to_name(rv));
       return false;
   }
 
@@ -593,13 +594,13 @@ app_main(void)
     .scheme_event_handler = WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM
 #endif /* CONFIG_WCANG_PROV_TRANSPORT_BLE */
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_SOFTAP
-    .scheme_event_handler = WIFI_PROV_EVENT_HANDLER_NONE
+                              .scheme_event_handler = WIFI_PROV_EVENT_HANDLER_NONE
 #endif /* CONFIG_WCANG_PROV_TRANSPORT_SOFTAP */
   };
 
-  /* 
+  /*
    * Initialize provisioning manager with the
-   * configuration parameters set above 
+   * configuration parameters set above
    */
   ESP_ERROR_CHECK(wifi_prov_mgr_init(config));
 
@@ -617,7 +618,7 @@ app_main(void)
 
     ESP_LOGI(TAG, "Starting provisioning");
 
-    /* 
+    /*
      * What is the Device Service Name that we want
      *
      * This translates to :
@@ -628,7 +629,7 @@ app_main(void)
     get_device_service_name(service_name, sizeof(service_name));
 
 #ifdef CONFIG_WCANG_PROV_SECURITY_VERSION_1
-    /* 
+    /*
      * What is the security level that we want (0, 1, 2):
      *
      *   - WIFI_PROV_SECURITY_0 is simply plain text communication.
@@ -640,49 +641,49 @@ app_main(void)
      */
     wifi_prov_security_t security = WIFI_PROV_SECURITY_1;
 
-    /* 
+    /*
      * Do we want a proof-of-possession (ignored if Security 0 is selected):
      *   - this should be a string with length > 0
      *   - NULL if not used
      */
     const char *pop = "VSCP-Frankfurt-WiFi";
-    /* 
-     * If the pop is allocated dynamically, then it should be valid till 
+    /*
+     * If the pop is allocated dynamically, then it should be valid till
      * the provisioning process is running.
-     * it can be only freed when the WIFI_PROV_END event is triggered 
+     * it can be only freed when the WIFI_PROV_END event is triggered
      */
 
-    /* 
+    /*
      * This is the structure for passing security parameters
      * for the protocomm security 1.
      * This does not need not be static i.e. could be dynamically allocated
      */
     wifi_prov_security1_params_t *sec_params = pop;
 
-    const char *username  = NULL;
+    const char *username = NULL;
 
 #elif CONFIG_WCANG_PROV_SECURITY_VERSION_2
     wifi_prov_security_t security = WIFI_PROV_SECURITY_2;
-    // The username must be the same one, which has been used in the generation of salt and verifier 
+    // The username must be the same one, which has been used in the generation of salt and verifier
 
 #if CONFIG_WCANG_PROV_SEC2_DEV_MODE
-    /* 
+    /*
      * This pop field represents the password that will be used to generate salt and verifier.
      * The field is present here in order to generate the QR code containing password.
-     * In production this password field shall not be stored on the device 
+     * In production this password field shall not be stored on the device
      */
     const char *username = WCANG_PROV_SEC2_USERNAME;
-    const char *pop = WCANG_PROV_SEC2_PWD;
+    const char *pop      = WCANG_PROV_SEC2_PWD;
 #elif CONFIG_WCANG_PROV_SEC2_PROD_MODE
-    /* 
+    /*
      * The username and password shall not be embedded in the firmware,
      * they should be provided to the user by other means.
-     * e.g. QR code sticker 
+     * e.g. QR code sticker
      */
     const char *username = NULL;
     const char *pop      = NULL;
 #endif
-    /* 
+    /*
      * This is the structure for passing security parameters
      * for the protocomm security 2.
      * This does not need not be static i.e. could be dynamically allocated
@@ -695,7 +696,7 @@ app_main(void)
     wifi_prov_security2_params_t *sec_params = &sec2_params;
 #endif
 
-    /* 
+    /*
      * What is the service key (could be NULL)
      * This translates to :
      *     - Wi-Fi password when scheme is wifi_prov_scheme_softap
@@ -705,7 +706,7 @@ app_main(void)
     const char *service_key = NULL;
 
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_BLE
-    /* 
+    /*
      * This step is only useful when scheme is wifi_prov_scheme_ble. This will
      * set a custom 128 bit UUID which will be included in the BLE advertisement
      * and will correspond to the primary GATT service that provides provisioning
@@ -714,25 +715,25 @@ app_main(void)
      * 12th and 13th bytes (assume counting starts from 0th byte). The client side
      * applications must identify the endpoints by reading the User Characteristic
      * Description descriptor (0x2901) for each characteristic, which contains the
-     * endpoint name of the characteristic 
+     * endpoint name of the characteristic
      */
     uint8_t custom_service_uuid[] = {
-      /* 
+      /*
        * LSB <---------------------------------------
-       * ---------------------------------------> MSB 
+       * ---------------------------------------> MSB
        */
       0xb4, 0xdf, 0x5a, 0x1c, 0x3f, 0x6b, 0xf4, 0xbf, 0xea, 0x4a, 0x82, 0x03, 0x04, 0x90, 0x1a, 0x02,
     };
 
-    /* 
+    /*
      * If your build fails with linker errors at this point, then you may have
      * forgotten to enable the BT stack or BTDM BLE settings in the SDK (e.g. see
-     * the sdkconfig.defaults in the example project) 
+     * the sdkconfig.defaults in the example project)
      */
     wifi_prov_scheme_ble_set_service_uuid(custom_service_uuid);
 #endif /* CONFIG_WCANG_PROV_TRANSPORT_BLE */
 
-    /* 
+    /*
      * An optional endpoint that applications can create if they expect to
      * get some additional custom data during provisioning workflow.
      * The endpoint name can be anything of your choice.
@@ -743,17 +744,17 @@ app_main(void)
     /* Start provisioning service */
     ESP_ERROR_CHECK(wifi_prov_mgr_start_provisioning(security, (const void *) sec_params, service_name, service_key));
 
-    /* 
+    /*
      * The handler for the optional endpoint created above.
      * This call must be made after starting the provisioning, and only if the endpoint
      * has already been created above.
      */
     wifi_prov_mgr_endpoint_register("VSCP-WCANG", custom_prov_data_handler, NULL);
 
-    /* 
+    /*
      * Uncomment the following to wait for the provisioning to finish and then release
      * the resources of the manager. Since in this case de-initialization is triggered
-     * by the default event loop handler, we don't need to call the following 
+     * by the default event loop handler, we don't need to call the following
      */
     // wifi_prov_mgr_wait();
     // wifi_prov_mgr_deinit();
@@ -768,9 +769,9 @@ app_main(void)
   else {
     ESP_LOGI(TAG, "Already provisioned, starting Wi-Fi STA");
 
-    /* 
+    /*
      * We don't need the manager as device is already provisioned,
-     * so let's release it's resources 
+     * so let's release it's resources
      */
     wifi_prov_mgr_deinit();
 
@@ -781,13 +782,9 @@ app_main(void)
   /* Wait for Wi-Fi connection */
   xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_EVENT, false, true, portMAX_DELAY);
 
-
-
   // **************************************************************************
   //                        NVS - Persistent storage
   // **************************************************************************
-
-
 
   // Init persistent storage
 
@@ -832,45 +829,92 @@ app_main(void)
 
     // TODO remove !!!!
     char username[32];
+    char password[32];
     size_t length = sizeof(username);
     rv            = nvs_get_str(nvsHandle, "username", username, &length);
-    ESP_LOGI(TAG, "Username_: %s", username);
-    length = sizeof(username);
-    rv     = nvs_get_str(nvsHandle, "password", username, &length);
-    ESP_LOGI(TAG, "Password: %s", username);
+    switch (rv) {
+
+      case ESP_OK:
+        ESP_LOGI(TAG, "Username: %s", username);
+        break;
+
+      case ESP_ERR_NVS_NOT_FOUND:
+        ESP_LOGI(TAG, "Username not found in nvs, writing default\n");
+        rv = nvs_set_str(nvsHandle, "username", "vscp");
+        break;
+
+      default:
+        ESP_LOGI(TAG, "Error (%s) reading username from nvs!\n", esp_err_to_name(rv));
+        break;
+    }
+
+    length = sizeof(password);
+    rv     = nvs_get_str(nvsHandle, "password", password, &length);
+    switch (rv) {
+
+      case ESP_OK:
+        ESP_LOGI(TAG, "Password: %s", password);
+        rv = nvs_set_str(nvsHandle, "password", "secret");
+        break;
+
+      case ESP_ERR_NVS_NOT_FOUND:
+        ESP_LOGI(TAG, "Password not found in nvs, writing default\n");
+        break;
+
+      default:
+        ESP_LOGI(TAG, "Error (%s) reading password from nvs!\n", esp_err_to_name(rv));
+        break;
+    }
+
     length = 16;
     rv     = nvs_get_blob(nvsHandle, "guid", g_node_guid, &length);
-    ESP_LOGI(TAG,
-             "GUID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
-             g_node_guid[0],
-             g_node_guid[1],
-             g_node_guid[2],
-             g_node_guid[3],
-             g_node_guid[4],
-             g_node_guid[5],
-             g_node_guid[6],
-             g_node_guid[7],
-             g_node_guid[8],
-             g_node_guid[9],
-             g_node_guid[10],
-             g_node_guid[11],
-             g_node_guid[12],
-             g_node_guid[13],
-             g_node_guid[14],
-             g_node_guid[15]);
+    switch (rv) {
+
+      case ESP_OK:
+        ESP_LOGI(TAG,
+                 "GUID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
+                 g_node_guid[0],
+                 g_node_guid[1],
+                 g_node_guid[2],
+                 g_node_guid[3],
+                 g_node_guid[4],
+                 g_node_guid[5],
+                 g_node_guid[6],
+                 g_node_guid[7],
+                 g_node_guid[8],
+                 g_node_guid[9],
+                 g_node_guid[10],
+                 g_node_guid[11],
+                 g_node_guid[12],
+                 g_node_guid[13],
+                 g_node_guid[14],
+                 g_node_guid[15]);
+        break;
+
+      case ESP_ERR_NVS_NOT_FOUND:
+        ESP_LOGI(TAG, "GUID not found in nvs, writing default\n");
+        memset(g_node_guid, 0, 16);
+        break;
+
+      default:
+        ESP_LOGI(TAG, "Error (%s) reading GUID from nvs!\n", esp_err_to_name(rv));
+        break;
+    }
+
     // If GUID is all zero construct GUID
     if (!(g_node_guid[0] | g_node_guid[1] | g_node_guid[2] | g_node_guid[3] | g_node_guid[4] | g_node_guid[5] |
-      g_node_guid[6] | g_node_guid[7] | g_node_guid[8] | g_node_guid[9] | g_node_guid[10] | g_node_guid[11] |
-      g_node_guid[12] | g_node_guid[13] | g_node_guid[14] | g_node_guid[15])) {
-        g_node_guid[0] = 0xff;
-        g_node_guid[1] = 0xff;
-        g_node_guid[2] = 0xff;
-        g_node_guid[3] = 0xff;
-        g_node_guid[4] = 0xff;
-        g_node_guid[5] = 0xff;
-        g_node_guid[6] = 0xff;
-        g_node_guid[7] = 0xfe;
+          g_node_guid[6] | g_node_guid[7] | g_node_guid[8] | g_node_guid[9] | g_node_guid[10] | g_node_guid[11] |
+          g_node_guid[12] | g_node_guid[13] | g_node_guid[14] | g_node_guid[15])) {
+      g_node_guid[0] = 0xff;
+      g_node_guid[1] = 0xff;
+      g_node_guid[2] = 0xff;
+      g_node_guid[3] = 0xff;
+      g_node_guid[4] = 0xff;
+      g_node_guid[5] = 0xff;
+      g_node_guid[6] = 0xff;
+      g_node_guid[7] = 0xfe;
       rv             = esp_efuse_mac_get_default(g_node_guid + 8);
+      rv             = nvs_set_blob(nvsHandle, "guid", g_node_guid, 16);
       ESP_LOGI(TAG,
                "Constructed GUID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
                g_node_guid[0],
@@ -931,11 +975,22 @@ app_main(void)
   xTaskCreate(tcpsrv_task, "tcpsrv", 4096, (void *) AF_INET6, 5, NULL);
 #endif
 
+  esp_task_wdt_config_t wdconfig;
+  // If the TWDT was not initialized automatically on startup, manually intialize it now
+  esp_task_wdt_config_t twdt_config = {
+    .timeout_ms     = 2000,
+    .idle_core_mask = (1 << CONFIG_FREERTOS_NUMBER_OF_CORES) - 1, // Bitmask of all cores
+    .trigger_panic  = false,
+  };
+  // esp_task_wdt_init(&wdconfig);
+
   /*
     Start main application loop now
   */
 
   while (1) {
+
+    // esp_task_wdt_reset();
 
     twai_message_t msg = {};
 

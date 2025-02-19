@@ -290,6 +290,17 @@ CustomData response: SUCCESS
 
 ## Troubleshooting
 
+### Complaining about missing addr2line file
+
+!()(../images/addr2line_error.png)
+
+Debug and singlestep will not work. This is because the `...addr2line file` for the specific processor is missing. This can be fixed by running the following command in the esp-idf folder:
+
+```
+./install.sh all
+``` 
+
+
 ### Provisioning failed
 
 It is possible that the Wi-Fi credentials provided were incorrect, or the device was not able to establish connection to the network, in which the the `esp_prov` script will notify failure (with reason). Serial monitor log will display the failure along with disconnect reason :
