@@ -20,7 +20,7 @@
 
 /*!
   Modifications done for the VSCP can gw project by
-  Ake Hedman, Grodans Paradis AB 2022
+  Ake Hedman, Grodans Paradis AB 2022-2025
   Part of the VSCP project (https://www.vcsp.org)
 */
 

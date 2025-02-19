@@ -300,7 +300,6 @@ Debug and singlestep will not work. This is because the `...addr2line file` for 
 ./install.sh all
 ``` 
 
-
 ### Provisioning failed
 
 It is possible that the Wi-Fi credentials provided were incorrect, or the device was not able to establish connection to the network, in which the the `esp_prov` script will notify failure (with reason). Serial monitor log will display the failure along with disconnect reason :

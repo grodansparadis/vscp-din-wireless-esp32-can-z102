@@ -61,6 +61,9 @@
 #endif /* CONFIG_WCANG_PROV_TRANSPORT_SOFTAP */
 #include "qrcode.h"
 
+#include "vscp.h"
+#include "vscp-firmware-helper.h"
+
 #include "can4vscp.h"
 #include "tcpsrv.h"
 #include "udpclient.h"
@@ -69,7 +72,20 @@
 
 #include "main.h"
 
+#include "vscp-compiler.h"
+#include "vscp-projdefs.h"
+
 static const char *TAG = "main";
+
+/*
+  VSCP firmware level 2 protocol configuration
+  is done here. Config is defined in 
+  vscp-firmware-level2.h
+*/ 
+// static vscp_frmw2_firmware_config_t vscp_config = {
+//   .m_level = VSCP_LEVEL1, // Level I
+//   .m_puserdata = NULL,     // No user data
+// };  
 
 /**!
  * Configer temperature sensor
@@ -90,11 +106,11 @@ uint8_t g_node_guid[16];
 transport_t tr_tcpsrv[MAX_TCP_CONNECTIONS] = {};
 // transport_t tr_tcpsrv0 = {};    // VSCP tcp/ip link protocol - channel 0
 // transport_t tr_tcpsrv1 = {};    // VSCP tcp/ip link protocol - channel 1
-transport_t tr_udpsrv    = {}; // UDP server
-transport_t tr_udpclient = {}; // UDP client
+// transport_t tr_udpsrv    = {}; // UDP server
+// transport_t tr_udpclient = {}; // UDP client
 transport_t tr_mqtt      = {}; // MQTT
-transport_t tr_ws        = {}; // Websockets
-transport_t tr_ble       = {}; // BLE
+// transport_t tr_ws        = {}; // Websockets
+// transport_t tr_ble       = {}; // BLE
 transport_t tr_uart      = {}; // UART
 
 SemaphoreHandle_t ctrl_task_sem;
@@ -255,7 +271,7 @@ validate_user(const char *user, const char *pw)
       return false;
   }
 
-  ESP_LOGI(TAG, "Credentials: %s %s - %s %s", username, user, password, pw);
+  ESP_LOGI(TAG, "Credentials: %s=%s - %s=%s", username, user, password, pw);
   if (0 == strcmp(username, user) && 0 == strcmp(password, pw)) {
     return true;
   }
@@ -541,11 +557,11 @@ app_main(void)
   }
   // tr_tcpsrv0.msg_queue = xQueueCreate(10, sizeof( twai_message_t) );     // tcp/ip link channel 0
   // tr_tcpsrv1.msg_queue = xQueueCreate(10, sizeof( twai_message_t) );     // tcp/ip link channel 1
-  tr_udpsrv.msg_queue    = xQueueCreate(10, sizeof(twai_message_t)); // UDP srv
-  tr_udpclient.msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // UDP client
+  //tr_udpsrv.msg_queue    = xQueueCreate(10, sizeof(twai_message_t)); // UDP srv
+  //tr_udpclient.msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // UDP client
   tr_mqtt.msg_queue      = xQueueCreate(10, sizeof(twai_message_t)); // MQTT empties
-  tr_ws.msg_queue        = xQueueCreate(10, sizeof(twai_message_t)); // websocket empties
-  tr_ble.msg_queue       = xQueueCreate(10, sizeof(twai_message_t)); // BLE empties
+  //tr_ws.msg_queue        = xQueueCreate(10, sizeof(twai_message_t)); // websocket empties
+  //tr_ble.msg_queue       = xQueueCreate(10, sizeof(twai_message_t)); // BLE empties
   // QueueHandle_t test = xQueueCreate(10, sizeof( twai_message_t) );
 
   ctrl_task_sem = xSemaphoreCreateBinary();
@@ -853,12 +869,12 @@ app_main(void)
     switch (rv) {
 
       case ESP_OK:
-        ESP_LOGI(TAG, "Password: %s", password);
-        rv = nvs_set_str(nvsHandle, "password", "secret");
+        ESP_LOGI(TAG, "Password: %s", password);        
         break;
 
       case ESP_ERR_NVS_NOT_FOUND:
         ESP_LOGI(TAG, "Password not found in nvs, writing default\n");
+        rv = nvs_set_str(nvsHandle, "password", "secret");
         break;
 
       default:

@@ -239,26 +239,20 @@ vscp_link_callback_check_password(const void *pdata, const char *arg)
     return VSCP_ERROR_SUCCESS;
   }
 
-  // trim
+  // trim password
   const char *p = arg;
   while (*p && isspace((unsigned char) *p)) {
     p++;
   }
 
-  ESP_LOGI(TAG, "Username: %s\n", pctx->user);
+  ESP_LOGI(TAG, "Username:'%s'\n", pctx->user);
+  ESP_LOGI(TAG, "Password '%s'\n", p);
 
   // if (0 == strcmp(pctx->user, "admin") && 0 == strcmp(p, "secret")) {
-  ESP_LOGI(TAG, "xxxx %s\n", pctx->user);
+  
   if (validate_user(pctx->user, p)) {
-
     pctx->bValidated = true;
     pctx->privLevel  = 15;
-
-    // Send out early to identify ourself
-    // no need to send earlier as bValidate must be true
-    // for events to get delivered
-    vscp_frmw2_send_heartbeat();
-    vscp_frmw2_send_caps();
   }
   else {
     pctx->user[0]    = '\0';
