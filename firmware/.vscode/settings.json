@@ -1,5 +1,6 @@
 {
   "idf.adapterTargetName": "esp32c3",
+  "C_Cpp.intelliSenseEngine": "Tag Parser",
   "idf.flashType": "UART",
   "idf.port": "/dev/ttyUSB0",
   "esp32.port": "-p ${config:idf.port}",

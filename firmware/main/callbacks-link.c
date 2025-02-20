@@ -157,7 +157,7 @@ uint16_t
 vscp_link_callback_get_interface_count(const void *pdata)
 {
   /* Return number of interfaces we support */
-  return 1;
+  return 2; // see vscp_link_callback_get_interface
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -175,13 +175,37 @@ vscp_link_callback_get_interface(const void *pdata, uint16_t index, struct vscp_
     return VSCP_ERROR_UNKNOWN_ITEM;
   }
 
-  // interface-id-n, type, interface-GUID-n, interface_real-name-n
-  // interface types in vscp.h
+  /*
+    We have two interfaces on this device
+    00:00 is the CAN4VSCP channel.
+    00:01 is the internal interface for the device itself.
 
-  pif->idx  = index;
-  pif->type = VSCP_INTERFACE_TYPE_INTERNAL;
-  memcpy(pif->guid, g_node_guid, 16);
-  strncpy(pif->description, "Interface for the device itself", sizeof(pif->description));
+    Each interfaces is returned as a comma separated string with the following format:
+
+    'interface-id-n, type, interface-GUID-n, interface_real-name-n'
+
+    interface types is in vscp.h
+   */
+
+  switch (index) {
+
+    case 0:
+      pif->idx  = index;
+      pif->type = VSCP_INTERFACE_TYPE_LEVEL1DRV;
+      memcpy(pif->guid, g_node_guid, 16);
+      strncpy(pif->description, "Interface for the device itself", sizeof(pif->description));
+      break;
+
+    case 1: {
+      uint8_t guid[16];
+      pif->idx  = index;
+      pif->type = VSCP_INTERFACE_TYPE_LEVEL2DRV;
+      memcpy(guid, g_node_guid, 16);
+      guid[15] = 0x01;
+      memcpy(pif->guid, guid, 16);
+      strncpy(pif->description, "Interface for the device itself", sizeof(pif->description));
+    } break;
+  }
 
   // We have no interfaces
   return VSCP_ERROR_SUCCESS;
@@ -249,7 +273,7 @@ vscp_link_callback_check_password(const void *pdata, const char *arg)
   ESP_LOGI(TAG, "Password '%s'\n", p);
 
   // if (0 == strcmp(pctx->user, "admin") && 0 == strcmp(p, "secret")) {
-  
+
   if (validate_user(pctx->user, p)) {
     pctx->bValidated = true;
     pctx->privLevel  = 15;
@@ -475,15 +499,35 @@ vscp_link_callback_retr(const void *pdata, vscpEvent **pev)
   // Get pointer to context
   ctx_t *pctx = (ctx_t *) pdata;
 
-  // if (!vscp_fifo_read(&pctx->fifoEventsOut, pex)) {
-  //   return VSCP_ERROR_RCV_EMPTY;
-  // }
-
-  (*pev)->obid = pctx->sock;
-
   // Check if there is a TWAI message in the receive queue
   if (pdPASS != (rv = xQueueReceive(tr_tcpsrv[pctx->id].msg_queue, &msg, 100))) {
     return VSCP_ERROR_RCV_EMPTY;
+  }
+
+  // OK we have a message and should return it as a VSCP event
+  // Allocate a new event
+  *pev = (vscpEvent *) malloc(sizeof(vscpEvent));
+  if (NULL == *pev) {
+    return VSCP_ERROR_MEMORY;
+  }
+
+  // Clear event
+  memset(*pev, 0, sizeof(vscpEvent));
+
+  // We use socket id as obid
+  (*pev)->obid = pctx->sock;
+
+  // Allocate data if the message has data
+  if (msg.data_length_code) {
+    (*pev)->pdata = (uint8_t *) malloc(msg.data_length_code);
+    if (NULL == (*pev)->pdata) {
+      free(*pev);
+      *pev = NULL;
+      return VSCP_ERROR_MEMORY;
+    }
+    // Copy in data
+    (*pev)->sizeData = msg.data_length_code;
+    memcpy((*pev)->pdata, msg.data, msg.data_length_code);
   }
 
   ESP_LOGI(TAG, "--> Event fetched %X", (unsigned int) msg.identifier);
@@ -495,7 +539,10 @@ vscp_link_callback_retr(const void *pdata, vscpEvent **pev)
   (*pev)->timestamp  = esp_timer_get_time();
   (*pev)->vscp_class = (msg.identifier >> 16) & 0x1ff;
   (*pev)->vscp_type  = (msg.identifier >> 8) & 0xff;
+
+  // GUID
   memcpy((*pev)->GUID, g_node_guid, 16);
+
   // Set nickname
   (*pev)->GUID[15] = msg.identifier & 0xff;
   (*pev)->sizeData = msg.data_length_code;
@@ -549,10 +596,16 @@ vscp_link_callback_get_rcvloop_status(const void *pdata, int *pRcvLoop)
     return VSCP_ERROR_INVALID_POINTER;
   }
 
+  if (NULL == pRcvLoop) {
+    return VSCP_ERROR_INVALID_POINTER;
+  }
+
   // Get pointer to context
   ctx_t *pctx = (ctx_t *) pdata;
 
-  return pctx->bRcvLoop;
+  *pRcvLoop = pctx->bRcvLoop;
+
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -751,8 +804,8 @@ vscp_link_callback_info(const void *pdata, VSCPStatus *pstatus)
 int
 vscp_link_callback_rcvloop(const void *pdata, vscpEvent **pev)
 {
-  BaseType_t rv;
-  twai_message_t msg = {};
+  // BaseType_t rv;
+  // twai_message_t msg = {};
 
   // Check pointer
   if ((NULL == pdata) || (NULL == pev)) {
@@ -763,44 +816,12 @@ vscp_link_callback_rcvloop(const void *pdata, vscpEvent **pev)
   ctx_t *pctx = (ctx_t *) pdata;
 
   // Every second output '+OK\r\n' in rcvloop mode
-  if ((time_us_32() - pctx->last_rcvloop_time) > 1000000) {
-    pctx->last_rcvloop_time = time_us_32();
+  if ((esp_timer_get_time() - pctx->last_rcvloop_time) > 1000000) {
+    pctx->last_rcvloop_time = esp_timer_get_time();
     return VSCP_ERROR_TIMEOUT;
   }
 
-  (*pev)->obid = pctx->sock;
-
-  // Check if there is a TWAI message in the receive queue
-  if (pdPASS != (rv = xQueueReceive(tr_tcpsrv[pctx->id].msg_queue, &msg, 100))) {
-    return VSCP_ERROR_RCV_EMPTY;
-  }
-
-  ESP_LOGI(TAG, "--> Event fetched %X", (unsigned int) msg.identifier);
-
-  UBaseType_t cnt = uxQueueMessagesWaiting(tr_tcpsrv[pctx->id].msg_queue);
-  ESP_LOGI(TAG, "count=%u %d", cnt, rv);
-
-  (*pev)->head       = (msg.identifier >> (26 - 5)) & 0x00e0;
-  (*pev)->timestamp  = esp_timer_get_time();
-  (*pev)->vscp_class = (msg.identifier >> 16) & 0x1ff;
-  (*pev)->vscp_type  = (msg.identifier >> 8) & 0xff;
-  memcpy((*pev)->GUID, g_node_guid, 16);
-  // Set nickname
-  (*pev)->GUID[15] = msg.identifier & 0xff;
-  (*pev)->sizeData = msg.data_length_code;
-  // Copy in data if any
-  if (msg.data_length_code) {
-    memcpy((*pev)->pdata, msg.data, msg.data_length_code);
-  }
-  // Time data set to null => first interface with this info should
-  // set timing data
-  (*pev)->year = (*pev)->month = (*pev)->day = (*pev)->hour = (*pev)->minute = (*pev)->second = 0;
-
-  // Update receive statistics
-  pctx->statistics.cntReceiveFrames++;
-  pctx->statistics.cntReceiveData += (*pev)->sizeData;
-
-  return VSCP_ERROR_SUCCESS;
+  return vscp_link_callback_retr(pdata, pev);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -819,7 +840,9 @@ vscp_link_callback_wcyd(const void *pdata, uint64_t *pwcyd)
   // ctx_t *pctx = (ctx_t *) pdata;
 
   // TODO
-  *pwcyd = VSCP_SERVER_CAPABILITY_TCPIP | VSCP_SERVER_CAPABILITY_DECISION_MATRIX | VSCP_SERVER_CAPABILITY_IP4 |
+  *pwcyd = VSCP_SERVER_CAPABILITY_TCPIP | 
+            VSCP_SERVER_CAPABILITY_DECISION_MATRIX | 
+            VSCP_SERVER_CAPABILITY_IP4 |
            /*VSCP_SERVER_CAPABILITY_SSL |*/
            VSCP_SERVER_CAPABILITY_TWO_CONNECTIONS;
 
@@ -839,21 +862,6 @@ vscp_link_callback_shutdown(const void *pdata)
   }
 
   return VSCP_ERROR_NOT_SUPPORTED;
-
-  // Get pointer to context
-  // ctx_t *pctx = (ctx_t *) pdata;
-
-  // At this point
-  // Shutdown the system
-  // Set everything in a safe and inactive state
-
-  // Stay here until someone presses the reset button
-  // or power cycles the board
-  // while (1) {
-  //   // watchdog_update();
-  // }
-
-  // return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -868,16 +876,12 @@ vscp_link_callback_restart(const void *pdata)
     return VSCP_ERROR_INVALID_POINTER;
   }
 
-  return VSCP_ERROR_NOT_SUPPORTED;
-
   // Get pointer to context
-  // ctx_t *pctx = (ctx_t *) pdata;
+  ctx_t *pctx = (ctx_t *) pdata;
 
-  // while (1) {
-  //   ; // Restart
-  // }
+  esp_restart();
 
-  // return VSCP_ERROR_SUCCESS;
+  return VSCP_ERROR_SUCCESS;
 }
 
 int

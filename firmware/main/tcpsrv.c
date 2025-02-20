@@ -194,10 +194,25 @@ client_task(void *pvParameters)
 
   while (1) {
 
+    // input data from socket but wait no more than 500 milliseconds
+    struct timeval tv;
+    tv.tv_sec  = 0;
+    tv.tv_usec = 500000; // 500 milliseconds
+    setsockopt(ctx.sock, SOL_SOCKET, SO_RCVTIMEO, (const char *) &tv, sizeof tv);
+
+    // Read command from client
     memset(rxbuf, 0, sizeof(rxbuf));
     len = (rv = recv(ctx.sock, rxbuf, sizeof(rxbuf) - 1, 0));
     if (rv < 0) {
+      if (errno == EAGAIN) {
+
+        vscp_link_idle_worker(&ctx);
+        continue;
+      }
+
+      // Timeout
       ESP_LOGE(TAG, "Error occurred during receiving: errno %d", errno);
+      break;
     }
     else if (len == 0) {
       ESP_LOGI(TAG, "Connection closed");
@@ -234,11 +249,13 @@ client_task(void *pvParameters)
       // if pev != NULL the worker is responsible for
       // freeing the event
 
-      // Do protocol work here
+      // Do VSCP protocol work here
       // vscp2_do_work(pev);
 
       // Handle rcvloop etc
-      // vscp_link_idle_worker(pctx);
+      // for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
+      vscp_link_idle_worker(&ctx);
+      //}
 
       ESP_LOGI(TAG, "Command handled");
     }

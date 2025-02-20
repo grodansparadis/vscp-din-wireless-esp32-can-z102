@@ -331,7 +331,7 @@ can4vscp_init(uint8_t bitrate)
     // Just a text name, not used by the RTOS kernel. 
     "TwaiTimer",
     // The timer period in ticks, must be greater than 0. 
-    pdMS_TO_TICKS(1000),
+    pdMS_TO_TICKS(15000),
     // The timer will auto-reload when it expire. 
     pdTRUE,
     // The ID is used to store a count of the number of times the timer
@@ -392,11 +392,13 @@ void twai_receive_task(void *arg)
     twai_message_t rxmsg = {};
 
     if (ESP_OK == (rv = twai_receive(&rxmsg, portMAX_DELAY))) {
-      ESP_LOGI(TAG, "TWAI msg received id= %X", (unsigned int)rxmsg.identifier);
+
+      ESP_LOGV(TAG, "TWAI msg received id= %X", (unsigned int)rxmsg.identifier);
+
       // Must be extended msg to be VSCP event
       if (rxmsg.extd) {
 
-        ESP_LOGI(TAG, "VSCP Event received");
+        ESP_LOGV(TAG, "VSCP Event received");
 
         for (int i=0; i<MAX_TCP_CONNECTIONS; i++) {
           // If not open take next
@@ -406,7 +408,7 @@ void twai_receive_task(void *arg)
                                                 (void *)&rxmsg,
                                                 (TickType_t)10)) ) {
             tr_tcpsrv[i].overruns++;                                    
-            ESP_LOGI(TAG, "VSCP link protocol buffer full: Failed to save message to queue");
+            ESP_LOGD(TAG, "VSCP link protocol buffer full: Failed to save message to queue");
           }
         }
         

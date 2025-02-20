@@ -4,7 +4,12 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/home/akhe/development/esp/esp-idf/**"
+                "${env:IDF_PATH}/**",
+                "${env:IDF_PATH}/components/**",
+                "${workspaceFolder}/firmware/managed_components/**",
+                "${workspaceFolder}/firmware/main/**",
+                "${workspaceFolder}/firmware/third_party/vscp-firmware/**",
+                "${workspaceFolder}/build/**"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/clang",

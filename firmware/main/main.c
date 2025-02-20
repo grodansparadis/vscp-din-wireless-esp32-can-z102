@@ -30,7 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <freertos/FreeRTOS.h>
+#include "freertos/FreeRTOS.h"
 #include <freertos/event_groups.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
@@ -555,13 +555,7 @@ app_main(void)
   for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
     tr_tcpsrv[i].msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // tcp/ip link channel i
   }
-  // tr_tcpsrv0.msg_queue = xQueueCreate(10, sizeof( twai_message_t) );     // tcp/ip link channel 0
-  // tr_tcpsrv1.msg_queue = xQueueCreate(10, sizeof( twai_message_t) );     // tcp/ip link channel 1
-  //tr_udpsrv.msg_queue    = xQueueCreate(10, sizeof(twai_message_t)); // UDP srv
-  //tr_udpclient.msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // UDP client
   tr_mqtt.msg_queue      = xQueueCreate(10, sizeof(twai_message_t)); // MQTT empties
-  //tr_ws.msg_queue        = xQueueCreate(10, sizeof(twai_message_t)); // websocket empties
-  //tr_ble.msg_queue       = xQueueCreate(10, sizeof(twai_message_t)); // BLE empties
   // QueueHandle_t test = xQueueCreate(10, sizeof( twai_message_t) );
 
   ctrl_task_sem = xSemaphoreCreateBinary();
@@ -980,25 +974,21 @@ app_main(void)
   xTaskCreate(twai_receive_task, "can4vscp", 4096, NULL /*&tr_twai_rx*/, 5, NULL);
   xSemaphoreGive(ctrl_task_sem);
 
-  // Start UDP server
-  // xTaskCreate(udpsrv_task, "udpsrv", 4096, (void*)AF_INET, 5, NULL);
-
   // Start the tcp/ip link server
   xTaskCreate(tcpsrv_task, "tcpsrv", 4096, (void *) AF_INET, 5, NULL);
 
 #ifdef CONFIG_EXAMPLE_IPV6
-  xTaskCreate(udpsrv_task, "udpsrv", 4096, (void *) AF_INET6, 5, NULL);
   xTaskCreate(tcpsrv_task, "tcpsrv", 4096, (void *) AF_INET6, 5, NULL);
 #endif
 
-  esp_task_wdt_config_t wdconfig;
   // If the TWDT was not initialized automatically on startup, manually intialize it now
-  esp_task_wdt_config_t twdt_config = {
+  esp_task_wdt_config_t wdconfig = {
     .timeout_ms     = 2000,
     .idle_core_mask = (1 << CONFIG_FREERTOS_NUMBER_OF_CORES) - 1, // Bitmask of all cores
     .trigger_panic  = false,
+    
   };
-  // esp_task_wdt_init(&wdconfig);
+  //esp_task_wdt_init(&wdconfig);
 
   /*
     Start main application loop now
@@ -1006,9 +996,9 @@ app_main(void)
 
   while (1) {
 
-    // esp_task_wdt_reset();
+    //esp_task_wdt_reset();
 
-    twai_message_t msg = {};
+    //twai_message_t msg = {};
 
     // Check if there is a TWAI message in the receive queue
     // if( xQueueReceive( tr_twai_rx.msg_queue,
@@ -1021,13 +1011,13 @@ app_main(void)
 
     //   // Now put the message in all open client queues
 
-    // }
+    //}
 
-    // xSemaphoreTake(ctrl_task_sem, portMAX_DELAY);
+    xSemaphoreTake(ctrl_task_sem, portMAX_DELAY);
 
     // ESP_LOGI(TAG, "Loop");
-    // xSemaphoreGive(ctrl_task_sem);
-    // vTaskDelay(1000 / portTICK_PERIOD_MS);
+    xSemaphoreGive(ctrl_task_sem);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 
   // Clean up
