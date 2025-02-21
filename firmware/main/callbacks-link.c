@@ -187,19 +187,19 @@ vscp_link_callback_get_interface(const void *pdata, uint16_t index, struct vscp_
 
     case 0:
       pif->idx  = index;
-      pif->type = VSCP_INTERFACE_TYPE_LEVEL1DRV;
+      pif->type = VSCP_INTERFACE_TYPE_LEVEL2DRV;
       memcpy(pif->guid, g_node_guid, 16);
-      strncpy(pif->description, "Interface for the CAN4VSCP channel", sizeof(pif->description));
+      strncpy(pif->description, "Interface for the device itself", sizeof(pif->description));
       break;
 
     case 1: {
       uint8_t guid[16];
       pif->idx  = index;
-      pif->type = VSCP_INTERFACE_TYPE_LEVEL2DRV;
+      pif->type = VSCP_INTERFACE_TYPE_LEVEL1DRV;
       memcpy(guid, g_node_guid, 16);
-      guid[15] = 0x01;
-      memcpy(pif->guid, guid, 16);
-      strncpy(pif->description, "Interface for the device itself", sizeof(pif->description));
+      guid[13] = 0x01; // Interface 0x0001
+      memcpy(pif->guid, g_node_guid, 16);
+      strncpy(pif->description, "Interface for the CAN4VSCP channel", sizeof(pif->description));
     } break;
 
     default:
@@ -701,7 +701,7 @@ vscp_link_callback_set_guid(const void *pdata, uint8_t *pguid)
     return VSCP_ERROR_INVALID_POINTER;
   }
 
-  //memcpy(g_node_guid, pguid, 16);
+  // memcpy(g_node_guid, pguid, 16);
   return VSCP_ERROR_NOT_SUPPORTED;
 }
 
