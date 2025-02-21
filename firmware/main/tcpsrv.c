@@ -262,6 +262,7 @@ client_task(void *pvParameters)
   };
 
   // Mark transport channel as closed
+
   tr_tcpsrv[ctx.id].open = false;
 
   // Empty the queue

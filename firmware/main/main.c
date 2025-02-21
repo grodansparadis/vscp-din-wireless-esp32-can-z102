@@ -30,7 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "freertos/FreeRTOS.h"
+#include <freertos/FreeRTOS.h>
 #include <freertos/event_groups.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
@@ -79,13 +79,13 @@ static const char *TAG = "main";
 
 /*
   VSCP firmware level 2 protocol configuration
-  is done here. Config is defined in 
+  is done here. Config is defined in
   vscp-firmware-level2.h
-*/ 
+*/
 // static vscp_frmw2_firmware_config_t vscp_config = {
 //   .m_level = VSCP_LEVEL1, // Level I
 //   .m_puserdata = NULL,     // No user data
-// };  
+// };
 
 /**!
  * Configer temperature sensor
@@ -101,22 +101,11 @@ nvs_handle_t nvsHandle;
 // GUID for unit
 uint8_t g_node_guid[16];
 
-// transport_t tr_twai_tx = {};    // TWAI output
-// transport_t tr_twai_rx = {};    // TWAI input
 transport_t tr_tcpsrv[MAX_TCP_CONNECTIONS] = {};
-// transport_t tr_tcpsrv0 = {};    // VSCP tcp/ip link protocol - channel 0
-// transport_t tr_tcpsrv1 = {};    // VSCP tcp/ip link protocol - channel 1
-// transport_t tr_udpsrv    = {}; // UDP server
-// transport_t tr_udpclient = {}; // UDP client
-transport_t tr_mqtt      = {}; // MQTT
-// transport_t tr_ws        = {}; // Websockets
-// transport_t tr_ble       = {}; // BLE
-transport_t tr_uart      = {}; // UART
+transport_t tr_mqtt                        = {}; // MQTT
+transport_t tr_uart                        = {}; // UART
 
 SemaphoreHandle_t ctrl_task_sem;
-
-// static xdev_buffer ucTCP_RX_Buffer;
-// static xdev_buffer ucTCP_TX_Buffer;
 
 // Web server
 static httpd_handle_t server = NULL;
@@ -499,8 +488,6 @@ wifi_prov_print_qr(const char *name, const char *username, const char *pop, cons
 void
 app_main(void)
 {
-  // static uint8_t uid[33];
-
   // Initialize NVS partition
   esp_err_t rv = nvs_flash_init();
   if (rv == ESP_ERR_NVS_NO_FREE_PAGES || rv == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -555,7 +542,7 @@ app_main(void)
   for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
     tr_tcpsrv[i].msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // tcp/ip link channel i
   }
-  tr_mqtt.msg_queue      = xQueueCreate(10, sizeof(twai_message_t)); // MQTT empties
+  tr_mqtt.msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // MQTT empties
   // QueueHandle_t test = xQueueCreate(10, sizeof( twai_message_t) );
 
   ctrl_task_sem = xSemaphoreCreateBinary();
@@ -863,7 +850,7 @@ app_main(void)
     switch (rv) {
 
       case ESP_OK:
-        ESP_LOGI(TAG, "Password: %s", password);        
+        ESP_LOGI(TAG, "Password: %s", password);
         break;
 
       case ESP_ERR_NVS_NOT_FOUND:
@@ -986,9 +973,9 @@ app_main(void)
     .timeout_ms     = 2000,
     .idle_core_mask = (1 << CONFIG_FREERTOS_NUMBER_OF_CORES) - 1, // Bitmask of all cores
     .trigger_panic  = false,
-    
+
   };
-  //esp_task_wdt_init(&wdconfig);
+  // esp_task_wdt_init(&wdconfig);
 
   /*
     Start main application loop now
@@ -996,9 +983,9 @@ app_main(void)
 
   while (1) {
 
-    //esp_task_wdt_reset();
+    // esp_task_wdt_reset();
 
-    //twai_message_t msg = {};
+    // twai_message_t msg = {};
 
     // Check if there is a TWAI message in the receive queue
     // if( xQueueReceive( tr_twai_rx.msg_queue,

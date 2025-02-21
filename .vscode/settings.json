@@ -135,5 +135,11 @@
     "ESP_NOW_VER_MINOR": "5",
     "ESP_NOW_VER_PATCH": "2",
     "IDF_TARGET": "esp32c3"
+  },
+  "files.associations": {
+    "vscp.h": "c",
+    "vscp-firmware-helper.h": "c",
+    "can4vscp.h": "c",
+    "tcpsrv.h": "c"
   }
 }

@@ -171,10 +171,6 @@ vscp_link_callback_get_interface(const void *pdata, uint16_t index, struct vscp_
     return VSCP_ERROR_UNKNOWN_ITEM;
   }
 
-  if (index != 0) {
-    return VSCP_ERROR_UNKNOWN_ITEM;
-  }
-
   /*
     We have two interfaces on this device
     00:00 is the CAN4VSCP channel.
@@ -193,7 +189,7 @@ vscp_link_callback_get_interface(const void *pdata, uint16_t index, struct vscp_
       pif->idx  = index;
       pif->type = VSCP_INTERFACE_TYPE_LEVEL1DRV;
       memcpy(pif->guid, g_node_guid, 16);
-      strncpy(pif->description, "Interface for the device itself", sizeof(pif->description));
+      strncpy(pif->description, "Interface for the CAN4VSCP channel", sizeof(pif->description));
       break;
 
     case 1: {
@@ -205,10 +201,23 @@ vscp_link_callback_get_interface(const void *pdata, uint16_t index, struct vscp_
       memcpy(pif->guid, guid, 16);
       strncpy(pif->description, "Interface for the device itself", sizeof(pif->description));
     } break;
+
+    default:
+      return VSCP_ERROR_UNKNOWN_ITEM;
+      break;
   }
 
-  // We have no interfaces
   return VSCP_ERROR_SUCCESS;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// vscp_link_callback_close_interface
+//
+
+int
+vscp_link_callback_close_interface(const void *pdata, uint8_t *pguid)
+{
+  return VSCP_ERROR_NOT_SUPPORTED;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -692,8 +701,8 @@ vscp_link_callback_set_guid(const void *pdata, uint8_t *pguid)
     return VSCP_ERROR_INVALID_POINTER;
   }
 
-  memcpy(g_node_guid, pguid, 16);
-  return VSCP_ERROR_SUCCESS;
+  //memcpy(g_node_guid, pguid, 16);
+  return VSCP_ERROR_NOT_SUPPORTED;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -840,9 +849,7 @@ vscp_link_callback_wcyd(const void *pdata, uint64_t *pwcyd)
   // ctx_t *pctx = (ctx_t *) pdata;
 
   // TODO
-  *pwcyd = VSCP_SERVER_CAPABILITY_TCPIP | 
-            VSCP_SERVER_CAPABILITY_DECISION_MATRIX | 
-            VSCP_SERVER_CAPABILITY_IP4 |
+  *pwcyd = VSCP_SERVER_CAPABILITY_TCPIP | VSCP_SERVER_CAPABILITY_DECISION_MATRIX | VSCP_SERVER_CAPABILITY_IP4 |
            /*VSCP_SERVER_CAPABILITY_SSL |*/
            VSCP_SERVER_CAPABILITY_TWO_CONNECTIONS;
 
@@ -877,7 +884,7 @@ vscp_link_callback_restart(const void *pdata)
   }
 
   // Get pointer to context
-  ctx_t *pctx = (ctx_t *) pdata;
+  // ctx_t *pctx = (ctx_t *) pdata;
 
   esp_restart();
 
