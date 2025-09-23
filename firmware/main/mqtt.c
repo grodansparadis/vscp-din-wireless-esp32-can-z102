@@ -52,10 +52,11 @@
 #include <vscp-firmware-helper.h>
 
 #include <esp32cangw.h>
+#include <main.h>
 #include "mqtt.h"
 
 // Global stuff
-//extern node_persistent_config_t g_persistent; // main
+extern node_persistent_config_t g_persistent; // main
 // extern transport_t g_tr_tcpsrv[CONFIG_APP_MAX_TCP_CONNECTIONS]; // tcpsrv
 
 static const char *TAG = "MQTT";
@@ -109,8 +110,8 @@ mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent
   int rv;
   char workbuf[48];
 
-  ESP_PARAM_CHECK(newTopic);
-  ESP_PARAM_CHECK(pTopic);
+  //ESP_PARAM_CHECK(newTopic);
+  //ESP_PARAM_CHECK(pTopic);
 
   /*
     {{node}}        - Node name
@@ -145,7 +146,7 @@ mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent
   //printf("newtopic=%s\n", newTopic);
   //fflush(stdout);
 
-  char *saveTopic = (char *)ESP_CALLOC(1,len);
+  char *saveTopic = (char *)calloc(1,len);
   if (NULL == saveTopic) {
     return VSCP_ERROR_MEMORY;
   }

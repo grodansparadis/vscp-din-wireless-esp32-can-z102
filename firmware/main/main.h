@@ -4,7 +4,7 @@
   This file is part of the VSCP (https://www.vscp.org)
 
   The MIT License (MIT)
-  Copyright © 2022-2025 Ake Hedman, the VSCP project <info@vscp.org>
+  Copyright © 2021-2025 Ake Hedman, the VSCP project <info@vscp.org>
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -77,7 +77,7 @@ typedef struct {
   // Module
   char nodeName[32];    // User name for node
   uint8_t lkey[32];     // Local key (16 (EAS128)/24(AES192)/32(AES256))
-  uint8_t pmk[32];      // Primary key (16 (EAS128)/24(AES192)/32(AES256)) 
+  uint8_t pmk[32];      // Primary key (16 (EAS128) / 24(AES192) / 32(AES256)) 
   uint8_t nodeGuid[16]; // GUID for node (default: Constructed from MAC address)
   uint8_t startDelay;   // Delay before wifi is enabled (to charge cap)
   uint32_t bootCnt;     // Number of restarts (not editable)
