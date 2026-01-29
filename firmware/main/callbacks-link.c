@@ -37,6 +37,9 @@
 #include "vscp-compiler.h"
 #include "vscp-projdefs.h"
 
+#include <vscp-class.h>
+#include <vscp-type.h>
+
 #include <esp_log.h>
 #include <esp_timer.h>
 #include <nvs_flash.h>

@@ -43,7 +43,7 @@
 
 #include "nvs_flash.h"
 
-#include <driver/temperature_sensor.h>
+//#include <driver/temperature_sensor.h>
 
 #include "lwip/sockets.h"
 #include "main.h"
@@ -77,7 +77,7 @@ static const twai_timing_config_t can4vscp_timing_config[] = {
   { .brp = 4, .tseg_1 = 15, .tseg_2 = 4, .sjw = 3, .triple_sampling = false }
 };
 
-temperature_sensor_handle_t temp_handle = NULL;
+//temperature_sensor_handle_t temp_handle = NULL;
 
 // static EventGroupHandle_t s_twai_event_group;
 //
@@ -173,6 +173,7 @@ can4vscp_enable(void)
   twai_clear_receive_queue();
   can4vscp_unblock();
   can4vscp_cfg.bus_state = ON_BUS;
+  ESP_LOGI(TAG, "TWAI driver installed");
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -308,9 +309,9 @@ can4vscp_Timer_Callback(TimerHandle_t xTimer)
   //ESP_LOGI(TAG, "CAN4VSCP Timer Callback");
 
   // Get converted sensor data
-  float tsens_out;
-  ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_handle, &tsens_out));
-  printf("Temperature is %0.2f °C\n", tsens_out);
+  // float tsens_out;
+  // ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_handle, &tsens_out));
+  // printf("Temperature is %0.2f °C\n", tsens_out);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -321,10 +322,10 @@ void
 can4vscp_init(uint8_t bitrate)
 {
   // Tempsensor  
-  temperature_sensor_config_t temp_sensor = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 50);
-  ESP_ERROR_CHECK(temperature_sensor_install(&temp_sensor, &temp_handle));
+      // temperature_sensor_config_t temp_sensor = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 50);
+      // ESP_ERROR_CHECK(temperature_sensor_install(&temp_sensor, &temp_handle));
 
-  ESP_ERROR_CHECK(temperature_sensor_enable(temp_handle));
+  //ESP_ERROR_CHECK(temperature_sensor_enable(temp_handle));
 
   s_can4vscp_event_group = xEventGroupCreate();
   xCAN4VSCP_EN_Timer     = xTimerCreate(
@@ -393,12 +394,12 @@ void twai_receive_task(void *arg)
 
     if (ESP_OK == (rv = twai_receive(&rxmsg, portMAX_DELAY))) {
 
-      ESP_LOGV(TAG, "TWAI msg received id= %X", (unsigned int)rxmsg.identifier);
+      ESP_LOGI(TAG, "TWAI msg received id= %X", (unsigned int)rxmsg.identifier);
 
       // Must be extended msg to be VSCP event
       if (rxmsg.extd) {
 
-        ESP_LOGV(TAG, "VSCP Event received");
+        ESP_LOGI(TAG, "VSCP Event received");
 
         for (int i=0; i<MAX_TCP_CONNECTIONS; i++) {
           // If not open take next

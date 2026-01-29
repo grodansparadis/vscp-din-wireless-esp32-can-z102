@@ -4,7 +4,7 @@
   This file is part of the VSCP (https://www.vscp.org)
 
   The MIT License (MIT)
-  Copyright © 2022-2025 Ake Hedman, the VSCP project <info@vscp.org>
+  Copyright (C) 2022-2026 Ake Hedman, the VSCP project <info@vscp.org>
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -189,7 +189,7 @@ function startUpload() {
 */
 #define WEBPAGE_START_TEMPLATE "<!DOCTYPE html><html lang=\"en\" class=\"\"><head><meta charset='utf-8'>" \
 "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,user-scalable=no\" />" \
-"<title>Droplet Alpha node - Main Menu</title>"\
+"<title>VSCP can4vscp gateway node - Main Menu</title>"\
 "<script>" \
 WEBPAGE_JS1 \
 WEBPAGE_JS2 \

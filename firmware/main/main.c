@@ -6,7 +6,7 @@
   This file is part of the VSCP (https://www.vscp.org)
 
   The MIT License (MIT)
-  Copyright © 2021-2025 Ake Hedman, the VSCP project <info@vscp.org>
+  Copyright (C) 2021-2026 Ake Hedman, the VSCP project <info@vscp.org>
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -37,7 +37,6 @@
 #include "freertos/semphr.h"
 
 #include <driver/gpio.h>
-#include <driver/temperature_sensor.h>
 #include "esp_task_wdt.h"
 #include <driver/twai.h>
 #include <esp_event.h>
@@ -87,25 +86,36 @@ static const char *TAG = "main";
 //   .m_puserdata = NULL,     // No user data
 // };
 
-/**!
- * Configer temperature sensor
- */
-temperature_sensor_config_t cfgTempSensor = {
-  .range_min = 20,
-  .range_max = 50,
-};
+
+
+// * * * Globals * * *
 
 // Handle for nvs storage
-nvs_handle_t nvsHandle;
+nvs_handle_t g_nvsHandle;
 
 // GUID for unit
 uint8_t g_node_guid[16];
+
+// Persistent configuration defaults
+node_persistent_config_t g_persistent = {
+  .nodeName = "VSCP CAN4VSCP Gateway", // Default name
+  .bootCnt = 0
+};
 
 transport_t tr_tcpsrv[MAX_TCP_CONNECTIONS] = {};
 transport_t tr_mqtt                        = {}; // MQTT
 transport_t tr_uart                        = {}; // UART
 
 SemaphoreHandle_t ctrl_task_sem;
+
+// CAN/TWAI
+
+// static const twai_timing_config_t t_config = TWAI_TIMING_CONFIG_125KBITS();
+// static const twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+// static const twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(TX_GPIO_NUM, RX_GPIO_NUM, TWAI_MODE_NORMAL);
+
+static QueueHandle_t tr_twai_tx;
+static QueueHandle_t tr_twai_rx;
 
 // Web server
 static httpd_handle_t server = NULL;
@@ -196,15 +206,32 @@ static EventGroupHandle_t wifi_event_group;
 #define QRCODE_BASE_URL       "https://espressif.github.io/esp-jumpstart/qrcode.html"
 
 ///////////////////////////////////////////////////////////////////////////////
-// read_onboard_temperature
+// startOTA
 //
 
-float
-read_onboard_temperature(void)
+void
+startOTA(void)
 {
-  // TODO
-  return 0;
+  ESP_LOGI(TAG, "Starting OTA firmware update...");
+
+  //vscp_fwhlp_initiate_ota_update("http://firmware.vscp.org/firmware/vscp-din-wireless-esp32-can-z102-latest.bin");
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// app_initiate_firmware_upload
+//
+
+int
+app_initiate_firmware_upload(const char *url)
+{
+  ESP_LOGI(TAG, "Starting firmware update from URL: %s", url);
+
+  //vscp_fwhlp_initiate_ota_update(url);
+
+  return VSCP_ERROR_SUCCESS;  
+}
+
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // getMilliSeconds
@@ -229,7 +256,7 @@ validate_user(const char *user, const char *pw)
   char password[VSCP_LINK_MAX_PASSWORD_LENGTH];
 
   length = sizeof(username);
-  rv     = nvs_get_str(nvsHandle, "username", username, &length);
+  rv     = nvs_get_str(g_nvsHandle, "username", username, &length);
   switch (rv) {
 
     case ESP_OK:
@@ -245,7 +272,7 @@ validate_user(const char *user, const char *pw)
   }
 
   length = sizeof(password);
-  rv     = nvs_get_str(nvsHandle, "password", password, &length);
+  rv     = nvs_get_str(g_nvsHandle, "password", password, &length);
   switch (rv) {
 
     case ESP_OK:
@@ -279,7 +306,7 @@ get_device_guid(uint8_t *pguid)
     return false;
   }
 
-  rv = nvs_get_blob(nvsHandle, "guid", pguid, &length);
+  rv = nvs_get_blob(g_nvsHandle, "guid", pguid, &length);
   switch (rv) {
 
     case ESP_OK:
@@ -537,8 +564,8 @@ app_main(void)
   gpio_set_level(ACTIVE_LED_GPIO_NUM, 1);
 
   // TWAI message buffers
-  // tr_twai_rx.msg_queue = xQueueCreate(10, sizeof( twai_message_t) );    // Incoming CAN
-  // tr_twai_tx.msg_queue = xQueueCreate(40, sizeof( twai_message_t) );    // Outgoing CAN (All fills)
+  tr_twai_rx = xQueueCreate(10, sizeof( twai_message_t) );    // Incoming CAN
+  tr_twai_tx = xQueueCreate(40, sizeof( twai_message_t) );    // Outgoing CAN (All fills)
   for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
     tr_tcpsrv[i].msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // tcp/ip link channel i
   }
@@ -643,7 +670,7 @@ app_main(void)
      *   - this should be a string with length > 0
      *   - NULL if not used
      */
-    const char *pop = "VSCP-Frankfurt-WiFi";
+    const char *pop = "VSCP-CAN4VSCP-GATEWAY-WiFi";
     /*
      * If the pop is allocated dynamically, then it should be valid till
      * the provisioning process is running.
@@ -785,7 +812,7 @@ app_main(void)
 
   // Init persistent storage
 
-  rv = nvs_open("config", NVS_READWRITE, &nvsHandle);
+  rv = nvs_open("config", NVS_READWRITE, &g_nvsHandle);
   if (rv != ESP_OK) {
     printf("Error (%s) opening NVS handle!\n", esp_err_to_name(rv));
   }
@@ -795,7 +822,7 @@ app_main(void)
     printf("Reading restart counter from NVS ... ");
     int32_t restart_counter = 0; // value will default to 0, if not set yet in NVS
 
-    rv = nvs_get_i32(nvsHandle, "restart_counter", &restart_counter);
+    rv = nvs_get_i32(g_nvsHandle, "restart_counter", &restart_counter);
     switch (rv) {
 
       case ESP_OK:
@@ -813,7 +840,7 @@ app_main(void)
     // Write
     printf("Updating restart counter in NVS ... ");
     restart_counter++;
-    rv = nvs_set_i32(nvsHandle, "restart_counter", restart_counter);
+    rv = nvs_set_i32(g_nvsHandle, "restart_counter", restart_counter);
     printf((rv != ESP_OK) ? "Failed!\n" : "Done\n");
 
     // Commit written value.
@@ -821,14 +848,14 @@ app_main(void)
     // to flash storage. Implementations may write to storage at other times,
     // but this is not guaranteed.
     printf("Committing updates in NVS ... ");
-    rv = nvs_commit(nvsHandle);
+    rv = nvs_commit(g_nvsHandle);
     printf((rv != ESP_OK) ? "Failed!\n" : "Done\n");
 
     // TODO remove !!!!
     char username[32];
     char password[32];
     size_t length = sizeof(username);
-    rv            = nvs_get_str(nvsHandle, "username", username, &length);
+    rv            = nvs_get_str(g_nvsHandle, "username", username, &length);
     switch (rv) {
 
       case ESP_OK:
@@ -837,7 +864,7 @@ app_main(void)
 
       case ESP_ERR_NVS_NOT_FOUND:
         ESP_LOGI(TAG, "Username not found in nvs, writing default\n");
-        rv = nvs_set_str(nvsHandle, "username", "vscp");
+        rv = nvs_set_str(g_nvsHandle, "username", "vscp");
         break;
 
       default:
@@ -846,7 +873,7 @@ app_main(void)
     }
 
     length = sizeof(password);
-    rv     = nvs_get_str(nvsHandle, "password", password, &length);
+    rv     = nvs_get_str(g_nvsHandle, "password", password, &length);
     switch (rv) {
 
       case ESP_OK:
@@ -855,7 +882,7 @@ app_main(void)
 
       case ESP_ERR_NVS_NOT_FOUND:
         ESP_LOGI(TAG, "Password not found in nvs, writing default\n");
-        rv = nvs_set_str(nvsHandle, "password", "secret");
+        rv = nvs_set_str(g_nvsHandle, "password", "secret");
         break;
 
       default:
@@ -864,7 +891,7 @@ app_main(void)
     }
 
     length = 16;
-    rv     = nvs_get_blob(nvsHandle, "guid", g_node_guid, &length);
+    rv     = nvs_get_blob(g_nvsHandle, "guid", g_node_guid, &length);
     switch (rv) {
 
       case ESP_OK:
@@ -911,7 +938,7 @@ app_main(void)
       g_node_guid[6] = 0xff;
       g_node_guid[7] = 0xfe;
       rv             = esp_efuse_mac_get_default(g_node_guid + 8);
-      rv             = nvs_set_blob(nvsHandle, "guid", g_node_guid, 16);
+      rv             = nvs_set_blob(g_nvsHandle, "guid", g_node_guid, 16);
       ESP_LOGI(TAG,
                "Constructed GUID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
                g_node_guid[0],
@@ -941,8 +968,8 @@ app_main(void)
   // ***************************************************************************
 
   // Install TWAI driver
-  // ESP_ERROR_CHECK(twai_driver_install(&g_config, &t_config, &f_config));
-  // ESP_LOGI(EXAMPLE_TAG, "Driver installed");
+  //ESP_ERROR_CHECK(twai_driver_install(&g_config, &t_config, &f_config));
+  //ESP_LOGI(TAG, "Driver installed");
 
   // Start TWAI
   can4vscp_init(CAN4VSCP_125K);
@@ -958,7 +985,7 @@ app_main(void)
   can4vscp_setBitrate(CAN4VSCP_125K);
   can4vscp_enable();
 
-  xTaskCreate(twai_receive_task, "can4vscp", 4096, NULL /*&tr_twai_rx*/, 5, NULL);
+  xTaskCreate(twai_receive_task, "can4vscp", 4096, &tr_twai_rx, 5, NULL);
   xSemaphoreGive(ctrl_task_sem);
 
   // Start the tcp/ip link server
@@ -983,22 +1010,22 @@ app_main(void)
 
   while (1) {
 
-    // esp_task_wdt_reset();
+    //esp_task_wdt_reset();
 
-    // twai_message_t msg = {};
+    twai_message_t msg = {};
 
     // Check if there is a TWAI message in the receive queue
-    // if( xQueueReceive( tr_twai_rx.msg_queue,
-    //                      &msg,
-    //                      portMAX_DELAY) == pdPASS ) {
+    if( xQueueReceive( tr_twai_rx,
+                         &msg,
+                         portMAX_DELAY) == pdPASS ) {
 
-    //   ESP_LOGI(TAG, "--> Event fetched %X", (unsigned int)msg.identifier);
-    //   UBaseType_t cnt = uxQueueMessagesWaiting(tr_twai_rx.msg_queue);
-    //   ESP_LOGI(TAG,"count=%u %d",cnt,rv);
+      ESP_LOGI(TAG, "--> Event fetched %X", (unsigned int)msg.identifier);
+      UBaseType_t cnt = uxQueueMessagesWaiting(tr_twai_rx);
+      ESP_LOGE(TAG,"count=%u %d",cnt,rv);
 
-    //   // Now put the message in all open client queues
+      // Now put the message in all open client queues
 
-    //}
+    }
 
     xSemaphoreTake(ctrl_task_sem, portMAX_DELAY);
 
@@ -1010,5 +1037,5 @@ app_main(void)
   // Clean up
 
   // Close
-  nvs_close(nvsHandle);
+  nvs_close(g_nvsHandle);
 }

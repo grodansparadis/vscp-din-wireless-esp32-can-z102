@@ -1,5 +1,6 @@
 HISTORY
 -------
+260128 - Changed to "rev C" on board and on drawing.
 230424 - Rev C
 230424 - Added scotty diod to USB power input.
 230423 - Added connector for reset button

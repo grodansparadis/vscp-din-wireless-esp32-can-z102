@@ -4,7 +4,7 @@
   This file is part of the VSCP (https://www.vscp.org)
 
   The MIT License (MIT)
-  Copyright © 2021-2025 Ake Hedman, the VSCP project <info@vscp.org>
+  Copyright (C) 2021-2025 Ake Hedman, the VSCP project <info@vscp.org>
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -35,40 +35,39 @@
 #include "vscp.h"
 #include "can4vscp.h"
 
-#define TWAI_TX_GPIO_NUM          GPIO_NUM_9  // CONFIG_EXAMPLE_TX_GPIO_NUM
-#define TWAI_RX_GPIO_NUM          GPIO_NUM_10  // GPIO_NUM_3 CONFIG_EXAMPLE_RX_GPIO_NUM
+#define TWAI_TX_GPIO_NUM GPIO_NUM_9  // CONFIG_EXAMPLE_TX_GPIO_NUM
+#define TWAI_RX_GPIO_NUM GPIO_NUM_10 // GPIO_NUM_3 CONFIG_EXAMPLE_RX_GPIO_NUM
 
-#define CONNECTED_LED_GPIO_NUM		0
-#define ACTIVE_LED_GPIO_NUM			  1
-#define GPIO_OUTPUT_PIN_SEL       ((1ULL<<CONNECTED_LED_GPIO_NUM) | (1ULL<<ACTIVE_LED_GPIO_NUM) )
+#define CONNECTED_LED_GPIO_NUM 0
+#define ACTIVE_LED_GPIO_NUM    1
+#define GPIO_OUTPUT_PIN_SEL    ((1ULL << CONNECTED_LED_GPIO_NUM) | (1ULL << ACTIVE_LED_GPIO_NUM))
 
-#define DEV_BUFFER_LENGTH	        64
+#define DEV_BUFFER_LENGTH 64
 
-typedef enum
-{	
-  CH_LINK = 0,    // tcp/ip link protocol
-  CH_CAN,         // CAN
-  CH_WS,          // websocket I & II
-  CH_UDP,         // UDP 
-  CH_MULTI,       // Multicast
-  CH_MQTT,        // MQTT
-	CH_BLE,         // BLE
-	CH_UART         // UART  
+typedef enum {
+  CH_LINK = 0, // tcp/ip link protocol
+  CH_CAN,      // CAN
+  CH_WS,       // websocket I & II
+  CH_UDP,      // UDP
+  CH_MULTI,    // Multicast
+  CH_MQTT,     // MQTT
+  CH_BLE,      // BLE
+  CH_UART      // UART
 } dev_channel_t;
 
-// All transports use this structure for state 
+// All transports use this structure for state
 
 typedef struct {
   union {
     struct {
-      uint32_t active: 1;       /**< Transport active if set to one */
-      uint32_t open: 1;         /**< Transport open if set to one */
-      uint32_t reserved: 30;    /**< Reserved bits */
+      uint32_t active : 1;    /**< Transport active if set to one */
+      uint32_t open : 1;      /**< Transport open if set to one */
+      uint32_t reserved : 30; /**< Reserved bits */
     };
-    uint32_t flags;             /**< Don't use */ 
+    uint32_t flags; /**< Don't use */
   };
-  QueueHandle_t msg_queue;      /**< Message queue for transport */
-  uint32_t overruns;            /**< Queue overrun counter */
+  QueueHandle_t msg_queue; /**< Message queue for transport */
+  uint32_t overruns;       /**< Queue overrun counter */
 
 } transport_t;
 
@@ -76,11 +75,50 @@ typedef struct {
 
   // Module
   char nodeName[32];    // User name for node
-  uint8_t lkey[32];     // Local key (16 (EAS128)/24(AES192)/32(AES256))
-  uint8_t pmk[32];      // Primary key (16 (EAS128) / 24(AES192) / 32(AES256)) 
   uint8_t nodeGuid[16]; // GUID for node (default: Constructed from MAC address)
   uint8_t startDelay;   // Delay before wifi is enabled (to charge cap)
   uint32_t bootCnt;     // Number of restarts (not editable)
+
+  // Log
+  uint8_t logType;         // Log type
+  uint8_t logLevel;        // Log level
+  uint8_t logRetries;      // Number of retries for log message send
+  uint16_t logPort;        // Log server port
+  char logUrl[80];         // Log server address
+  char logMqttTopic[80];   // MQTT topic for log messages
+  uint8_t logwrite2Stdout; // Write log to stdout
+
+  // web server
+  bool webEnable;       // Enable web server
+  uint16_t webPort;     // Web server port
+  char webUser[32];     // Web server user
+  char webPassword[32]; // Web server password
+
+  // tcp/ip interface
+  bool tcpipEnable;       // Enable tcp/ip interface
+  uint16_t tcpipPort;     // TCP/IP port
+  char tcpipUser[32];     // TCP/IP user
+  char tcpipPassword[32]; // TCP/IP password
+  uint8_t tcpipVer;       // IP version 4 or 6
+
+  // VSCP link protocol
+  bool vscplinkEnable;           // Enable VSCP link protocol
+  uint16_t vscplinkPort;         // VSCP link protocol port
+  char vscplinkUser[32];         // VSCP link protocol user
+  char vscplinkPassword[32];     // VSCP link protocol password
+  char vscplinkUrl[80];          // VSCP link protocol URL
+  unsigned char vscpLinkKey[32]; // VSCP link protocol key
+
+  // MQTT
+  char mqttPub[80];      // MQTT publish topic
+  char mqttSub[80];      // MQTT subscribe topic
+  char mqttPubLog[80];   // MQTT topic for log messages
+  bool mqttEnable;       // Enable MQTT
+  char mqttClientid[32]; // MQTT client ID
+  char mqttUrl[80];      // MQTT URL
+  uint16_t mqttPort;     // MQTT port
+  char mqttUsername[32]; // MQTT username
+  char mqttPassword[32]; // MQTT password
 } node_persistent_config_t;
 
 /*!
@@ -88,74 +126,82 @@ typedef struct {
   on start up.
 */
 
-#define DEFAULT_GUID              ""      // Empty constructs from MAC, "-" all nills, "xx:yy:..." set GUID
+#define DEFAULT_KEY_LEN 16 // AES128
+#define DEFAULT_GUID    "" // Empty constructs from MAC, "-" all nills, "xx:yy:..." set GUID
 
 // BLE
-#define DEFAULT_BLE_ENABLE        true
-#define DEFAULT_ADVERTISE_ENABLE  true
+#define DEFAULT_BLE_ENABLE       true
+#define DEFAULT_ADVERTISE_ENABLE true
 
 // Web server
-#define DEFAULT_WEB_ENABLE        true
-#define DEFAULT_WEB_PORT          80
+#define DEFAULT_WEB_ENABLE true
+#define DEFAULT_WEB_PORT   80
 
 // MQTT
-#define DEAFULT_MQTT_ENABLE       true   // Enabled
+#define DEFAULT_MQTT_ENABLE true // Enabled
 
 // tcp/ip interface
-#define DEFAULT_TCPIP_ENABLE      true   // Enabled
-#define DEFAULT_TCPIPPORT         9598
-#define DEFAULT_TCPIP_USER        "vscp"
-#define DEFAULT_TCPIP_PASSWORD    "secret"
-#define DEFAULT_TCPIP_VER         4       // Ipv6 = 6 or Ipv4 = 4
-#define TCPSRV_WELCOME_MSG        "Welcome to the Wireless CAN4VSCP Gateway\r\n"                    \
-                                  "Copyright (C) 2000-2025 Grodans Paradis AB\r\n"                  \
-                                  "https://www.grodansparadis.com\r\n"                              \
-                                  "+OK\r\n"
+#define DEFAULT_TCPIP_ENABLE   true // Enabled
+#define DEFAULT_TCPIPPORT      9598
+#define DEFAULT_TCPIP_USER     "vscp"
+#define DEFAULT_TCPIP_PASSWORD "secret"
+#define DEFAULT_TCPIP_VER      4 // Ipv6 = 6 or Ipv4 = 4
+#define TCPSRV_WELCOME_MSG                                                                                             \
+  "Welcome to the VSCP CAN4VSCP Gateway\r\n"                                                                           \
+  "Copyright (C) 2000-2026 Grodans Paradis AB\r\n"                                                                     \
+  "https://www.grodansparadis.com\r\n"                                                                                 \
+  "+OK\r\n"
 
 // UDP interface
-#define DEFAULT_UDP_ENABLE        true   // Enabled
-#define DEFAULT_UDP_RX_ENABLE     true   // Enable UDP server
-#define DEFAULT_UDP_TX_ENABLE     true   // Enable UDP client
+#define DEFAULT_UDP_ENABLE    true // Enabled
+#define DEFAULT_UDP_RX_ENABLE true // Enable UDP server
+#define DEFAULT_UDP_TX_ENABLE true // Enable UDP client
 
 // Multicast
-#define DEFAULT_MULTICAST_ENABLE  false   // Disable
+#define DEFAULT_MULTICAST_ENABLE false // Disable
 
 // MQTT broker
-#define DEFAULT_MQTT_ENABLE       true
-#define DEFAULT_MQTT_ADDRESS      "192.168.1.7"
-#define DEFAULT_MQTT_PORT         1883
-#define DEFAULT_MQTT_USER         "vscp"
-#define DEFAULT_MQTT_PASSWORD     "secret"
-#define DEFAULT_TOPIC_SUBSCRIBE   "VSCP"
-#define DEFAULT_TOPIC_PUBLISH     "VSCP/PUB"
-
+#define DEFAULT_MQTT_ENABLE     true
+#define DEFAULT_MQTT_ADDRESS    "192.168.1.7"
+#define DEFAULT_MQTT_PORT       1883
+#define DEFAULT_MQTT_USER       "vscp"
+#define DEFAULT_MQTT_PASSWORD   "secret"
+#define DEFAULT_TOPIC_SUBSCRIBE "VSCP"
+#define DEFAULT_TOPIC_PUBLISH   "VSCP/PUB"
 
 // TWAI
-#define DEFAULT_TWAI_MODE         0   // CAN4VSCP_NORMAL
-#define DEFAULT_TWAI_SPEED        CAN4VSCP_125K
+#define DEFAULT_TWAI_MODE  0 // CAN4VSCP_NORMAL
+#define DEFAULT_TWAI_SPEED CAN4VSCP_125K
+//#define TX_GPIO_NUM        GPIO_NUM_9  // CONFIG_EXAMPLE_TX_GPIO_NUM
+//#define RX_GPIO_NUM        GPIO_NUM_10 // GPIO_NUM_3 CONFIG_EXAMPLE_RX_GPIO_NUM
 
 // SMTP
-#define DEFAULT_SMTP_ENABLE       false
+#define DEFAULT_SMTP_ENABLE false
+
+// OTA
+#define DEFAULT_APP_OTA_URL_MAX_SIZE 128
+#define DEFAULT_APP_OTA_URL          "http://vscp.org/firmware/vscp-wcang/firmware.bin"
 
 /**
- * @brief Read preocessor on chip temperature
+ * @brief Read processor on chip temperature
  * @return Temperature as floating point value
  */
-float read_onboard_temperature(void);
-
+float
+read_onboard_temperature(void);
 
 /**
  * @fn getMilliSeconds
- * @brief Get system time in Milliseconds 
- * 
+ * @brief Get system time in Milliseconds
+ *
  * @return Systemtime in milliseconds
  */
-uint32_t getMilliSeconds(void);
+uint32_t
+getMilliSeconds(void);
 
 /**
  * @fn validate_user
  * @brief Validate user
- * 
+ *
  * @param user Username to check
  * @param password Password to check
  * @return True if user is valid, False if not.

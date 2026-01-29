@@ -201,4 +201,8 @@
 #define THIS_FIRMWARE_TCPIP_LINK_MAX_BUFFER  2048
 #define THIS_FIRMWARE_TCPIP_LINK_ENABLE_RCVLOOP_CMD 1
 
+
+// Firmware helper functionality switches
+#define VSCP_FWHLP_JSON_SUPPORT
+
 #endif // _VSCP_PROJDEFS_H_

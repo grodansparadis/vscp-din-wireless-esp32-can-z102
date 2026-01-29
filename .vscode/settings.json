@@ -5,7 +5,7 @@
   ],
   "idf.flashType": "JTAG",
   "idf.port": "/dev/ttyACM0",
-  "idf.espIdfPath": "/home/akhe/development/esp/esp-idf-v5.4",
+  "idf.espIdfPath": "/home/akhe/development/esp/esp-idf",
   "idf.toolsPath": "/home/akhe/.espressif",
   "idf.pythonInstallPath": "/home/akhe/.platformio/penv/bin/python",
   "idf.customExtraVars": {
@@ -141,5 +141,13 @@
     "vscp-firmware-helper.h": "c",
     "can4vscp.h": "c",
     "tcpsrv.h": "c"
-  }
+  },
+  "idf.monitorPort": "/dev/ttyACM0",
+  "idf.currentSetup": "/home/akhe/development/esp/esp-idf",
+  "clangd.path": "/home/akhe/.espressif/tools/esp-clang/esp-19.1.2_20250312/esp-clang/bin/clangd",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=/home/akhe/.espressif/tools/riscv32-esp-elf/esp-14.2.0_20241119/riscv32-esp-elf/bin/riscv32-esp-elf-gcc",
+    "--compile-commands-dir=/home/akhe/development/VSCP/vscp-din-wireless-esp32-can-z102/build"
+  ]
 }

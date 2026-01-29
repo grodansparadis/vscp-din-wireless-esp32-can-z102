@@ -3739,7 +3739,7 @@
 			(net 2 "GND")
 			(pinfunction "GND")
 			(pintype "power_in")
-			(uuid "99f382a6-a151-40bf-82f7-828435f35f13")
+			(uuid "7320097f-71b3-48ce-9fcf-3df72ed0a8f7")
 		)
 		(pad "4" smd roundrect
 			(at -7.65 1.7)
@@ -10902,7 +10902,7 @@
 			)
 		)
 	)
-	(gr_text "Rev B"
+	(gr_text "Rev C"
 		(at 124.25 131.6 0)
 		(layer "F.SilkS")
 		(uuid "afefa8b5-574d-494a-a028-6d5e3ad241b5")

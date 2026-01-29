@@ -1,12 +1,10 @@
 /*
   VSCP Wireless CAN4VSCP Gateway (VSCP-WCANG)
 
-  VSCP Alpha Droplet node
-
   MQTT SSL Client
 
   The MIT License (MIT)
-  Copyright © 2022-2025 Ake Hedman, the VSCP project <info@vscp.org>
+  Copyright (C) 2022-2026 Ake Hedman, the VSCP project <info@vscp.org>
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -107,11 +105,11 @@ extern const uint8_t mqtt_eclipse_io_pem_end[] asm("_binary_mqtt_eclipse_io_pem_
 static int
 mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent *pev)
 {
-  int rv;
+  // int rv;
   char workbuf[48];
 
-  //ESP_PARAM_CHECK(newTopic);
-  //ESP_PARAM_CHECK(pTopic);
+  // ESP_PARAM_CHECK(newTopic);
+  // ESP_PARAM_CHECK(pTopic);
 
   /*
     {{node}}        - Node name
@@ -141,12 +139,12 @@ mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent
     vscp/{{guid}}/{{class}}/{{type}}/{{index}}
   */
 
-  strncpy(newTopic, pTopic, MIN(len,strlen(pTopic)));
+  strncpy(newTopic, pTopic, MIN(len, strlen(pTopic)));
 
-  //printf("newtopic=%s\n", newTopic);
-  //fflush(stdout);
+  // printf("newtopic=%s\n", newTopic);
+  // fflush(stdout);
 
-  char *saveTopic = (char *)calloc(1,len);
+  char *saveTopic = (char *) calloc(1, len);
   if (NULL == saveTopic) {
     return VSCP_ERROR_MEMORY;
   }
@@ -156,9 +154,7 @@ mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent
   strncpy(saveTopic, newTopic, MIN(strlen(newTopic), len));
 
   // GUID
-  uint8_t GUID[16];
-  vscp_espnow_get_node_guid(GUID);
-  vscp_fwhlp_writeGuidToString(workbuf, GUID);
+  vscp_fwhlp_writeGuidToString(workbuf, g_persistent.nodeGuid);
   vscp_fwhlp_strsubst(newTopic, len, saveTopic, "{{guid}}", workbuf);
   strcpy(saveTopic, newTopic);
 
@@ -181,7 +177,7 @@ mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent
     strcpy(saveTopic, newTopic);
 
     // nickname
-    sprintf(workbuf, "%d", ((GUID[14] << 8) + (GUID[15])));
+    sprintf(workbuf, "%d", ((g_persistent.nodeGuid[14] << 8) + (g_persistent.nodeGuid[15])));
     vscp_fwhlp_strsubst(newTopic, len, saveTopic, "{{nickname}}", workbuf);
     strcpy(saveTopic, newTopic);
 
@@ -201,7 +197,7 @@ mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent
     // strcpy(saveTopic, newTopic);
   }
 
-  ESP_FREE(saveTopic);
+  free(saveTopic);
 
   return VSCP_ERROR_SUCCESS;
 }
@@ -235,14 +231,14 @@ mqtt_send_vscp_event(const char *topic, const vscpEvent *pev)
   }
 
   // We publish VSCP event on JSON form
-  char *pbuf = ESP_MALLOC(MQTT_SUBST_BUF_LEN);
+  char *pbuf = malloc(MQTT_SUBST_BUF_LEN);
   if (NULL == pbuf) {
     ESP_LOGE(TAG, "Unable to allocate JSON buffer for conversion");
     return VSCP_ERROR_MEMORY;
   }
 
   if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_create_json(pbuf, 2048, pev))) {
-    ESP_FREE(pbuf);
+    free(pbuf);
     ESP_LOGE(TAG, "Failed to convert event to JSON rv = %d", rv);
     return rv;
   }
@@ -325,10 +321,10 @@ mqtt_send_vscp_event(const char *topic, const vscpEvent *pev)
   // vscp_fwhlp_strsubst(newTopic, sizeof(newTopic), saveTopic, "{{sindex}}", workbuf);
   // strcpy(saveTopic, newTopic);
 
-  char *newTopic = ESP_CALLOC(1,MQTT_SUBST_BUF_LEN);
+  char *newTopic = calloc(MQTT_SUBST_BUF_LEN,1);
   if (NULL == newTopic) {
     ESP_LOGE(TAG, "Unable to allocate memory.");
-    ESP_FREE(pbuf);
+    free(pbuf);
     return VSCP_ERROR_MEMORY;
   }
 
@@ -361,8 +357,8 @@ mqtt_send_vscp_event(const char *topic, const vscpEvent *pev)
              esp_mqtt_client_get_outbox_size(g_mqtt_client));
   }
 
-  ESP_FREE(newTopic);
-  ESP_FREE(pbuf);
+  free(newTopic);
+  free(pbuf);
 
   return VSCP_ERROR_SUCCESS;
 }
@@ -372,10 +368,10 @@ mqtt_send_vscp_event(const char *topic, const vscpEvent *pev)
 //
 
 int
-mqtt_log(const char *msg)
+mqtt_log(char *msg)
 {
   char *pbuf = msg;
-  ESP_PARAM_CHECK(msg);
+  //ESP_PARAM_CHECK(msg);
 
   // Noting to do if no message
   if (!strlen(msg)) {
@@ -384,10 +380,10 @@ mqtt_log(const char *msg)
 
   if (strlen(g_persistent.mqttPubLog)) {
 
-    char *newTopic = ESP_CALLOC(1,MQTT_SUBST_BUF_LEN);
+    char *newTopic = calloc(MQTT_SUBST_BUF_LEN,1);
     if (NULL == newTopic) {
       ESP_LOGE(TAG, "Unable to allocate memory.");
-      ESP_FREE(pbuf);
+      free(pbuf);
       return VSCP_ERROR_MEMORY;
     }
 
@@ -407,10 +403,9 @@ mqtt_log(const char *msg)
                esp_mqtt_client_get_outbox_size(g_mqtt_client));
     }
 
-    ESP_FREE(newTopic);
+    free(newTopic);
   }
 
-  
   return VSCP_ERROR_SUCCESS;
 }
 
@@ -539,12 +534,10 @@ mqtt_start(void)
   strcpy(save, clientid);
 
   // GUID
-  uint8_t GUID[16];
-  vscp_espnow_get_node_guid(GUID);
-  vscp_fwhlp_writeGuidToString(workbuf, GUID);
+  vscp_fwhlp_writeGuidToString(workbuf, g_persistent.nodeGuid);
   vscp_fwhlp_strsubst(clientid, sizeof(clientid), save, "{{guid}}", workbuf);
 
-  char uri[64];
+  char uri[256];
   sprintf(uri, "mqtt://%s:%d", g_persistent.mqttUrl, g_persistent.mqttPort);
 
   // clang-format off

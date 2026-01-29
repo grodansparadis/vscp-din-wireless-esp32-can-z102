@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="210mm"
+   height="297mm"
+   viewBox="0 0 210 297"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4.2 (ebf0e940d0, 2025-05-08)"
+   sodipodi:docname="interfaces.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:zoom="0.7180275"
+     inkscape:cx="396.22438"
+     inkscape:cy="561.25984"
+     inkscape:window-width="1878"
+     inkscape:window-height="1011"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1"
+     inkscape:export-bgcolor="#0f0f0f00" />
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <rect
+       style="fill:#e9ddaf;fill-opacity:0.979858;stroke:#2a7e69;stroke-width:0.783;stroke-opacity:0.807843"
+       id="rect1"
+       width="81.80397"
+       height="124.54839"
+       x="21.003721"
+       y="52.69355" />
+    <text
+       xml:space="preserve"
+       style="font-weight:200;font-size:8.46667px;font-family:'DejaVu Sans';-inkscape-font-specification:'DejaVu Sans, Ultra-Light';text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#e9ddaf;fill-opacity:0.979858;stroke:#2a7e69;stroke-width:0.783;stroke-opacity:0.807843"
+       x="39.42804"
+       y="119.75806"
+       id="text1"><tspan
+         sodipodi:role="line"
+         id="tspan1"
+         style="stroke-width:0.783"
+         x="39.42804"
+         y="119.75806">ESP32 CAN</tspan></text>
+    <path
+       style="fill:#e9ddaf;fill-opacity:0.979858;stroke:#2a7e69;stroke-width:0.783;stroke-opacity:0.807843"
+       d="m 103.19919,78.119107 53.40751,0.368485 -0.73697,-0.368485"
+       id="path1" />
+    <path
+       style="fill:#e9ddaf;fill-opacity:0.979858;stroke:#2a7e69;stroke-width:0.783;stroke-opacity:0.807843"
+       d="m 103.19649,95.437964 53.58529,-0.368485"
+       id="path2" />
+    <path
+       style="fill:#e9ddaf;fill-opacity:0.979858;stroke:#2a7e69;stroke-width:0.783;stroke-opacity:0.807843"
+       d="m 102.80769,114.96775 c 53.79901,0 53.79901,0 53.79901,0"
+       id="path3" />
+    <path
+       style="fill:#e9ddaf;fill-opacity:0.979858;stroke:#2a7e69;stroke-width:0.783;stroke-opacity:0.807843"
+       d="m 102.80769,133.02357 h 53.06204"
+       id="path4" />
+    <text
+       xml:space="preserve"
+       style="font-weight:200;font-size:8.46667px;font-family:'DejaVu Sans';-inkscape-font-specification:'DejaVu Sans, Ultra-Light';text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#02020b;fill-opacity:0.97985798;stroke:#060302;stroke-width:0.783;stroke-opacity:0.80784303"
+       x="163.01938"
+       y="80.88401"
+       id="text4"><tspan
+         sodipodi:role="line"
+         style="stroke-width:0.783;fill:#02020b;fill-opacity:0.97985798;stroke:#060302;stroke-opacity:0.80784303"
+         x="163.01938"
+         y="80.88401"
+         id="tspan5">Multicast</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-weight:200;font-size:8.46667px;font-family:'DejaVu Sans';-inkscape-font-specification:'DejaVu Sans, Ultra-Light';text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#000000;fill-opacity:0.979858;stroke:#020504;stroke-width:0.783;stroke-opacity:0.80784303"
+       x="164.94505"
+       y="97.189598"
+       id="text6"><tspan
+         sodipodi:role="line"
+         style="stroke-width:0.783;fill:#000000;stroke:#020504;stroke-opacity:0.80784303"
+         x="164.94505"
+         y="97.189598"
+         id="tspan7">UDP</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-weight:200;font-size:8.46667px;font-family:'DejaVu Sans';-inkscape-font-specification:'DejaVu Sans, Ultra-Light';text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#e9ddaf;fill-opacity:0.979858;stroke:#020706;stroke-width:0.783;stroke-opacity:0.80784303"
+       x="165.50026"
+       y="116.91203"
+       id="text8"><tspan
+         sodipodi:role="line"
+         id="tspan8"
+         style="stroke-width:0.783;stroke:#020706;stroke-opacity:0.80784303"
+         x="165.50026"
+         y="116.91203">tcp/ip</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-weight:200;font-size:8.46667px;font-family:'DejaVu Sans';-inkscape-font-specification:'DejaVu Sans, Ultra-Light';text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#000000;fill-opacity:0.979858;stroke:#020504;stroke-width:0.783;stroke-opacity:0.80784303"
+       x="164.6693"
+       y="135.96692"
+       id="text9"><tspan
+         sodipodi:role="line"
+         id="tspan9"
+         style="stroke-width:0.783;fill:#000000;stroke:#020504;stroke-opacity:0.80784303"
+         x="164.6693"
+         y="135.96692">MQTT</tspan></text>
+    <path
+       style="fill:#e9ddaf;fill-opacity:0.979858;stroke:#2a7e69;stroke-width:0.783;stroke-opacity:0.807843"
+       d="m 62.64268,177.61042 v 39.42804"
+       id="path9" />
+    <circle
+       id="path10"
+       style="fill:#2a7e69;stroke:none;stroke-width:0.264583"
+       cx="62.642677"
+       cy="217.03847"
+       r="1.1745" />
+    <text
+       xml:space="preserve"
+       style="font-weight:200;font-size:8.46667px;font-family:'DejaVu Sans';-inkscape-font-specification:'DejaVu Sans, Ultra-Light';text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#e9ddaf;fill-opacity:0.979858;stroke:#030807;stroke-width:0.783;stroke-opacity:0.80784303"
+       x="19.159634"
+       y="231.04094"
+       id="text10"><tspan
+         sodipodi:role="line"
+         id="tspan10"
+         style="stroke-width:0.783;stroke:#030807;stroke-opacity:0.80784303"
+         x="19.159634"
+         y="231.04094">CAN4VSCP 125kbps</tspan></text>
+  </g>
+</svg>

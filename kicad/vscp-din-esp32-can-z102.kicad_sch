@@ -6,7 +6,7 @@
 	(paper "A4")
 	(title_block
 		(title "vscp-din-esp32-can-z102")
-		(rev "B")
+		(rev "C")
 		(company "Grodans Paradis AB")
 	)
 	(lib_symbols
