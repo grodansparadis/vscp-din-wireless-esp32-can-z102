@@ -1,8 +1,9 @@
 /*
- * This file is part of the WiCAN project.
+ * This file is part of the VSCP CAN4VSCP Gateway project.
  *
  * Copyright (C) 2022  Meatpi Electronics.
  * Written by Ali Slim <ali@meatpi.com>
+ * Changes Copyright (C) 2022-2026 Ake Hedman, the VSCP Project <ake@vscp.org>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,7 +44,7 @@
 
 #include "nvs_flash.h"
 
-//#include <driver/temperature_sensor.h>
+// #include <driver/temperature_sensor.h>
 
 #include "lwip/sockets.h"
 #include "main.h"
@@ -52,10 +53,10 @@
 #include <string.h>
 
 static EventGroupHandle_t s_can4vscp_event_group;
-#define CAN4VSCP_ENABLE_BIT     BIT0
+#define CAN4VSCP_ENABLE_BIT BIT0
 
 extern SemaphoreHandle_t ctrl_task_sem;
-//extern QueueHandle_t xmsg_Rx_Queue; 
+// extern QueueHandle_t xmsg_Rx_Queue;
 
 // Global stuff
 extern transport_t tr_twai_rx;
@@ -77,7 +78,7 @@ static const twai_timing_config_t can4vscp_timing_config[] = {
   { .brp = 4, .tseg_1 = 15, .tseg_2 = 4, .sjw = 3, .triple_sampling = false }
 };
 
-//temperature_sensor_handle_t temp_handle = NULL;
+// temperature_sensor_handle_t temp_handle = NULL;
 
 // static EventGroupHandle_t s_twai_event_group;
 //
@@ -86,11 +87,16 @@ static uint8_t datarate = CAN4VSCP_125K;
 static can4vscp_cfg_t can4vscp_cfg;
 
 #define TWAI_CONFIG(tx_io_num, rx_io_num, op_mode)                                                                     \
-  {                                                                                                                    \
-    .mode = op_mode, .tx_io = tx_io_num, .rx_io = rx_io_num, .clkout_io = TWAI_IO_UNUSED,                              \
-    .bus_off_io = TWAI_IO_UNUSED, .tx_queue_len = 100, .rx_queue_len = 100, .alerts_enabled = TWAI_ALERT_NONE,         \
-    .clkout_divider = 0, .intr_flags = ESP_INTR_FLAG_LEVEL1                                                            \
-  }
+  { .mode           = op_mode,                                                                                         \
+    .tx_io          = tx_io_num,                                                                                       \
+    .rx_io          = rx_io_num,                                                                                       \
+    .clkout_io      = TWAI_IO_UNUSED,                                                                                  \
+    .bus_off_io     = TWAI_IO_UNUSED,                                                                                  \
+    .tx_queue_len   = 100,                                                                                             \
+    .rx_queue_len   = 100,                                                                                             \
+    .alerts_enabled = TWAI_ALERT_NONE,                                                                                 \
+    .clkout_divider = 0,                                                                                               \
+    .intr_flags     = ESP_INTR_FLAG_LEVEL1 }
 
 static const twai_general_config_t g_config_normal =
   TWAI_GENERAL_CONFIG_DEFAULT(TWAI_TX_GPIO_NUM, TWAI_RX_GPIO_NUM, TWAI_MODE_NORMAL);
@@ -154,7 +160,7 @@ can4vscp_enable(void)
   }
 
   twai_timing_config_t *t_config;
-  t_config = (twai_timing_config_t *) &can4vscp_timing_config[datarate];
+  t_config                 = (twai_timing_config_t *) &can4vscp_timing_config[datarate];
   f_config.acceptance_code = 0;
   f_config.acceptance_mask = 0xFFFFFFFF;
 
@@ -218,7 +224,6 @@ can4vscp_isSilent(void)
 {
   return can4vscp_cfg.silent;
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // can4vscp_setLoopback
@@ -306,7 +311,7 @@ static void
 can4vscp_Timer_Callback(TimerHandle_t xTimer)
 {
   xEventGroupSetBits(s_can4vscp_event_group, CAN4VSCP_ENABLE_BIT);
-  //ESP_LOGI(TAG, "CAN4VSCP Timer Callback");
+  // ESP_LOGI(TAG, "CAN4VSCP Timer Callback");
 
   // Get converted sensor data
   // float tsens_out;
@@ -321,30 +326,29 @@ can4vscp_Timer_Callback(TimerHandle_t xTimer)
 void
 can4vscp_init(uint8_t bitrate)
 {
-  // Tempsensor  
-      // temperature_sensor_config_t temp_sensor = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 50);
-      // ESP_ERROR_CHECK(temperature_sensor_install(&temp_sensor, &temp_handle));
+  // Tempsensor
+  // temperature_sensor_config_t temp_sensor = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 50);
+  // ESP_ERROR_CHECK(temperature_sensor_install(&temp_sensor, &temp_handle));
 
-  //ESP_ERROR_CHECK(temperature_sensor_enable(temp_handle));
+  // ESP_ERROR_CHECK(temperature_sensor_enable(temp_handle));
 
   s_can4vscp_event_group = xEventGroupCreate();
   xCAN4VSCP_EN_Timer     = xTimerCreate(
-    // Just a text name, not used by the RTOS kernel. 
+    // Just a text name, not used by the RTOS kernel.
     "TwaiTimer",
-    // The timer period in ticks, must be greater than 0. 
+    // The timer period in ticks, must be greater than 0.
     pdMS_TO_TICKS(15000),
-    // The timer will auto-reload when it expire. 
+    // The timer will auto-reload when it expire.
     pdTRUE,
     // The ID is used to store a count of the number of times the timer
-    // has expired, which is initialised to 0. 
+    // has expired, which is initialised to 0.
     (void *) 0,
-    // Each timer calls the same callback when it expires. 
+    // Each timer calls the same callback when it expires.
     can4vscp_Timer_Callback);
 
   if (xTimerIsTimerActive(xCAN4VSCP_EN_Timer) != pdFALSE) {
     xTimerStop(xCAN4VSCP_EN_Timer, 0);
   }
-
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -378,41 +382,41 @@ can4vscp_getRxMsgCount(void)
 // twai_receive_task
 //
 
-void twai_receive_task(void *arg)
+void
+twai_receive_task(void *arg)
 {
   esp_err_t rv;
-  //transport_t *ptr = (transport_t *)arg;
-  //QueueHandle_t h = ptr->msg_queue;
-  
+  // transport_t *ptr = (transport_t *)arg;
+  // QueueHandle_t h = ptr->msg_queue;
+
   ESP_LOGI(TAG, "TWAI receive driver started");
 
-  //QueueHandle_t h = xQueueCreate(10, sizeof( twai_message_t) ); 
-  
+  // QueueHandle_t h = xQueueCreate(10, sizeof( twai_message_t) );
+
   while (1) {
-    
+
     twai_message_t rxmsg = {};
 
     if (ESP_OK == (rv = twai_receive(&rxmsg, portMAX_DELAY))) {
 
-      ESP_LOGI(TAG, "TWAI msg received id= %X", (unsigned int)rxmsg.identifier);
+      ESP_LOGI(TAG, "TWAI msg received id= %X", (unsigned int) rxmsg.identifier);
 
       // Must be extended msg to be VSCP event
       if (rxmsg.extd) {
 
         ESP_LOGI(TAG, "VSCP Event received");
 
-        for (int i=0; i<MAX_TCP_CONNECTIONS; i++) {
+        for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
           // If not open take next
-          if (!tr_tcpsrv[i].open) continue;
+          if (!tr_tcpsrv[i].open)
+            continue;
           // Put message in queue for task to handle
-          if( pdPASS != (rv = xQueueSendToBack( tr_tcpsrv[i].msg_queue,
-                                                (void *)&rxmsg,
-                                                (TickType_t)10)) ) {
-            tr_tcpsrv[i].overruns++;                                    
+          if (pdPASS != (rv = xQueueSendToBack(tr_tcpsrv[i].msg_queue, (void *) &rxmsg, (TickType_t) 10))) {
+            tr_tcpsrv[i].overruns++;
             ESP_LOGD(TAG, "VSCP link protocol buffer full: Failed to save message to queue");
           }
         }
-        
+
         // UBaseType_t cnt = uxQueueMessagesWaiting(ptr->msg_queue);
         // ESP_LOGI(TAG,"count=%u %d",cnt,rv);
         xSemaphoreTake(ctrl_task_sem, portMAX_DELAY);
@@ -423,3 +427,23 @@ void twai_receive_task(void *arg)
   }
 
 } // while
+
+///////////////////////////////////////////////////////////////////////////////
+// twai_recover_stopped_check
+//
+
+void
+twai_recover_stopped_check(void)
+{
+  while (true) {
+    twai_status_info_t info;
+    if (twai_get_status_info(&info) != ESP_OK)
+      return;
+    if (info.state == TWAI_STATE_STOPPED) {
+      ESP_LOGW(TAG, "TWAI in stopped state, attempting recovery...");
+      twai_stop();
+      twai_start();
+    }
+    vTaskDelay(200);
+  }
+}

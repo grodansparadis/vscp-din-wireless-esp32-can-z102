@@ -4,7 +4,7 @@
   This file is part of the VSCP (https://www.vscp.org)
 
   The MIT License (MIT)
-  Copyright (C) 2021-2025 Ake Hedman, the VSCP project <info@vscp.org>
+  Copyright (C) 2021-2026 Ake Hedman, the VSCP project <info@vscp.org>
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -74,10 +74,11 @@ typedef struct {
 typedef struct {
 
   // Module
-  char nodeName[32];    // User name for node
-  uint8_t nodeGuid[16]; // GUID for node (default: Constructed from MAC address)
-  uint8_t startDelay;   // Delay before wifi is enabled (to charge cap)
-  uint32_t bootCnt;     // Number of restarts (not editable)
+  char nodeName[32]; // User name for node
+  uint8_t guid[16];  // GUID for node (default: Constructed from MAC address)
+  uint8_t pmk[32];   // System security key for encryption (AES256/AES192/AES128)
+  uint8_t pmkLen;    // Length of key in bytes (16 = AES128 (default), 24 = AES192, 32 = AES256)
+  uint32_t bootCnt;  // Number of restarts (not editable)
 
   // Log
   uint8_t logType;         // Log type
@@ -89,20 +90,19 @@ typedef struct {
   uint8_t logwrite2Stdout; // Write log to stdout
 
   // web server
-  bool webEnable;       // Enable web server
   uint16_t webPort;     // Web server port
   char webUser[32];     // Web server user
   char webPassword[32]; // Web server password
 
   // tcp/ip interface
-  bool tcpipEnable;       // Enable tcp/ip interface
+  bool enableTcpip;       // Enable tcp/ip interface
   uint16_t tcpipPort;     // TCP/IP port
   char tcpipUser[32];     // TCP/IP user
   char tcpipPassword[32]; // TCP/IP password
   uint8_t tcpipVer;       // IP version 4 or 6
 
   // VSCP link protocol
-  bool vscplinkEnable;           // Enable VSCP link protocol
+  bool enableVscpLink;           // Enable VSCP link protocol
   uint16_t vscplinkPort;         // VSCP link protocol port
   char vscplinkUser[32];         // VSCP link protocol user
   char vscplinkPassword[32];     // VSCP link protocol password
@@ -110,6 +110,7 @@ typedef struct {
   unsigned char vscpLinkKey[32]; // VSCP link protocol key
 
   // MQTT
+  bool enableMqtt;       // Enable MQTT
   char mqttPub[80];      // MQTT publish topic
   char mqttSub[80];      // MQTT subscribe topic
   char mqttPubLog[80];   // MQTT topic for log messages
@@ -119,6 +120,19 @@ typedef struct {
   uint16_t mqttPort;     // MQTT port
   char mqttUsername[32]; // MQTT username
   char mqttPassword[32]; // MQTT password
+
+  // Multicast interface
+  bool enableMulticast;    // Enable multicast
+  char multicastIpStr[20]; // Multicast IP address
+  uint16_t multicastPort;  // Multicast port
+  uint8_t multicastTtl;    // Multicast TTL
+
+  // UDP interface
+  bool enableUdp;    // Enable UDP interface
+  bool enableUdpRx;  // Enable UDP receive
+  bool enableUdpTx;  // Enable UDP transmit
+  char udpIpStr[20]; // UDP IP address
+  uint16_t udpPort;  // UDP port
 } node_persistent_config_t;
 
 /*!
@@ -126,7 +140,7 @@ typedef struct {
   on start up.
 */
 
-#define DEFAULT_KEY_LEN 16 // AES128
+#define DEFAULT_KEY_LEN 32 // AES256
 #define DEFAULT_GUID    "" // Empty constructs from MAC, "-" all nills, "xx:yy:..." set GUID
 
 // BLE
@@ -172,8 +186,8 @@ typedef struct {
 // TWAI
 #define DEFAULT_TWAI_MODE  0 // CAN4VSCP_NORMAL
 #define DEFAULT_TWAI_SPEED CAN4VSCP_125K
-//#define TX_GPIO_NUM        GPIO_NUM_9  // CONFIG_EXAMPLE_TX_GPIO_NUM
-//#define RX_GPIO_NUM        GPIO_NUM_10 // GPIO_NUM_3 CONFIG_EXAMPLE_RX_GPIO_NUM
+// #define TX_GPIO_NUM        GPIO_NUM_9  // CONFIG_EXAMPLE_TX_GPIO_NUM
+// #define RX_GPIO_NUM        GPIO_NUM_10 // GPIO_NUM_3 CONFIG_EXAMPLE_RX_GPIO_NUM
 
 // SMTP
 #define DEFAULT_SMTP_ENABLE false

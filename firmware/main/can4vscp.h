@@ -1,8 +1,9 @@
 /*
- * This file is part of the WiCAN project.
+ * This file is part of the VSCP CAN4VSCP Gateway project.
  *
  * Copyright (C) 2022  Meatpi Electronics.
  * Original written by Ali Slim <ali@meatpi.com>
+ * Changes Copyright (C) 2022-2026 Ake Hedman, the VSCP Project <ake@vscp.org>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -212,5 +213,13 @@ void twai_receive_task(void *arg);
   @param arg CAN4VSCP context
 */
 void twai_transmit_task(void *arg);
+
+/*!
+  @fn twai_recover_stopped_check
+  @brief Check if TWAI is stopped and recover if so
+  @param arg Not used
+*/
+void
+twai_recover_stopped_check(void);
 
 #endif

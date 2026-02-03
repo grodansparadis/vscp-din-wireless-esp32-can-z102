@@ -86,20 +86,28 @@ static const char *TAG = "main";
 //   .m_puserdata = NULL,     // No user data
 // };
 
-
-
 // * * * Globals * * *
 
 // Handle for nvs storage
 nvs_handle_t g_nvsHandle;
 
-// GUID for unit
-uint8_t g_node_guid[16];
-
-// Persistent configuration defaults
+// Persistent configuration defaults  g_persistent.guid
 node_persistent_config_t g_persistent = {
   .nodeName = "VSCP CAN4VSCP Gateway", // Default name
-  .bootCnt = 0
+  .guid     = { 0 },                   // Default GUID is constructed from MAC address
+  .bootCnt  = 0,
+  .pmkLen   = 16,    // AES128
+  .pmk      = { 0 }, // Default key is all nills
+
+  .webPort     = 80, // Web server port
+  .webUser     = "vscp",
+  .webPassword = "secret",
+
+  // Multicast
+  .multicastIpStr = "224.0.23.158",
+  .multicastPort  = 9598
+
+  // UDP
 };
 
 transport_t tr_tcpsrv[MAX_TCP_CONNECTIONS] = {};
@@ -112,7 +120,8 @@ SemaphoreHandle_t ctrl_task_sem;
 
 // static const twai_timing_config_t t_config = TWAI_TIMING_CONFIG_125KBITS();
 // static const twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
-// static const twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(TX_GPIO_NUM, RX_GPIO_NUM, TWAI_MODE_NORMAL);
+// static const twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(TX_GPIO_NUM, RX_GPIO_NUM,
+// TWAI_MODE_NORMAL);
 
 static QueueHandle_t tr_twai_tx;
 static QueueHandle_t tr_twai_rx;
@@ -214,7 +223,7 @@ startOTA(void)
 {
   ESP_LOGI(TAG, "Starting OTA firmware update...");
 
-  //vscp_fwhlp_initiate_ota_update("http://firmware.vscp.org/firmware/vscp-din-wireless-esp32-can-z102-latest.bin");
+  // vscp_fwhlp_initiate_ota_update("http://firmware.vscp.org/firmware/vscp-din-wireless-esp32-can-z102-latest.bin");
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -226,12 +235,10 @@ app_initiate_firmware_upload(const char *url)
 {
   ESP_LOGI(TAG, "Starting firmware update from URL: %s", url);
 
-  //vscp_fwhlp_initiate_ota_update(url);
+  // vscp_fwhlp_initiate_ota_update(url);
 
-  return VSCP_ERROR_SUCCESS;  
+  return VSCP_ERROR_SUCCESS;
 }
-
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // getMilliSeconds
@@ -313,11 +320,11 @@ get_device_guid(uint8_t *pguid)
       break;
 
     case ESP_ERR_NVS_NOT_FOUND:
-      printf("guid not found in nvs\n");
+      ESP_LOGW(TAG, "guid not found in nvs\n");
       return false;
 
     default:
-      printf("Error (%s) reading guid from nvs!\n", esp_err_to_name(rv));
+      ESP_LOGI(TAG, "Error (%s) reading guid from nvs!\n", esp_err_to_name(rv));
       return false;
   }
 
@@ -564,8 +571,8 @@ app_main(void)
   gpio_set_level(ACTIVE_LED_GPIO_NUM, 1);
 
   // TWAI message buffers
-  tr_twai_rx = xQueueCreate(10, sizeof( twai_message_t) );    // Incoming CAN
-  tr_twai_tx = xQueueCreate(40, sizeof( twai_message_t) );    // Outgoing CAN (All fills)
+  tr_twai_rx = xQueueCreate(10, sizeof(twai_message_t)); // Incoming CAN
+  tr_twai_tx = xQueueCreate(40, sizeof(twai_message_t)); // Outgoing CAN (All fills)
   for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
     tr_tcpsrv[i].msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // tcp/ip link channel i
   }
@@ -814,34 +821,37 @@ app_main(void)
 
   rv = nvs_open("config", NVS_READWRITE, &g_nvsHandle);
   if (rv != ESP_OK) {
-    printf("Error (%s) opening NVS handle!\n", esp_err_to_name(rv));
+    ESP_LOGE(TAG, "Error (%s) opening NVS handle!", esp_err_to_name(rv));
   }
   else {
 
-    // Read
-    printf("Reading restart counter from NVS ... ");
-    int32_t restart_counter = 0; // value will default to 0, if not set yet in NVS
+    // * * * Module persistent configuration * * *
 
-    rv = nvs_get_i32(g_nvsHandle, "restart_counter", &restart_counter);
+    // Read
+    ESP_LOGD(TAG, "Reading restart counter from NVS ... ");
+
+    rv = nvs_get_u32(g_nvsHandle, "restart_counter", &g_persistent.bootCnt);
     switch (rv) {
 
       case ESP_OK:
-        printf("Restart counter = %d\n", (int) restart_counter);
+        ESP_LOGI(TAG, "Restart counter = %d", (int) g_persistent.bootCnt);
         break;
 
       case ESP_ERR_NVS_NOT_FOUND:
-        printf("The value is not initialized yet!\n");
+        ESP_LOGI(TAG, "The restart value is not initialized yet!");
         break;
 
       default:
-        printf("Error (%s) reading!\n", esp_err_to_name(rv));
+        ESP_LOGI(TAG, "Error (%s) reading restart value", esp_err_to_name(rv));
     }
 
     // Write
-    printf("Updating restart counter in NVS ... ");
-    restart_counter++;
-    rv = nvs_set_i32(g_nvsHandle, "restart_counter", restart_counter);
-    printf((rv != ESP_OK) ? "Failed!\n" : "Done\n");
+    ESP_LOGD(TAG, "Updating restart counter in NVS ... ");
+    g_persistent.bootCnt++;
+    rv = nvs_set_u32(g_nvsHandle, "restart_counter", g_persistent.bootCnt);
+    if (rv != ESP_OK) {
+      ESP_LOGI(TAG, "Failed to read restart counter!");
+    }
 
     // Commit written value.
     // After setting any values, nvs_commit() must be called to ensure changes are written
@@ -851,73 +861,35 @@ app_main(void)
     rv = nvs_commit(g_nvsHandle);
     printf((rv != ESP_OK) ? "Failed!\n" : "Done\n");
 
-    // TODO remove !!!!
-    char username[32];
-    char password[32];
-    size_t length = sizeof(username);
-    rv            = nvs_get_str(g_nvsHandle, "username", username, &length);
-    switch (rv) {
-
-      case ESP_OK:
-        ESP_LOGI(TAG, "Username: %s", username);
-        break;
-
-      case ESP_ERR_NVS_NOT_FOUND:
-        ESP_LOGI(TAG, "Username not found in nvs, writing default\n");
-        rv = nvs_set_str(g_nvsHandle, "username", "vscp");
-        break;
-
-      default:
-        ESP_LOGI(TAG, "Error (%s) reading username from nvs!\n", esp_err_to_name(rv));
-        break;
-    }
-
-    length = sizeof(password);
-    rv     = nvs_get_str(g_nvsHandle, "password", password, &length);
-    switch (rv) {
-
-      case ESP_OK:
-        ESP_LOGI(TAG, "Password: %s", password);
-        break;
-
-      case ESP_ERR_NVS_NOT_FOUND:
-        ESP_LOGI(TAG, "Password not found in nvs, writing default\n");
-        rv = nvs_set_str(g_nvsHandle, "password", "secret");
-        break;
-
-      default:
-        ESP_LOGI(TAG, "Error (%s) reading password from nvs!\n", esp_err_to_name(rv));
-        break;
-    }
-
-    length = 16;
-    rv     = nvs_get_blob(g_nvsHandle, "guid", g_node_guid, &length);
+    // Get GUID
+    size_t length = 16;
+    rv     = nvs_get_blob(g_nvsHandle, "guid", g_persistent.guid, &length);
     switch (rv) {
 
       case ESP_OK:
         ESP_LOGI(TAG,
                  "GUID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
-                 g_node_guid[0],
-                 g_node_guid[1],
-                 g_node_guid[2],
-                 g_node_guid[3],
-                 g_node_guid[4],
-                 g_node_guid[5],
-                 g_node_guid[6],
-                 g_node_guid[7],
-                 g_node_guid[8],
-                 g_node_guid[9],
-                 g_node_guid[10],
-                 g_node_guid[11],
-                 g_node_guid[12],
-                 g_node_guid[13],
-                 g_node_guid[14],
-                 g_node_guid[15]);
+                 g_persistent.guid[0],
+                 g_persistent.guid[1],
+                 g_persistent.guid[2],
+                 g_persistent.guid[3],
+                 g_persistent.guid[4],
+                 g_persistent.guid[5],
+                 g_persistent.guid[6],
+                 g_persistent.guid[7],
+                 g_persistent.guid[8],
+                 g_persistent.guid[9],
+                 g_persistent.guid[10],
+                 g_persistent.guid[11],
+                 g_persistent.guid[12],
+                 g_persistent.guid[13],
+                 g_persistent.guid[14],
+                 g_persistent.guid[15]);
         break;
 
       case ESP_ERR_NVS_NOT_FOUND:
         ESP_LOGI(TAG, "GUID not found in nvs, writing default\n");
-        memset(g_node_guid, 0, 16);
+        memset(g_persistent.guid, 0, 16);
         break;
 
       default:
@@ -926,38 +898,94 @@ app_main(void)
     }
 
     // If GUID is all zero construct GUID
-    if (!(g_node_guid[0] | g_node_guid[1] | g_node_guid[2] | g_node_guid[3] | g_node_guid[4] | g_node_guid[5] |
-          g_node_guid[6] | g_node_guid[7] | g_node_guid[8] | g_node_guid[9] | g_node_guid[10] | g_node_guid[11] |
-          g_node_guid[12] | g_node_guid[13] | g_node_guid[14] | g_node_guid[15])) {
-      g_node_guid[0] = 0xff;
-      g_node_guid[1] = 0xff;
-      g_node_guid[2] = 0xff;
-      g_node_guid[3] = 0xff;
-      g_node_guid[4] = 0xff;
-      g_node_guid[5] = 0xff;
-      g_node_guid[6] = 0xff;
-      g_node_guid[7] = 0xfe;
-      rv             = esp_efuse_mac_get_default(g_node_guid + 8);
-      rv             = nvs_set_blob(g_nvsHandle, "guid", g_node_guid, 16);
+    if (!(g_persistent.guid[0] | g_persistent.guid[1] | g_persistent.guid[2] | g_persistent.guid[3] |
+          g_persistent.guid[4] | g_persistent.guid[5] | g_persistent.guid[6] | g_persistent.guid[7] |
+          g_persistent.guid[8] | g_persistent.guid[9] | g_persistent.guid[10] | g_persistent.guid[11] |
+          g_persistent.guid[12] | g_persistent.guid[13] | g_persistent.guid[14] | g_persistent.guid[15])) {
+      g_persistent.guid[0] = 0xff;
+      g_persistent.guid[1] = 0xff;
+      g_persistent.guid[2] = 0xff;
+      g_persistent.guid[3] = 0xff;
+      g_persistent.guid[4] = 0xff;
+      g_persistent.guid[5] = 0xff;
+      g_persistent.guid[6] = 0xff;
+      g_persistent.guid[7] = 0xfe;
+      rv                   = esp_efuse_mac_get_default(g_persistent.guid + 8);
+      rv                   = nvs_set_blob(g_nvsHandle, "guid", g_persistent.guid, 16);
       ESP_LOGI(TAG,
                "Constructed GUID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
-               g_node_guid[0],
-               g_node_guid[1],
-               g_node_guid[2],
-               g_node_guid[3],
-               g_node_guid[4],
-               g_node_guid[5],
-               g_node_guid[6],
-               g_node_guid[7],
-               g_node_guid[8],
-               g_node_guid[9],
-               g_node_guid[10],
-               g_node_guid[11],
-               g_node_guid[12],
-               g_node_guid[13],
-               g_node_guid[14],
-               g_node_guid[15]);
+               g_persistent.guid[0],
+               g_persistent.guid[1],
+               g_persistent.guid[2],
+               g_persistent.guid[3],
+               g_persistent.guid[4],
+               g_persistent.guid[5],
+               g_persistent.guid[6],
+               g_persistent.guid[7],
+               g_persistent.guid[8],
+               g_persistent.guid[9],
+               g_persistent.guid[10],
+               g_persistent.guid[11],
+               g_persistent.guid[12],
+               g_persistent.guid[13],
+               g_persistent.guid[14],
+               g_persistent.guid[15]);
     }
+  }
+
+  // * * * Web server persistent configuration * * *
+
+  rv = nvs_get_u16(g_nvsHandle, "webPort", &g_persistent.webPort);
+  switch (rv) {
+
+    case ESP_OK:
+      ESP_LOGI(TAG, "webPort: %d", g_persistent.webPort);
+      break;
+
+    case ESP_ERR_NVS_NOT_FOUND:
+      ESP_LOGI(TAG, "Username not found in nvs, writing default\n");
+      rv = nvs_set_u16(g_nvsHandle, "webPort", 80);
+      break;
+
+    default:
+      ESP_LOGI(TAG, "Error (%s) reading username from nvs!\n", esp_err_to_name(rv));
+      break;
+  }
+
+  size_t length = sizeof(g_persistent.webUser);
+  rv            = nvs_get_str(g_nvsHandle, "webUser", g_persistent.webUser, &length);
+  switch (rv) {
+
+    case ESP_OK:
+      ESP_LOGI(TAG, "webUser: %s", g_persistent.webUser);
+      break;
+
+    case ESP_ERR_NVS_NOT_FOUND:
+      ESP_LOGI(TAG, "Username not found in nvs, writing default\n");
+      rv = nvs_set_str(g_nvsHandle, "webUser", "vscp");
+      break;
+
+    default:
+      ESP_LOGI(TAG, "Error (%s) reading username from nvs!\n", esp_err_to_name(rv));
+      break;
+  }
+
+  length = sizeof(g_persistent.webPassword);
+  rv     = nvs_get_str(g_nvsHandle, "webPassword", g_persistent.webPassword, &length);
+  switch (rv) {
+
+    case ESP_OK:
+      ESP_LOGI(TAG, "Password: %s", g_persistent.webPassword);
+      break;
+
+    case ESP_ERR_NVS_NOT_FOUND:
+      ESP_LOGI(TAG, "webPassword not found in nvs, writing default\n");
+      rv = nvs_set_str(g_nvsHandle, "webPassword", "secret");
+      break;
+
+    default:
+      ESP_LOGI(TAG, "Error (%s) reading password from nvs!\n", esp_err_to_name(rv));
+      break;
   }
 
   // First start of web server
@@ -968,8 +996,8 @@ app_main(void)
   // ***************************************************************************
 
   // Install TWAI driver
-  //ESP_ERROR_CHECK(twai_driver_install(&g_config, &t_config, &f_config));
-  //ESP_LOGI(TAG, "Driver installed");
+  // ESP_ERROR_CHECK(twai_driver_install(&g_config, &t_config, &f_config));
+  // ESP_LOGI(TAG, "Driver installed");
 
   // Start TWAI
   can4vscp_init(CAN4VSCP_125K);
@@ -1010,21 +1038,18 @@ app_main(void)
 
   while (1) {
 
-    //esp_task_wdt_reset();
+    // esp_task_wdt_reset();
 
     twai_message_t msg = {};
 
     // Check if there is a TWAI message in the receive queue
-    if( xQueueReceive( tr_twai_rx,
-                         &msg,
-                         portMAX_DELAY) == pdPASS ) {
+    if (xQueueReceive(tr_twai_rx, &msg, portMAX_DELAY) == pdPASS) {
 
-      ESP_LOGI(TAG, "--> Event fetched %X", (unsigned int)msg.identifier);
+      ESP_LOGI(TAG, "--> Event fetched %X", (unsigned int) msg.identifier);
       UBaseType_t cnt = uxQueueMessagesWaiting(tr_twai_rx);
-      ESP_LOGE(TAG,"count=%u %d",cnt,rv);
+      ESP_LOGE(TAG, "count=%u %d", cnt, rv);
 
       // Now put the message in all open client queues
-
     }
 
     xSemaphoreTake(ctrl_task_sem, portMAX_DELAY);

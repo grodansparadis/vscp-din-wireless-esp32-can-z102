@@ -61,7 +61,9 @@ static const char *TAG = "tcpsrv-cb";
 // Global stuff
 extern transport_t tr_twai_rx;
 extern transport_t tr_tcpsrv[MAX_TCP_CONNECTIONS];
-extern uint8_t g_node_guid[16];
+// from main
+extern nvs_handle_t g_nvsHandle;
+extern node_persistent_config_t g_persistent;
 
 extern uint32_t
 time_us_32(void);
@@ -191,7 +193,7 @@ vscp_link_callback_get_interface(const void *pdata, uint16_t index, struct vscp_
     case 0:
       pif->idx  = index;
       pif->type = VSCP_INTERFACE_TYPE_LEVEL2DRV;
-      memcpy(pif->guid, g_node_guid, 16);
+      memcpy(pif->guid, g_persistent.guid, 16);
       strncpy(pif->description, "Interface for the device itself", sizeof(pif->description));
       break;
 
@@ -199,9 +201,9 @@ vscp_link_callback_get_interface(const void *pdata, uint16_t index, struct vscp_
       uint8_t guid[16];
       pif->idx  = index;
       pif->type = VSCP_INTERFACE_TYPE_LEVEL1DRV;
-      memcpy(guid, g_node_guid, 16);
+      memcpy(guid, g_persistent.guid, 16);
       guid[13] = 0x01; // Interface 0x0001
-      memcpy(pif->guid, g_node_guid, 16);
+      memcpy(pif->guid, g_persistent.guid, 16);
       strncpy(pif->description, "Interface for the CAN4VSCP channel", sizeof(pif->description));
     } break;
 
@@ -553,7 +555,7 @@ vscp_link_callback_retr(const void *pdata, vscpEvent **pev)
   (*pev)->vscp_type  = (msg.identifier >> 8) & 0xff;
 
   // GUID
-  memcpy((*pev)->GUID, g_node_guid, 16);
+  memcpy((*pev)->GUID, g_persistent.guid, 16);
 
   // Set nickname
   (*pev)->GUID[15] = msg.identifier & 0xff;
@@ -689,7 +691,7 @@ vscp_link_callback_get_guid(const void *pdata, uint8_t *pguid)
     return VSCP_ERROR_INVALID_POINTER;
   }
 
-  memcpy(pguid, g_node_guid, 16);
+  memcpy(pguid, g_persistent.guid, 16);
   return VSCP_ERROR_SUCCESS;
 }
 
@@ -704,7 +706,7 @@ vscp_link_callback_set_guid(const void *pdata, uint8_t *pguid)
     return VSCP_ERROR_INVALID_POINTER;
   }
 
-  // memcpy(g_node_guid, pguid, 16);
+  memcpy(g_persistent.guid, pguid, 16);
   return VSCP_ERROR_NOT_SUPPORTED;
 }
 

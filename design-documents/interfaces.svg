@@ -26,8 +26,8 @@
      inkscape:zoom="0.7180275"
      inkscape:cx="396.22438"
      inkscape:cy="561.25984"
-     inkscape:window-width="1878"
-     inkscape:window-height="1011"
+     inkscape:window-width="1920"
+     inkscape:window-height="1043"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
@@ -73,6 +73,10 @@
        style="fill:#e9ddaf;fill-opacity:0.979858;stroke:#2a7e69;stroke-width:0.783;stroke-opacity:0.807843"
        d="m 102.80769,133.02357 h 53.06204"
        id="path4" />
+    <path
+       style="fill:#e9ddaf;fill-opacity:0.979858;stroke:#2a7e69;stroke-width:0.783;stroke-opacity:0.807843"
+       d="m 102.80769,151.07939 h 53.06204"
+       id="path4-3" />
     <text
        xml:space="preserve"
        style="font-weight:200;font-size:8.46667px;font-family:'DejaVu Sans';-inkscape-font-specification:'DejaVu Sans, Ultra-Light';text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#02020b;fill-opacity:0.97985798;stroke:#060302;stroke-width:0.783;stroke-opacity:0.80784303"
@@ -117,6 +121,17 @@
          style="stroke-width:0.783;fill:#000000;stroke:#020504;stroke-opacity:0.80784303"
          x="164.6693"
          y="135.96692">MQTT</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-weight:200;font-size:8.46667px;font-family:'DejaVu Sans';-inkscape-font-specification:'DejaVu Sans, Ultra-Light';text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#000000;fill-opacity:0.979858;stroke:#020504;stroke-width:0.783;stroke-opacity:0.807843"
+       x="164.6693"
+       y="153.01663"
+       id="text9-1"><tspan
+         sodipodi:role="line"
+         id="tspan9-2"
+         style="fill:#000000;stroke:#020504;stroke-width:0.783;stroke-opacity:0.807843"
+         x="164.6693"
+         y="153.01663">websocket</tspan></text>
     <path
        style="fill:#e9ddaf;fill-opacity:0.979858;stroke:#2a7e69;stroke-width:0.783;stroke-opacity:0.807843"
        d="m 62.64268,177.61042 v 39.42804"

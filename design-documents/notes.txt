@@ -1,0 +1,14 @@
+
+
+ESP-IDF Debugging with OpenOCD
+===========================
+Make sure JTAG is selected as flash method and that port is correct "/dev/ttyACM0"
+
+1.) Strat openocd with "openocd -f board/esp32c3-builtin.cfg" in a terminal window
+2.) Build and flash in vs code and run.
+
+Start openocd
+------------- 
+openocd -f board/esp32c3-builtin.cfg
+
+

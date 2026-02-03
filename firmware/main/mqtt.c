@@ -154,7 +154,7 @@ mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent
   strncpy(saveTopic, newTopic, MIN(strlen(newTopic), len));
 
   // GUID
-  vscp_fwhlp_writeGuidToString(workbuf, g_persistent.nodeGuid);
+  vscp_fwhlp_writeGuidToString(workbuf, g_persistent.guid);
   vscp_fwhlp_strsubst(newTopic, len, saveTopic, "{{guid}}", workbuf);
   strcpy(saveTopic, newTopic);
 
@@ -177,7 +177,7 @@ mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent
     strcpy(saveTopic, newTopic);
 
     // nickname
-    sprintf(workbuf, "%d", ((g_persistent.nodeGuid[14] << 8) + (g_persistent.nodeGuid[15])));
+    sprintf(workbuf, "%d", ((g_persistent.guid[14] << 8) + (g_persistent.guid[15])));
     vscp_fwhlp_strsubst(newTopic, len, saveTopic, "{{nickname}}", workbuf);
     strcpy(saveTopic, newTopic);
 
@@ -534,7 +534,7 @@ mqtt_start(void)
   strcpy(save, clientid);
 
   // GUID
-  vscp_fwhlp_writeGuidToString(workbuf, g_persistent.nodeGuid);
+  vscp_fwhlp_writeGuidToString(workbuf, g_persistent.guid);
   vscp_fwhlp_strsubst(clientid, sizeof(clientid), save, "{{guid}}", workbuf);
 
   char uri[256];

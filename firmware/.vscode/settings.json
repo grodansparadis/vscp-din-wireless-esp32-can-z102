@@ -1,8 +1,8 @@
 {
   "idf.adapterTargetName": "esp32c3",
   "C_Cpp.intelliSenseEngine": "Tag Parser",
-  "idf.flashType": "UART",
-  "idf.port": "/dev/ttyUSB0",
+  "idf.flashType": "JTAG",
+  "idf.port": "/dev/ttyACM0",
   "esp32.port": "-p ${config:idf.port}",
   // Use board or interface as needed for openocd functionality
   "esp32.openocd.board":"esp32c3-builtin.cfg",

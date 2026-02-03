@@ -1,4 +1,4 @@
-menu "VSCP WCANG Configuration"
+menu "VSCP CAN4VSCP gw Configuration"
 
     choice WCANG_PROV_TRANSPORT
         bool "Provisioning Transport"
