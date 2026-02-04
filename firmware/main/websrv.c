@@ -1221,11 +1221,9 @@ config_get_handler(httpd_req_t *req)
           "<p><form id=but3 class=\"button\" action='cfgweb' method='get'><button>Web interface</button></form></p>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "<p><form id=but2 class=\"button\" action='cfgwifi' method='get'><button>WiFi scan</button></form></p>");
-  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-
-  sprintf(buf,
-          "<p><form id=but3 class=\"button\" action='cfgvscplink' method='get'><button>VSCP Link</button></form></p>");
+  sprintf(
+    buf,
+    "<p><form id=but3 class=\"button\" action='cfgvscplink' method='get'><button>VSCP Link Srv</button></form></p>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, "<p><form id=but3 class=\"button\" action='cfgmqtt' method='get'><button>MQTT</button></form></p>");
@@ -1242,6 +1240,9 @@ config_get_handler(httpd_req_t *req)
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, "<p><form id=but3 class=\"button\" action='cfglog' method='get'><button>Logging</button></form></p>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "<p><form id=but2 class=\"button\" action='cfgwifi' method='get'><button>WiFi scan</button></form></p>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf,
@@ -1335,10 +1336,10 @@ config_module_get_handler(httpd_req_t *req)
 
   char *pmkstr = (char *) malloc(65);
   for (int i = 0; i < 32; i++) {
-    sprintf(pmkstr + 2 * i, "%02X", g_persistent.vscpLinkKey[i]);
+    sprintf(pmkstr + 2 * i, "%02X", g_persistent.pmk[i]);
   }
   sprintf(buf,
-          "Security key (32 bytes hex):<input type=\"password\" name=\"key\" maxlength=\"64\" value=\"%s\" >",
+          "Primary security key (32 hex bytes):<input type=\"password\" name=\"key\" maxlength=\"32\" value=\"%s\" >",
           pmkstr);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
   free(pmkstr);
@@ -1346,7 +1347,7 @@ config_module_get_handler(httpd_req_t *req)
   sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -1401,13 +1402,13 @@ do_config_module_get_handler(httpd_req_t *req)
         // setAccessPointParameters();
 
         // Write changed value to persistent storage
-        rv = nvs_set_str(g_nvsHandle, "node_name", g_persistent.nodeName);
+        rv = nvs_set_str(g_nvsHandle, "nodeName", g_persistent.nodeName);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update node name");
         }
       }
       else {
-        ESP_LOGE(TAG, "Error getting node_name => rv=%d", rv);
+        ESP_LOGE(TAG, "Error getting node name => rv=%d", rv);
       }
 
       // key
@@ -1426,7 +1427,7 @@ do_config_module_get_handler(httpd_req_t *req)
           ESP_LOGE(TAG, "Invalid key size. size=%d", rv);
         }
         else {
-          g_persistent.pmkLen = rv; // Save the keylength (16/24/32 bytes)
+          g_persistent.pmkLen = 16; // rv; // Save the keylength (16/24/32 bytes)
 
           // Write changed value to persistent storage
           rv = nvs_set_blob(g_nvsHandle, "pmk", g_persistent.pmk, sizeof(g_persistent.pmk));
@@ -1438,20 +1439,6 @@ do_config_module_get_handler(httpd_req_t *req)
       else {
         ESP_LOGE(TAG, "Error getting node_name => rv=%d", rv);
       }
-
-      // strtdly
-      // if (ESP_OK == (rv = httpd_query_key_value(buf, "strtdly", param, WEBPAGE_PARAM_SIZE))) {
-      //   ESP_LOGD(TAG, "Found query parameter => strtdly=%s", param);
-      //   g_persistent.startDelay = atoi(param);
-      //   // Write changed value to persistent storage
-      //   rv = nvs_set_u8(g_nvsHandle, "start_delay", g_persistent.startDelay);
-      //   if (rv != ESP_OK) {
-      //     ESP_LOGE(TAG, "Failed to update start delay");
-      //   }
-      // }
-      // else {
-      //   ESP_LOGE(TAG, "Error getting strtdly => rv=%d", rv);
-      // }
 
       rv = nvs_commit(g_nvsHandle);
       if (rv != ESP_OK) {
@@ -1697,7 +1684,7 @@ wifi_scan_done:
   sprintf(buf, "<button class=\"bred bgrn:hover\">Rescan</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -1744,7 +1731,7 @@ do_config_wifi_get_handler(httpd_req_t *req)
         strncpy(g_persistent.nodeName, pdecoded, 31);
         free(pdecoded);
         // Write changed value to persistent storage
-        rv = nvs_set_str(g_nvsHandle, "node_name", g_persistent.nodeName);
+        rv = nvs_set_str(g_nvsHandle, "nodeName", g_persistent.nodeName);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update node name");
         }
@@ -1752,20 +1739,6 @@ do_config_wifi_get_handler(httpd_req_t *req)
       else {
         ESP_LOGE(TAG, "Error getting node_name => rv=%d", rv);
       }
-
-      // strtdly
-      // if (ESP_OK == (rv = httpd_query_key_value(buf, "strtdly", param, WEBPAGE_PARAM_SIZE))) {
-      //   ESP_LOGD(TAG, "Found query parameter => strtdly=%s", param);
-      //   g_persistent.startDelay = atoi(param);
-      //   // Write changed value to persistent storage
-      //   rv = nvs_set_u8(g_nvsHandle, "start_delay", g_persistent.startDelay);
-      //   if (rv != ESP_OK) {
-      //     ESP_LOGE(TAG, "Failed to update start delay");
-      //   }
-      // }
-      // else {
-      //   ESP_LOGE(TAG, "Error getting strtdly => rv=%d", rv);
-      // }
 
       rv = nvs_commit(g_nvsHandle);
       if (rv != ESP_OK) {
@@ -1821,7 +1794,7 @@ config_vscplink_get_handler(httpd_req_t *req)
     free(req_buf);
   }
 
-  sprintf(buf, WEBPAGE_START_TEMPLATE, g_persistent.nodeName, "VSCP Link Configuration");
+  sprintf(buf, WEBPAGE_START_TEMPLATE, g_persistent.nodeName, "VSCP Link Srv Configuration");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, "<div><form id=but3 class=\"button\" action='/docfgvscplink' method='get'><fieldset>");
@@ -1831,9 +1804,6 @@ config_vscplink_get_handler(httpd_req_t *req)
   sprintf(buf, "<input type=\"checkbox\" name=\"enable\" value=\"true\" ");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
   sprintf(buf, "%s><label for=\"lr\"> Enable</label>", g_persistent.enableVscpLink ? "checked" : "");
-  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-
-  sprintf(buf, "<br><br>Host:<input type=\"text\" name=\"url\" value=\"%s\" >", g_persistent.vscplinkUrl);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, "Port:<input type=\"text\" name=\"port\" value=\"%d\" >", g_persistent.vscplinkPort);
@@ -1848,7 +1818,7 @@ config_vscplink_get_handler(httpd_req_t *req)
   sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -1897,21 +1867,7 @@ do_config_vscplink_get_handler(httpd_req_t *req)
       // Write changed value to persistent storage
       rv = nvs_set_u8(g_nvsHandle, "vscp_enable", g_persistent.enableVscpLink);
       if (rv != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to update vscp link enable");
-      }
-
-      // url
-      if (ESP_OK == (rv = httpd_query_key_value(buf, "url", param, WEBPAGE_PARAM_SIZE))) {
-        ESP_LOGD(TAG, "Found query parameter => url=%s", param);
-        strncpy(g_persistent.vscplinkUrl, param, sizeof(g_persistent.vscplinkUrl) - 1);
-        // Write changed value to persistent storage
-        rv = nvs_set_str(g_nvsHandle, "vscp_url", g_persistent.vscplinkUrl);
-        if (rv != ESP_OK) {
-          ESP_LOGE(TAG, "Failed to update VSCP link url");
-        }
-      }
-      else {
-        ESP_LOGE(TAG, "Error getting VSCP link URL => rv=%d", rv);
+        ESP_LOGE(TAG, "Failed to update vscp link srv enable");
       }
 
       // port
@@ -1921,11 +1877,11 @@ do_config_vscplink_get_handler(httpd_req_t *req)
         // Write changed value to persistent storage
         rv = nvs_set_u16(g_nvsHandle, "vscp_port", g_persistent.vscplinkPort);
         if (rv != ESP_OK) {
-          ESP_LOGE(TAG, "Failed to update VSCP link port");
+          ESP_LOGE(TAG, "Failed to update VSCP link srv port");
         }
       }
       else {
-        ESP_LOGE(TAG, "Error getting VSCP link port => rv=%d", rv);
+        ESP_LOGE(TAG, "Error getting VSCP link srv port => rv=%d", rv);
       }
 
       // username
@@ -1941,11 +1897,11 @@ do_config_vscplink_get_handler(httpd_req_t *req)
         // Write changed value to persistent storage
         rv = nvs_set_str(g_nvsHandle, "vscp_user", g_persistent.vscplinkUser);
         if (rv != ESP_OK) {
-          ESP_LOGE(TAG, "Failed to update VSCP link user");
+          ESP_LOGE(TAG, "Failed to update VSCP link srv user");
         }
       }
       else {
-        ESP_LOGE(TAG, "Error getting VSCP link username => rv=%d", rv);
+        ESP_LOGE(TAG, "Error getting VSCP link srv username => rv=%d", rv);
       }
 
       // password
@@ -1961,28 +1917,28 @@ do_config_vscplink_get_handler(httpd_req_t *req)
         // Write changed value to persistent storage
         rv = nvs_set_str(g_nvsHandle, "vscp_password", g_persistent.vscplinkPassword);
         if (rv != ESP_OK) {
-          ESP_LOGE(TAG, "Failed to update VSCP link password err=%02X", rv);
+          ESP_LOGE(TAG, "Failed to update VSCP link srv password err=%02X", rv);
         }
       }
       else {
-        ESP_LOGE(TAG, "Error getting VSCP link password => rv=%d", rv);
+        ESP_LOGE(TAG, "Error getting VSCP link srv password => rv=%d", rv);
       }
 
-      // key
-      if (ESP_OK == (rv = httpd_query_key_value(buf, "key", param, WEBPAGE_PARAM_SIZE))) {
-        ESP_LOGD(TAG, "Found query parameter => key=%s", param);
-        memset(g_persistent.vscpLinkKey, 0, 32);
-        vscp_fwhlp_hex2bin(g_persistent.vscpLinkKey, 32, param);
+      // // key
+      // if (ESP_OK == (rv = httpd_query_key_value(buf, "key", param, WEBPAGE_PARAM_SIZE))) {
+      //   ESP_LOGD(TAG, "Found query parameter => key=%s", param);
+      //   memset(g_persistent.pmk, 0, 32);
+      //   vscp_fwhlp_hex2bin(g_persistent.pmk, 32, param);
 
-        // Write changed value to persistent storage
-        rv = nvs_set_blob(g_nvsHandle, "vscp_key", g_persistent.vscpLinkKey, sizeof(g_persistent.vscpLinkKey));
-        if (rv != ESP_OK) {
-          ESP_LOGE(TAG, "Failed to write VSCP link key to nvs. rv=%d", rv);
-        }
-      }
-      else {
-        ESP_LOGE(TAG, "Error getting VSCP link key => rv=%d", rv);
-      }
+      //   // Write changed value to persistent storage
+      //   rv = nvs_set_blob(g_nvsHandle, "vscp_key", g_persistent.pmk, sizeof(g_persistent.pmk));
+      //   if (rv != ESP_OK) {
+      //     ESP_LOGE(TAG, "Failed to write VSCP link key to nvs. rv=%d", rv);
+      //   }
+      // }
+      // else {
+      //   ESP_LOGE(TAG, "Error getting VSCP link key => rv=%d", rv);
+      // }
 
       rv = nvs_commit(g_nvsHandle);
       if (rv != ESP_OK) {
@@ -2047,7 +2003,7 @@ config_mqtt_get_handler(httpd_req_t *req)
   // Enable
   sprintf(buf, "<input type=\"checkbox\" name=\"enable\" value=\"true\" ");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-  sprintf(buf, "%s><label for=\"lr\"> Enable</label>", g_persistent.mqttEnable ? "checked" : "");
+  sprintf(buf, "%s><label for=\"lr\"> Enable</label>", g_persistent.enableMqtt ? "checked" : "");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, "<br><br>Host:<input type=\"text\" name=\"url\" value=\"%s\" >", g_persistent.mqttUrl);
@@ -2056,10 +2012,10 @@ config_mqtt_get_handler(httpd_req_t *req)
   sprintf(buf, "Port:<input type=\"text\" name=\"port\" value=\"%d\" >", g_persistent.mqttPort);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "Client id:<input type=\"text\" name=\"client\" value=\"%s\" >", g_persistent.mqttClientid);
+  sprintf(buf, "Client id:<input type=\"text\" name=\"client\" value=\"%s\" >", g_persistent.mqttClientId);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "Username:<input type=\"text\" name=\"user\" value=\"%s\" >", g_persistent.mqttUsername);
+  sprintf(buf, "Username:<input type=\"text\" name=\"user\" value=\"%s\" >", g_persistent.mqttUser);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, "Password:<input type=\"password\" name=\"password\" value=\"%s\" >", g_persistent.mqttPassword);
@@ -2074,7 +2030,7 @@ config_mqtt_get_handler(httpd_req_t *req)
   sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -2113,15 +2069,15 @@ do_config_mqtt_get_handler(httpd_req_t *req)
       if (ESP_OK == (rv = httpd_query_key_value(buf, "enable", param, WEBPAGE_PARAM_SIZE))) {
         ESP_LOGD(TAG, "Found query parameter => enable=%s", param);
         if (NULL != strstr(param, "true")) {
-          g_persistent.mqttEnable = true;
+          g_persistent.enableMqtt = true;
         }
       }
       else {
-        g_persistent.mqttEnable = false;
+        g_persistent.enableMqtt = false;
       }
 
       // Write changed value to persistent storage
-      nvs_set_u8(g_nvsHandle, "mqtt_enable", g_persistent.mqttEnable);
+      nvs_set_u8(g_nvsHandle, "mqtt_enable", g_persistent.enableMqtt);
       if (rv != ESP_OK) {
         ESP_LOGE(TAG, "Failed to update MQTT enable");
       }
@@ -2138,7 +2094,7 @@ do_config_mqtt_get_handler(httpd_req_t *req)
         strncpy(g_persistent.mqttUrl, pdecoded, sizeof(g_persistent.mqttUrl) - 1);
         free(pdecoded);
         // Write changed value to persistent storage
-        rv = nvs_set_str(g_nvsHandle, "mqtt_url", g_persistent.mqttUrl);
+        rv = nvs_set_str(g_nvsHandle, "mqttUrl", g_persistent.mqttUrl);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update MQTT url");
         }
@@ -2152,7 +2108,7 @@ do_config_mqtt_get_handler(httpd_req_t *req)
         ESP_LOGD(TAG, "Found query parameter => port=%s", param);
         g_persistent.mqttPort = atoi(param);
         // Write changed value to persistent storage
-        rv = nvs_set_u16(g_nvsHandle, "mqtt_port", g_persistent.mqttPort);
+        rv = nvs_set_u16(g_nvsHandle, "mqttPort", g_persistent.mqttPort);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update MQTT port");
         }
@@ -2170,9 +2126,9 @@ do_config_mqtt_get_handler(httpd_req_t *req)
           return ESP_ERR_NO_MEM;
         }
         ESP_LOGD(TAG, "Found query parameter => clientid=%s", pdecoded);
-        strncpy(g_persistent.mqttClientid, pdecoded, sizeof(g_persistent.mqttClientid) - 1);
+        strncpy(g_persistent.mqttClientId, pdecoded, sizeof(g_persistent.mqttClientId) - 1);
         // Write changed value to persistent storage
-        rv = nvs_set_str(g_nvsHandle, "mqtt_cid", g_persistent.mqttClientid);
+        rv = nvs_set_str(g_nvsHandle, "mqttClientId", g_persistent.mqttClientId);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update MQTT clientid");
         }
@@ -2190,9 +2146,9 @@ do_config_mqtt_get_handler(httpd_req_t *req)
           return ESP_ERR_NO_MEM;
         }
         ESP_LOGD(TAG, "Found query parameter => user=%s", pdecoded);
-        strncpy(g_persistent.mqttUsername, pdecoded, sizeof(g_persistent.mqttUsername) - 1);
+        strncpy(g_persistent.mqttUser, pdecoded, sizeof(g_persistent.mqttUser) - 1);
         // Write changed value to persistent storage
-        rv = nvs_set_str(g_nvsHandle, "mqtt_user", g_persistent.mqttUsername);
+        rv = nvs_set_str(g_nvsHandle, "mqttUser", g_persistent.mqttUser);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update MQTT user");
         }
@@ -2212,7 +2168,7 @@ do_config_mqtt_get_handler(httpd_req_t *req)
         ESP_LOGD(TAG, "Found query parameter => password=%s", pdecoded);
         strncpy(g_persistent.mqttPassword, pdecoded, sizeof(g_persistent.mqttPassword) - 1);
         // Write changed value to persistent storage
-        rv = nvs_set_str(g_nvsHandle, "mqtt_password", g_persistent.mqttPassword);
+        rv = nvs_set_str(g_nvsHandle, "mqttPassword", g_persistent.mqttPassword);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update MQTT password");
         }
@@ -2233,7 +2189,7 @@ do_config_mqtt_get_handler(httpd_req_t *req)
         strncpy(g_persistent.mqttSub, pdecoded, sizeof(g_persistent.mqttSub) - 1);
         free(pdecoded);
         // Write changed value to persistent storage
-        rv = nvs_set_str(g_nvsHandle, "mqtt_sub", g_persistent.mqttSub);
+        rv = nvs_set_str(g_nvsHandle, "mqttSub", g_persistent.mqttSub);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update MQTT sub");
         }
@@ -2254,7 +2210,7 @@ do_config_mqtt_get_handler(httpd_req_t *req)
         strncpy(g_persistent.mqttPub, pdecoded, sizeof(g_persistent.mqttPub) - 1);
         free(pdecoded);
         // Write changed value to persistent storage
-        rv = nvs_set_str(g_nvsHandle, "mqtt_pub", g_persistent.mqttPub);
+        rv = nvs_set_str(g_nvsHandle, "mqttPub", g_persistent.mqttPub);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update MQTT pub");
         }
@@ -2331,12 +2287,6 @@ config_web_get_handler(httpd_req_t *req)
   sprintf(buf, "<div><form id=but3 class=\"button\" action='/docfgweb' method='get'><fieldset>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  // Enable
-  // sprintf(buf, "<input type=\"checkbox\" name=\"enable\" value=\"true\" ");
-  // httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-  // sprintf(buf, "%s><label for=\"lr\"> Enable</label>", g_persistent.webEnable ? "checked" : "");
-  // httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-
   sprintf(buf, "Port:<input type=\"text\" name=\"port\" value=\"%d\" >", g_persistent.webPort);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
@@ -2349,7 +2299,7 @@ config_web_get_handler(httpd_req_t *req)
   sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -2384,29 +2334,12 @@ do_config_web_get_handler(httpd_req_t *req)
         free(param);
       }
 
-      // Enable
-      // if (ESP_OK == (rv = httpd_query_key_value(buf, "enable", param, WEBPAGE_PARAM_SIZE))) {
-      //   ESP_LOGD(TAG, "Found query parameter => enable=%s", param);
-      //   if (NULL != strstr(param, "true")) {
-      //     g_persistent.webEnable = true;
-      //   }
-      // }
-      // else {
-      //   g_persistent.webEnable = false;
-      // }
-
-      // Write changed value to persistent storage
-      // rv = nvs_set_u8(g_nvsHandle, "web_enable", g_persistent.webEnable);
-      // if (rv != ESP_OK) {
-      //   ESP_LOGE(TAG, "Failed to update web enable");
-      // }
-
       // port
       if (ESP_OK == (rv = httpd_query_key_value(buf, "port", param, WEBPAGE_PARAM_SIZE))) {
         ESP_LOGD(TAG, "Found query parameter => port=%s", param);
         g_persistent.webPort = atoi(param);
         // Write changed value to persistent storage
-        rv = nvs_set_u16(g_nvsHandle, "web_port", g_persistent.webPort);
+        rv = nvs_set_u16(g_nvsHandle, "webPort", g_persistent.webPort);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update Web interface port");
         }
@@ -2426,7 +2359,7 @@ do_config_web_get_handler(httpd_req_t *req)
         ESP_LOGD(TAG, "Found query parameter => user=%s", pdecoded);
         strncpy(g_persistent.webUser, pdecoded, sizeof(g_persistent.webUser) - 1);
         // Write changed value to persistent storage
-        rv = nvs_set_str(g_nvsHandle, "web_user", g_persistent.webUser);
+        rv = nvs_set_str(g_nvsHandle, "webUser", g_persistent.webUser);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update Web interface user");
         }
@@ -2446,7 +2379,7 @@ do_config_web_get_handler(httpd_req_t *req)
         ESP_LOGD(TAG, "Found query parameter => password=%s", pdecoded);
         strncpy(g_persistent.webPassword, pdecoded, sizeof(g_persistent.webPassword) - 1);
         // Write changed value to persistent storage
-        rv = nvs_set_str(g_nvsHandle, "web_password", g_persistent.webPassword);
+        rv = nvs_set_str(g_nvsHandle, "webPassword", g_persistent.webPassword);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update Web interface password");
         }
@@ -2519,26 +2452,26 @@ config_log_get_handler(httpd_req_t *req)
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
   sprintf(buf, "%s><label for=\"stdout\"> Log to stdout</label>", g_persistent.logwrite2Stdout ? "checked" : "");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-  /*
-    sprintf(buf, "<br /><br />Log to:<select  name=\"type\" ");
-    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-    sprintf(buf, "<option value=\"0\" %s>none</option>", (LOG_NONE == g_persistent.logType) ? "selected" : "");
-    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-    sprintf(buf, "<option value=\"1\" %s>stdout</option>", (LOG_STD == g_persistent.logType) ? "selected" : "");
-    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-    sprintf(buf, "<option value=\"2\" %s>UDP</option>", (LOG_UDP == g_persistent.logType) ? "selected" : "");
-    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-    sprintf(buf, "<option value=\"3\" %s>TCP</option>", (LOG_TCP == g_persistent.logType) ? "selected" : "");
-    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-    sprintf(buf, "<option value=\"4\" %s>HTTP</option>", (LOG_HTTP == g_persistent.logType) ? "selected" : "");
-    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-    sprintf(buf, "<option value=\"5\" %s>MQTT</option>", (LOG_MQTT == g_persistent.logType) ? "selected" : "");
-    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-    sprintf(buf, "<option value=\"6\" %s>VSCP</option>", (LOG_VSCP == g_persistent.logType) ? "selected" : "");
-    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-    sprintf(buf, "></select>");
-    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-  */
+
+  sprintf(buf, "<br /><br />Log to:<select  name=\"type\" ");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  sprintf(buf, "<option value=\"0\" %s>none</option>", (LOG_TYPE_NONE == g_persistent.logType) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  sprintf(buf, "<option value=\"1\" %s>stdout</option>", (LOG_TYPE_STD == g_persistent.logType) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  sprintf(buf, "<option value=\"2\" %s>UDP</option>", (LOG_TYPE_UDP == g_persistent.logType) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  sprintf(buf, "<option value=\"3\" %s>TCP</option>", (LOG_TYPE_TCP == g_persistent.logType) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  sprintf(buf, "<option value=\"4\" %s>HTTP</option>", (LOG_TYPE_HTTP == g_persistent.logType) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  sprintf(buf, "<option value=\"5\" %s>MQTT</option>", (LOG_TYPE_MQTT == g_persistent.logType) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  sprintf(buf, "<option value=\"6\" %s>VSCP</option>", (LOG_TYPE_VSCP == g_persistent.logType) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  sprintf(buf, "></select>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
   sprintf(buf, "Log level:<select name=\"level\" ");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
   sprintf(buf, "<option value=\"1\" %s>error</option>", (ESP_LOG_ERROR == g_persistent.logLevel) ? "selected" : "");
@@ -2569,7 +2502,7 @@ config_log_get_handler(httpd_req_t *req)
   sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -2620,7 +2553,7 @@ do_config_log_get_handler(httpd_req_t *req)
         g_persistent.logwrite2Stdout = 0;
       }
 
-      rv = nvs_set_u8(g_nvsHandle, "log_stdout", g_persistent.logwrite2Stdout);
+      rv = nvs_set_u8(g_nvsHandle, "logwrite2Stdout", g_persistent.logwrite2Stdout);
       if (rv != ESP_OK) {
         ESP_LOGE(TAG, "Failed to update log-stdout");
       }
@@ -2707,9 +2640,9 @@ do_config_log_get_handler(httpd_req_t *req)
         strncpy(g_persistent.logMqttTopic, pdecoded, sizeof(g_persistent.logMqttTopic));
         free(pdecoded);
 
-        rv = nvs_set_str(g_nvsHandle, "log_mqtt_topic", g_persistent.logMqttTopic);
+        rv = nvs_set_str(g_nvsHandle, "logMqttTopic", g_persistent.logMqttTopic);
         if (rv != ESP_OK) {
-          ESP_LOGE(TAG, "Failed to save log topic");
+          ESP_LOGE(TAG, "Failed to save logMqtt topic");
         }
       }
       else {
@@ -2916,7 +2849,7 @@ default_get_handler(httpd_req_t *req)
       ESP_LOGE(TAG, "No auth value received");
     }
 
-    char *auth_credentials = http_auth_basic(DEFAULT_TCPIP_USER, DEFAULT_TCPIP_PASSWORD);
+    char *auth_credentials = http_auth_basic(DEFAULT_VSCP_LINK_USER, DEFAULT_VSCP_LINK_PASSWORD);
     if (!auth_credentials) {
       ESP_LOGE(TAG, "No enough memory for basic authorization credentials");
       free(buf);
@@ -3180,6 +3113,7 @@ start_webserver(void)
 {
   httpd_handle_t srv        = NULL;
   httpd_config_t dfltconfig = HTTPD_DEFAULT_CONFIG();
+  dfltconfig.server_port    = g_persistent.webPort;
 
   // 4096 is to low for OTA
   dfltconfig.stack_size = 1024 * 5;

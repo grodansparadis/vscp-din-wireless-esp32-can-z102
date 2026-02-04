@@ -77,5 +77,6 @@
     "vscp-projdefs.h": "c",
     "vscp-compiler.h": "c",
     "vscp-link-protocol.h": "c"
-  }
+  },
+  "idf.currentSetup": "/home/akhe/development/esp/esp-idf"
 }

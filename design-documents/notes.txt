@@ -1,14 +1,16 @@
+Internal product page: http://192.168.1.7/wiki/doku.php?id=vscp-din-esp32-can-z102
 
 
-ESP-IDF Debugging with OpenOCD
-===========================
-Make sure JTAG is selected as flash method and that port is correct "/dev/ttyACM0"
-
-1.) Strat openocd with "openocd -f board/esp32c3-builtin.cfg" in a terminal window
-2.) Build and flash in vs code and run.
-
-Start openocd
-------------- 
 openocd -f board/esp32c3-builtin.cfg
+
+TODO
+----
+- Multicast support
+- UDP support
+- TLS support
+- Send heartbeat on all interfaces. (Multicast 9598)
+- VSCP Node scan on VSCP2CAN interface.
+- Buttons.  
+- LED functionality.
 
 

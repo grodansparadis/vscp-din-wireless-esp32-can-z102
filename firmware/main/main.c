@@ -92,27 +92,56 @@ static const char *TAG = "main";
 nvs_handle_t g_nvsHandle;
 
 // Persistent configuration defaults  g_persistent.guid
-node_persistent_config_t g_persistent = {
-  .nodeName = "VSCP CAN4VSCP Gateway", // Default name
-  .guid     = { 0 },                   // Default GUID is constructed from MAC address
-  .bootCnt  = 0,
-  .pmkLen   = 16,    // AES128
-  .pmk      = { 0 }, // Default key is all nills
+node_persistent_config_t g_persistent = { .nodeName = DEFAULT_NODE_NAME,
+                                          .guid     = { 0 }, // Default GUID is constructed from MAC address
+                                          .bootCnt  = 0,
+                                          .pmkLen   = 16,    // AES128 (for future use)
+                                          .pmk      = { 0 }, // Default key is all nills
 
-  .webPort     = 80, // Web server port
-  .webUser     = "vscp",
-  .webPassword = "secret",
+                                          .logType      = DEFAULT_LOG_TYPE,    // Log type
+                                          .logLevel     = DEFAULT_LOG_LEVEL,   // Log level
+                                          .logRetries   = DEFAULT_LOG_RETRIES, // Number of retries for log message send
+                                          .logPort      = DEFAULT_LOG_PORT,    // Log server port
+                                          .logUrl       = DEFAULT_LOG_URL,     // Log server address
+                                          .logMqttTopic = DEFAULT_MQTT_LOG_PUBLISH_TOPIC, // MQTT topic for log messages
+                                          .logwrite2Stdout = DEFAULT_LOG_WRITE2STDOUT,    // Write log to stdout
 
-  // Multicast
-  .multicastIpStr = "224.0.23.158",
-  .multicastPort  = 9598
+                                          .webPort     = DEFAULT_WEBSERVER_PORT,
+                                          .webUser     = DEFAULT_WEBSERVER_USER,
+                                          .webPassword = DEFAULT_WEBSERVER_PASSWORD,
 
-  // UDP
-};
+                                          .enableVscpLink   = DEFAULT_VSCP_LINK_ENABLE,
+                                          .vscplinkPort     = DEFAULT_VSCP_LINK_PORT,
+                                          .vscplinkUser     = DEFAULT_VSCP_LINK_USER,
+                                          .vscplinkPassword = DEFAULT_VSCP_LINK_PASSWORD,
 
-transport_t tr_tcpsrv[MAX_TCP_CONNECTIONS] = {};
+                                          .enableMqtt   = DEFAULT_MQTT_ENABLE,
+                                          .mqttUrl      = DEFAULT_MQTT_URL,
+                                          .mqttPort     = DEFAULT_MQTT_PORT,
+                                          .mqttUser     = DEFAULT_MQTT_USER,
+                                          .mqttPassword = DEFAULT_MQTT_PASSWORD,
+                                          .mqttPub      = DEFAULT_MQTT_PUBLISH,
+                                          .mqttSub      = DEFAULT_MQTT_SUBSCRIBE,
+                                          .mqttPubLog = DEFAULT_MQTT_LOG_PUBLISH_TOPIC, // Set in logging configuration
+                                          .mqttClientId = DEFAULT_MQTT_CLIENT_ID,
+
+                                          // Multicast
+                                          .enableMulticast = DEFAULT_MULTICAST_ENABLE,
+                                          .multicastUrl    = DEFAULT_MULTICAST_URL,
+                                          .multicastPort   = DEFAULT_MULTICAST_PORT,
+                                          .multicastTtl    = DEFAULT_MULTICAST_TTL,
+
+                                          // UDP
+                                          .enableUdp   = DEFAULT_UDP_ENABLE,
+                                          .enableUdpRx = DEFAULT_UDP_RX_ENABLE,
+                                          .enableUdpTx = DEFAULT_UDP_TX_ENABLE,
+                                          .udpUrl      = DEFAULT_UDP_URL,
+                                          .udpPort     = DEFAULT_UDP_PORT };
+
+transport_t tr_tcpsrv[MAX_TCP_CONNECTIONS] = {}; // tcp/ip (VSCP link protocol)
 transport_t tr_mqtt                        = {}; // MQTT
-transport_t tr_uart                        = {}; // UART
+transport_t tr_multicast                   = {}; // Multicast
+transport_t tr_udp                         = {}; // UDP
 
 SemaphoreHandle_t ctrl_task_sem;
 
@@ -204,6 +233,357 @@ wcang_get_sec2_verifier(const char **verifier, uint16_t *verifier_len)
 #endif
 }
 #endif
+
+///////////////////////////////////////////////////////////////////////////////
+// initPersistentStorage (NVS)
+//
+
+void
+initPersistentStorage(void)
+{
+  esp_err_t rv;
+  size_t length;
+
+  rv = nvs_open("config", NVS_READWRITE, &g_nvsHandle);
+  if (rv != ESP_OK) {
+    ESP_LOGE(TAG, "Error (%s) opening NVS handle!", esp_err_to_name(rv));
+  }
+  else {
+
+    // * * * Module persistent configuration * * *
+
+    NVS_GET_OR_SET_DEFAULT(u32, nvs_get_u32, nvs_set_u32, g_nvsHandle, "bootCnt", g_persistent.bootCnt, 0, TAG, "%d");
+
+    ESP_LOGD(TAG, "Updating restart counter in NVS ... ");
+    g_persistent.bootCnt++;
+
+    // Write updated counter value to nvs
+    rv = nvs_set_u32(g_nvsHandle, "restart_counter", g_persistent.bootCnt);
+    if (rv != ESP_OK) {
+      ESP_LOGI(TAG, "Failed to read restart counter!");
+    }
+
+    // Node name
+    NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "nodeName", g_persistent.nodeName, DEFAULT_NODE_NAME, TAG);
+
+    // Get GUID
+    length = 16;
+    rv     = nvs_get_blob(g_nvsHandle, "guid", g_persistent.guid, &length);
+    switch (rv) {
+      case ESP_OK:
+        ESP_LOGI(TAG,
+                 "GUID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
+                 g_persistent.guid[0],
+                 g_persistent.guid[1],
+                 g_persistent.guid[2],
+                 g_persistent.guid[3],
+                 g_persistent.guid[4],
+                 g_persistent.guid[5],
+                 g_persistent.guid[6],
+                 g_persistent.guid[7],
+                 g_persistent.guid[8],
+                 g_persistent.guid[9],
+                 g_persistent.guid[10],
+                 g_persistent.guid[11],
+                 g_persistent.guid[12],
+                 g_persistent.guid[13],
+                 g_persistent.guid[14],
+                 g_persistent.guid[15]);
+        break;
+
+      case ESP_ERR_NVS_NOT_FOUND:
+        ESP_LOGI(TAG, "GUID not found in nvs, writing default\n");
+        memset(g_persistent.guid, 0, 16);
+        break;
+
+      default:
+        ESP_LOGI(TAG, "Error (%s) reading GUID from nvs!\n", esp_err_to_name(rv));
+        break;
+    }
+
+    // If GUID is all zero construct GUID
+    if (!(g_persistent.guid[0] | g_persistent.guid[1] | g_persistent.guid[2] | g_persistent.guid[3] |
+          g_persistent.guid[4] | g_persistent.guid[5] | g_persistent.guid[6] | g_persistent.guid[7] |
+          g_persistent.guid[8] | g_persistent.guid[9] | g_persistent.guid[10] | g_persistent.guid[11] |
+          g_persistent.guid[12] | g_persistent.guid[13] | g_persistent.guid[14] | g_persistent.guid[15])) {
+      g_persistent.guid[0] = 0xff;
+      g_persistent.guid[1] = 0xff;
+      g_persistent.guid[2] = 0xff;
+      g_persistent.guid[3] = 0xff;
+      g_persistent.guid[4] = 0xff;
+      g_persistent.guid[5] = 0xff;
+      g_persistent.guid[6] = 0xff;
+      g_persistent.guid[7] = 0xfe;
+      rv                   = esp_efuse_mac_get_default(g_persistent.guid + 8);
+      rv                   = nvs_set_blob(g_nvsHandle, "guid", g_persistent.guid, 16);
+      ESP_LOGI(TAG,
+               "Constructed GUID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
+               g_persistent.guid[0],
+               g_persistent.guid[1],
+               g_persistent.guid[2],
+               g_persistent.guid[3],
+               g_persistent.guid[4],
+               g_persistent.guid[5],
+               g_persistent.guid[6],
+               g_persistent.guid[7],
+               g_persistent.guid[8],
+               g_persistent.guid[9],
+               g_persistent.guid[10],
+               g_persistent.guid[11],
+               g_persistent.guid[12],
+               g_persistent.guid[13],
+               g_persistent.guid[14],
+               g_persistent.guid[15]);
+    }
+  }
+
+  // Primary key pmk
+  length = 16;
+  rv     = nvs_get_blob(g_nvsHandle, "pmk", g_persistent.pmk, &length);
+  switch (rv) {
+    case ESP_OK:
+      ESP_LOGI(TAG, "Primary key: xxxxxxxxx reading from nvs");
+      break;
+
+    case ESP_ERR_NVS_NOT_FOUND:
+      ESP_LOGI(TAG, "Primary key not found in nvs, writing default\n");
+      memset(g_persistent.pmk, 0, 16);
+      if (-1 != vscp_fwhlp_hex2bin(g_persistent.pmk, DEFAULT_KEY_LEN, VSCP_DEFAULT_KEY16)) {
+        rv = nvs_set_blob(g_nvsHandle, "pmk", g_persistent.pmk, 16);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to write primary key to nvs!");
+        }
+        else {
+          ESP_LOGI(TAG, "Primary key set to default value");
+        }
+      }
+      break;
+
+    default:
+      ESP_LOGI(TAG, "Error (%s) reading Primary key from nvs!\n", esp_err_to_name(rv));
+      break;
+  }
+
+  // * * * Log persistent configuration * * *
+
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "logType",
+                         g_persistent.logType,
+                         DEFAULT_LOG_TYPE,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "logRetries",
+                         g_persistent.logRetries,
+                         DEFAULT_LOG_RETRIES,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "logLevel",
+                         g_persistent.logLevel,
+                         DEFAULT_LOG_LEVEL,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT(u16,
+                         nvs_get_u16,
+                         nvs_set_u16,
+                         g_nvsHandle,
+                         "logPort",
+                         g_persistent.logPort,
+                         DEFAULT_LOG_PORT,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "logUrl", g_persistent.logUrl, DEFAULT_LOG_URL, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle,
+                             "logMqttTopic",
+                             g_persistent.logMqttTopic,
+                             DEFAULT_MQTT_LOG_PUBLISH_TOPIC,
+                             TAG);
+
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "logwrite2Stdout",
+                         g_persistent.logwrite2Stdout,
+                         DEFAULT_LOG_WRITE2STDOUT,
+                         TAG,
+                         "%d");
+
+  // * * * Web server persistent configuration * * *
+
+  NVS_GET_OR_SET_DEFAULT(u16,
+                         nvs_get_u16,
+                         nvs_set_u16,
+                         g_nvsHandle,
+                         "webPort",
+                         g_persistent.webPort,
+                         DEFAULT_WEBSERVER_PORT,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "webUser", g_persistent.webUser, DEFAULT_WEBSERVER_USER, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "webPassword", g_persistent.webPassword, DEFAULT_WEBSERVER_PASSWORD, TAG);
+
+  // * * * VSCP link persistent configuration * * *
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "enableVscpLink",
+                         g_persistent.enableVscpLink,
+                         DEFAULT_VSCP_LINK_ENABLE,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT(u16,
+                         nvs_get_u16,
+                         nvs_set_u16,
+                         g_nvsHandle,
+                         "vscplinkPort",
+                         g_persistent.vscplinkPort,
+                         DEFAULT_VSCP_LINK_PORT,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "vscplinkUser", g_persistent.vscplinkUser, DEFAULT_VSCP_LINK_USER, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle,
+                             "vscplinkPassword",
+                             g_persistent.vscplinkPassword,
+                             DEFAULT_VSCP_LINK_PASSWORD,
+                             TAG);
+
+  // * * * MQTT persistent configuration * * *
+
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "enableMqtt",
+                         g_persistent.enableMqtt,
+                         DEFAULT_MQTT_ENABLE,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT(u16,
+                         nvs_get_u16,
+                         nvs_set_u16,
+                         g_nvsHandle,
+                         "mqttPort",
+                         g_persistent.mqttPort,
+                         DEFAULT_MQTT_PORT,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttUrl", g_persistent.mqttUrl, DEFAULT_MQTT_URL, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttUser", g_persistent.mqttUser, DEFAULT_MQTT_USER, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttPassword", g_persistent.mqttPassword, DEFAULT_MQTT_PASSWORD, TAG);
+
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttPub", g_persistent.mqttPub, DEFAULT_MQTT_PUBLISH, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttSub", g_persistent.mqttSub, DEFAULT_MQTT_SUBSCRIBE, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttPubLog", g_persistent.mqttPubLog, DEFAULT_MQTT_LOG_PUBLISH_TOPIC, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttClientId", g_persistent.mqttClientId, DEFAULT_MQTT_CLIENT_ID, TAG);
+
+  // * * * Multicast persistent configuration * * *
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "enableMulticast",
+                         g_persistent.enableMulticast,
+                         DEFAULT_MULTICAST_ENABLE,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT(u16,
+                         nvs_get_u16,
+                         nvs_set_u16,
+                         g_nvsHandle,
+                         "multicastPort",
+                         g_persistent.multicastPort,
+                         DEFAULT_MULTICAST_PORT,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "multicastTtl",
+                         g_persistent.multicastTtl,
+                         DEFAULT_MULTICAST_TTL,
+                         TAG,
+                         "%d");
+
+  // * * * UDP persistent configuration * * *
+
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "enableUdp",
+                         g_persistent.enableUdp,
+                         DEFAULT_UDP_ENABLE,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "enableUdpRx",
+                         g_persistent.enableUdpRx,
+                         DEFAULT_UDP_RX_ENABLE,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "enableUdpTx",
+                         g_persistent.enableUdpTx,
+                         DEFAULT_UDP_TX_ENABLE,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT(u16,
+                         nvs_get_u16,
+                         nvs_set_u16,
+                         g_nvsHandle,
+                         "udpPort",
+                         g_persistent.udpPort,
+                         DEFAULT_UDP_PORT,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "udpUrl", g_persistent.udpUrl, "255.255.255.255", TAG);
+
+  //////////////////////////////////////////////////////////////////////////////////////
+  // Commit written value.
+  // After setting any values, nvs_commit() must be called to ensure changes are written
+  // to flash storage. Implementations may write to storage at other times,
+  // but this is not guaranteed.
+  /////////////////////////////////////////////////////////////////////////////////////
+  printf("Committing updates in NVS ... ");
+  rv = nvs_commit(g_nvsHandle);
+  if (rv != ESP_OK) {
+    ESP_LOGE(TAG, "NVS commit faild at startup (%s)!", esp_err_to_name(rv));
+  }
+}
 
 /* Signal Wi-Fi events on this event-group */
 const int WIFI_CONNECTED_EVENT = BIT0;
@@ -579,6 +959,9 @@ app_main(void)
   tr_mqtt.msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // MQTT empties
   // QueueHandle_t test = xQueueCreate(10, sizeof( twai_message_t) );
 
+  tr_multicast.msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // Multicast empties
+  tr_udp.msg_queue       = xQueueCreate(10, sizeof(twai_message_t)); // UDP empties
+
   ctrl_task_sem = xSemaphoreCreateBinary();
 
   // Register our event handler for Wi-Fi, IP and Provisioning related events
@@ -813,180 +1196,7 @@ app_main(void)
   /* Wait for Wi-Fi connection */
   xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_EVENT, false, true, portMAX_DELAY);
 
-  // **************************************************************************
-  //                        NVS - Persistent storage
-  // **************************************************************************
-
-  // Init persistent storage
-
-  rv = nvs_open("config", NVS_READWRITE, &g_nvsHandle);
-  if (rv != ESP_OK) {
-    ESP_LOGE(TAG, "Error (%s) opening NVS handle!", esp_err_to_name(rv));
-  }
-  else {
-
-    // * * * Module persistent configuration * * *
-
-    // Read
-    ESP_LOGD(TAG, "Reading restart counter from NVS ... ");
-
-    rv = nvs_get_u32(g_nvsHandle, "restart_counter", &g_persistent.bootCnt);
-    switch (rv) {
-
-      case ESP_OK:
-        ESP_LOGI(TAG, "Restart counter = %d", (int) g_persistent.bootCnt);
-        break;
-
-      case ESP_ERR_NVS_NOT_FOUND:
-        ESP_LOGI(TAG, "The restart value is not initialized yet!");
-        break;
-
-      default:
-        ESP_LOGI(TAG, "Error (%s) reading restart value", esp_err_to_name(rv));
-    }
-
-    // Write
-    ESP_LOGD(TAG, "Updating restart counter in NVS ... ");
-    g_persistent.bootCnt++;
-    rv = nvs_set_u32(g_nvsHandle, "restart_counter", g_persistent.bootCnt);
-    if (rv != ESP_OK) {
-      ESP_LOGI(TAG, "Failed to read restart counter!");
-    }
-
-    // Commit written value.
-    // After setting any values, nvs_commit() must be called to ensure changes are written
-    // to flash storage. Implementations may write to storage at other times,
-    // but this is not guaranteed.
-    printf("Committing updates in NVS ... ");
-    rv = nvs_commit(g_nvsHandle);
-    printf((rv != ESP_OK) ? "Failed!\n" : "Done\n");
-
-    // Get GUID
-    size_t length = 16;
-    rv     = nvs_get_blob(g_nvsHandle, "guid", g_persistent.guid, &length);
-    switch (rv) {
-
-      case ESP_OK:
-        ESP_LOGI(TAG,
-                 "GUID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
-                 g_persistent.guid[0],
-                 g_persistent.guid[1],
-                 g_persistent.guid[2],
-                 g_persistent.guid[3],
-                 g_persistent.guid[4],
-                 g_persistent.guid[5],
-                 g_persistent.guid[6],
-                 g_persistent.guid[7],
-                 g_persistent.guid[8],
-                 g_persistent.guid[9],
-                 g_persistent.guid[10],
-                 g_persistent.guid[11],
-                 g_persistent.guid[12],
-                 g_persistent.guid[13],
-                 g_persistent.guid[14],
-                 g_persistent.guid[15]);
-        break;
-
-      case ESP_ERR_NVS_NOT_FOUND:
-        ESP_LOGI(TAG, "GUID not found in nvs, writing default\n");
-        memset(g_persistent.guid, 0, 16);
-        break;
-
-      default:
-        ESP_LOGI(TAG, "Error (%s) reading GUID from nvs!\n", esp_err_to_name(rv));
-        break;
-    }
-
-    // If GUID is all zero construct GUID
-    if (!(g_persistent.guid[0] | g_persistent.guid[1] | g_persistent.guid[2] | g_persistent.guid[3] |
-          g_persistent.guid[4] | g_persistent.guid[5] | g_persistent.guid[6] | g_persistent.guid[7] |
-          g_persistent.guid[8] | g_persistent.guid[9] | g_persistent.guid[10] | g_persistent.guid[11] |
-          g_persistent.guid[12] | g_persistent.guid[13] | g_persistent.guid[14] | g_persistent.guid[15])) {
-      g_persistent.guid[0] = 0xff;
-      g_persistent.guid[1] = 0xff;
-      g_persistent.guid[2] = 0xff;
-      g_persistent.guid[3] = 0xff;
-      g_persistent.guid[4] = 0xff;
-      g_persistent.guid[5] = 0xff;
-      g_persistent.guid[6] = 0xff;
-      g_persistent.guid[7] = 0xfe;
-      rv                   = esp_efuse_mac_get_default(g_persistent.guid + 8);
-      rv                   = nvs_set_blob(g_nvsHandle, "guid", g_persistent.guid, 16);
-      ESP_LOGI(TAG,
-               "Constructed GUID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
-               g_persistent.guid[0],
-               g_persistent.guid[1],
-               g_persistent.guid[2],
-               g_persistent.guid[3],
-               g_persistent.guid[4],
-               g_persistent.guid[5],
-               g_persistent.guid[6],
-               g_persistent.guid[7],
-               g_persistent.guid[8],
-               g_persistent.guid[9],
-               g_persistent.guid[10],
-               g_persistent.guid[11],
-               g_persistent.guid[12],
-               g_persistent.guid[13],
-               g_persistent.guid[14],
-               g_persistent.guid[15]);
-    }
-  }
-
-  // * * * Web server persistent configuration * * *
-
-  rv = nvs_get_u16(g_nvsHandle, "webPort", &g_persistent.webPort);
-  switch (rv) {
-
-    case ESP_OK:
-      ESP_LOGI(TAG, "webPort: %d", g_persistent.webPort);
-      break;
-
-    case ESP_ERR_NVS_NOT_FOUND:
-      ESP_LOGI(TAG, "Username not found in nvs, writing default\n");
-      rv = nvs_set_u16(g_nvsHandle, "webPort", 80);
-      break;
-
-    default:
-      ESP_LOGI(TAG, "Error (%s) reading username from nvs!\n", esp_err_to_name(rv));
-      break;
-  }
-
-  size_t length = sizeof(g_persistent.webUser);
-  rv            = nvs_get_str(g_nvsHandle, "webUser", g_persistent.webUser, &length);
-  switch (rv) {
-
-    case ESP_OK:
-      ESP_LOGI(TAG, "webUser: %s", g_persistent.webUser);
-      break;
-
-    case ESP_ERR_NVS_NOT_FOUND:
-      ESP_LOGI(TAG, "Username not found in nvs, writing default\n");
-      rv = nvs_set_str(g_nvsHandle, "webUser", "vscp");
-      break;
-
-    default:
-      ESP_LOGI(TAG, "Error (%s) reading username from nvs!\n", esp_err_to_name(rv));
-      break;
-  }
-
-  length = sizeof(g_persistent.webPassword);
-  rv     = nvs_get_str(g_nvsHandle, "webPassword", g_persistent.webPassword, &length);
-  switch (rv) {
-
-    case ESP_OK:
-      ESP_LOGI(TAG, "Password: %s", g_persistent.webPassword);
-      break;
-
-    case ESP_ERR_NVS_NOT_FOUND:
-      ESP_LOGI(TAG, "webPassword not found in nvs, writing default\n");
-      rv = nvs_set_str(g_nvsHandle, "webPassword", "secret");
-      break;
-
-    default:
-      ESP_LOGI(TAG, "Error (%s) reading password from nvs!\n", esp_err_to_name(rv));
-      break;
-  }
+  initPersistentStorage();
 
   // First start of web server
   server = start_webserver();

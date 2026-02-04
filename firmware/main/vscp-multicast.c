@@ -98,7 +98,7 @@ multicast_sendEvent(int sock, const char *pstrev, bool bEncrypt, uint8_t nAlgori
 
   memset(&multicast_addr, 0, sizeof(multicast_addr));
   multicast_addr.sin_family      = AF_INET;
-  multicast_addr.sin_addr.s_addr = inet_addr(g_persistent.multicastIpStr);
+  multicast_addr.sin_addr.s_addr = inet_addr(g_persistent.multicastUrl);
   multicast_addr.sin_port        = htons(g_persistent.multicastPort);
 
   vscpEventEx ex;
@@ -367,7 +367,7 @@ multicast_send_dummy(void)
 
   memset(&multicast_addr, 0, sizeof(multicast_addr));
   multicast_addr.sin_family      = AF_INET;
-  multicast_addr.sin_addr.s_addr = inet_addr(g_persistent.multicastIpStr);
+  multicast_addr.sin_addr.s_addr = inet_addr(g_persistent.multicastUrl);
   multicast_addr.sin_port        = htons(g_persistent.multicastPort);
 
   send_len = strlen(message_to_send);

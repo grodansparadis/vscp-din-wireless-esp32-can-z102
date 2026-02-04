@@ -99,6 +99,7 @@
 // https://codebeautify.org/css-beautify-minify
 #define WEBPAGE_STYLE_CSS "div,fieldset,input,select{padding: 5px;font-size: 1.0em}fieldset{background: #4b4b4e}p{margin: 0.5em 0}input{width: 100%%;box-sizing: border-box;-webkit-box-sizing: border-box;-moz-box-sizing: border-box;background: #dddddd;color: #000000}input[type=checkbox],input[type=radio]{width: 1em;margin-right: 6px;vertical-align: -1px}input[type=range]{width: 99%%}select{width: 100%%;background: #dddddd;color: #000000}textarea{resize: vertical;width: 98%%;height: 318px;padding: 5px;overflow: auto;background: #e9e6e6;color: #65c115b6}body{text-align: center;font-family: verdana, sans-serif;background: #252525}button{border: 1;border-radius: 0.5rem;background: #d3d3d0;color: #000000;line-height: 2.4rem;font-size: 1.2rem;width: 100%%;-webkit-transition-duration: 0.7s;transition-duration: 0.7s;cursor: pointer}button:hover{background: #375733}.bred{background: #d43535}.bred:hover{background: #931f1f}.bgrn{background: #47c266}.bgrn:hover{background: #296939}.byell{background: #f0ee81}.byell:hover{background: #68642e}a{color: #1fa3ec;text-decoration: none}.p{float: left;text-align: left}.q{float: right;text-align: right}.r{border-radius: 0.3em;padding: 2px;margin: 6px 2px}.hf{display: none}td{padding-left: 30px;padding-right: 15px;padding-bottom: 10px}.name{font-family: Arial, Helvetica, sans-serif;font-size: small;font-weight: bold;color: #ffffff}.prop{font-family: Arial, Helvetica, sans-serif;font-size: small;font-weight: lighter;color: #a7aca7}.infoheader{font-family: Arial, Helvetica, sans-serif;font-size: normal;font-weight: lighter;color: #ede02c}"
 
+
 /*
 // https://github.com/Jeija/esp32-softap-ota/blob/master/main/web/index.html
 function startUpload() {
@@ -211,8 +212,16 @@ WEBPAGE_FAVICON \
   Parameter 1: Page head
   Parameter 2: Section header
 */
-#define WEBPAGE_END_TEMPLATE "<div style='text-align:right;font-size:11px;'><hr /><form id=but14 style=\"display: block;\" "\
+#define WEBPAGE_END_TEMPLATE "<div style='text-align:right;font-size:11px;'><hr />"\
+"<form id=but14 style=\"display: block;\" "\
 "action='index.html' method='get'><button class=\"byell\">Main Menu</button></form>"\
+"<hr /><div style='text-align:right;font-size:11px;'>%s - <a href='https://vscp.org' target='_blank' "\
+"style='color:#aaa;'>%s -- vscp.org</a></div>"\
+"</div></body></html>"
+
+#define WEBPAGE_CONFIG_END_TEMPLATE "<div style='text-align:right;font-size:11px;'><hr />"\
+"<form id=but14 style=\"display: block;\" "\
+"action='config.html' method='get'><button class=\"byell\">Configuration</button></form>"\
 "<hr /><div style='text-align:right;font-size:11px;'>%s - <a href='https://vscp.org' target='_blank' "\
 "style='color:#aaa;'>%s -- vscp.org</a></div>"\
 "</div></body></html>"

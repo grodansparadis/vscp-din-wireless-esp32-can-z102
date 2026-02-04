@@ -49,7 +49,6 @@
 #include <vscp.h>
 #include <vscp-firmware-helper.h>
 
-#include <esp32cangw.h>
 #include <main.h>
 #include "mqtt.h"
 
@@ -530,7 +529,7 @@ mqtt_start(void)
   char clientid[128], save[128], workbuf[48];
 
   // Node name
-  vscp_fwhlp_strsubst(clientid, sizeof(clientid), g_persistent.mqttClientid, "{{node}}", g_persistent.nodeName);
+  vscp_fwhlp_strsubst(clientid, sizeof(clientid), g_persistent.mqttClientId, "{{node}}", g_persistent.nodeName);
   strcpy(save, clientid);
 
   // GUID
@@ -551,7 +550,7 @@ mqtt_start(void)
     .session.disable_clean_session = true,
     .session.keepalive = 60,          
     .credentials.client_id               = clientid,
-    .credentials.username                = g_persistent.mqttUsername,
+    .credentials.username                = g_persistent.mqttUser,
     .credentials.authentication.password = g_persistent.mqttPassword,
     .task.priority = 5,
     //.task.stack_size = 2 * 1024,

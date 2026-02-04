@@ -1,2 +1,4 @@
 dependencies:
-  qrcode: "^0.1.0"
+  qrcode: ^0.1.0
+  espressif/button: =*
+  espressif/led_indicator: ^2.1.1
