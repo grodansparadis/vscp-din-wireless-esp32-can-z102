@@ -38,8 +38,8 @@
 #include "vscp.h"
 #include "can4vscp.h"
 
-#define TWAI_TX_GPIO_NUM GPIO_NUM_9  // CONFIG_EXAMPLE_TX_GPIO_NUM
-#define TWAI_RX_GPIO_NUM GPIO_NUM_10 // GPIO_NUM_3 CONFIG_EXAMPLE_RX_GPIO_NUM
+#define TWAI_TX_GPIO_NUM GPIO_NUM_9  // CAN TX
+#define TWAI_RX_GPIO_NUM GPIO_NUM_10 // CAN RX
 
 #define CONNECTED_LED_GPIO_NUM 0
 #define ACTIVE_LED_GPIO_NUM    1
@@ -214,6 +214,11 @@ typedef struct {
 #define DEFAULT_UDP_URL       "255.255.255.255" // Broadcast
 #define DEFAULT_UDP_PORT      9598
 
+#define DEFAULT_WEBSOCKETS_ENABLE    false
+#define DEFAULT_WEBSOCKETS_PORT      8080
+#define DEFAULT_WEBSOCKETS_USER      "vscp"
+#define DEFAULT_WEBSOCKETS_PASSWORD  "secret"
+
 typedef struct {
 
   // Module
@@ -222,6 +227,13 @@ typedef struct {
   uint8_t pmk[16];   // System security key for encryption (AES128)
   uint8_t pmkLen;    // For future use, Now always 16 (AES128)
   uint32_t bootCnt;  // Number of restarts (not editable)
+
+  // CAN
+  uint8_t canMode;  // CAN mode (normal, listen only, etc)
+  uint8_t canSpeed; // CAN speed (125k, 250k, etc
+  uint32_t nSent;   // Number of sent messages (not editable)
+  uint32_t nRecv;   // Number of received messages (not editable)
+  uint32_t nErr;    // Number of errors (not editable)
 
   // Log
   uint8_t logType;         // Log type
@@ -266,6 +278,13 @@ typedef struct {
   uint8_t enableUdpTx; // Enable UDP transmit
   char udpUrl[32];     // UDP IP address
   uint16_t udpPort;    // UDP port
+
+  // Websocket server protocol
+  uint8_t enableWebsock;    // Enable Websocket server protocol
+  uint16_t websockPort;     // Websocket server protocol port
+  char websockUser[32];     // Websocket server protocol user
+  char websockPw[32]; // Websocket server protocol password
+
 } node_persistent_config_t;
 
 /*!

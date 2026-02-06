@@ -92,51 +92,59 @@ static const char *TAG = "main";
 nvs_handle_t g_nvsHandle;
 
 // Persistent configuration defaults  g_persistent.guid
-node_persistent_config_t g_persistent = { .nodeName = DEFAULT_NODE_NAME,
-                                          .guid     = { 0 }, // Default GUID is constructed from MAC address
-                                          .bootCnt  = 0,
-                                          .pmkLen   = 16,    // AES128 (for future use)
-                                          .pmk      = { 0 }, // Default key is all nills
+node_persistent_config_t g_persistent = {
+  .nodeName = DEFAULT_NODE_NAME,
+  .guid     = { 0 }, // Default GUID is constructed from MAC address
+  .bootCnt  = 0,
+  .pmkLen   = 16,    // AES128 (for future use)
+  .pmk      = { 0 }, // Default key is all nills
 
-                                          .logType      = DEFAULT_LOG_TYPE,    // Log type
-                                          .logLevel     = DEFAULT_LOG_LEVEL,   // Log level
-                                          .logRetries   = DEFAULT_LOG_RETRIES, // Number of retries for log message send
-                                          .logPort      = DEFAULT_LOG_PORT,    // Log server port
-                                          .logUrl       = DEFAULT_LOG_URL,     // Log server address
-                                          .logMqttTopic = DEFAULT_MQTT_LOG_PUBLISH_TOPIC, // MQTT topic for log messages
-                                          .logwrite2Stdout = DEFAULT_LOG_WRITE2STDOUT,    // Write log to stdout
+  .logType         = DEFAULT_LOG_TYPE,               // Log type
+  .logLevel        = DEFAULT_LOG_LEVEL,              // Log level
+  .logRetries      = DEFAULT_LOG_RETRIES,            // Number of retries for log message send
+  .logPort         = DEFAULT_LOG_PORT,               // Log server port
+  .logUrl          = DEFAULT_LOG_URL,                // Log server address
+  .logMqttTopic    = DEFAULT_MQTT_LOG_PUBLISH_TOPIC, // MQTT topic for log messages
+  .logwrite2Stdout = DEFAULT_LOG_WRITE2STDOUT,       // Write log to stdout
 
-                                          .webPort     = DEFAULT_WEBSERVER_PORT,
-                                          .webUser     = DEFAULT_WEBSERVER_USER,
-                                          .webPassword = DEFAULT_WEBSERVER_PASSWORD,
+  .webPort     = DEFAULT_WEBSERVER_PORT,
+  .webUser     = DEFAULT_WEBSERVER_USER,
+  .webPassword = DEFAULT_WEBSERVER_PASSWORD,
 
-                                          .enableVscpLink   = DEFAULT_VSCP_LINK_ENABLE,
-                                          .vscplinkPort     = DEFAULT_VSCP_LINK_PORT,
-                                          .vscplinkUser     = DEFAULT_VSCP_LINK_USER,
-                                          .vscplinkPassword = DEFAULT_VSCP_LINK_PASSWORD,
+  .enableVscpLink   = DEFAULT_VSCP_LINK_ENABLE,
+  .vscplinkPort     = DEFAULT_VSCP_LINK_PORT,
+  .vscplinkUser     = DEFAULT_VSCP_LINK_USER,
+  .vscplinkPassword = DEFAULT_VSCP_LINK_PASSWORD,
 
-                                          .enableMqtt   = DEFAULT_MQTT_ENABLE,
-                                          .mqttUrl      = DEFAULT_MQTT_URL,
-                                          .mqttPort     = DEFAULT_MQTT_PORT,
-                                          .mqttUser     = DEFAULT_MQTT_USER,
-                                          .mqttPassword = DEFAULT_MQTT_PASSWORD,
-                                          .mqttPub      = DEFAULT_MQTT_PUBLISH,
-                                          .mqttSub      = DEFAULT_MQTT_SUBSCRIBE,
-                                          .mqttPubLog = DEFAULT_MQTT_LOG_PUBLISH_TOPIC, // Set in logging configuration
-                                          .mqttClientId = DEFAULT_MQTT_CLIENT_ID,
+  .enableMqtt   = DEFAULT_MQTT_ENABLE,
+  .mqttUrl      = DEFAULT_MQTT_URL,
+  .mqttPort     = DEFAULT_MQTT_PORT,
+  .mqttUser     = DEFAULT_MQTT_USER,
+  .mqttPassword = DEFAULT_MQTT_PASSWORD,
+  .mqttPub      = DEFAULT_MQTT_PUBLISH,
+  .mqttSub      = DEFAULT_MQTT_SUBSCRIBE,
+  .mqttPubLog   = DEFAULT_MQTT_LOG_PUBLISH_TOPIC, // Set in logging configuration
+  .mqttClientId = DEFAULT_MQTT_CLIENT_ID,
 
-                                          // Multicast
-                                          .enableMulticast = DEFAULT_MULTICAST_ENABLE,
-                                          .multicastUrl    = DEFAULT_MULTICAST_URL,
-                                          .multicastPort   = DEFAULT_MULTICAST_PORT,
-                                          .multicastTtl    = DEFAULT_MULTICAST_TTL,
+  // Multicast
+  .enableMulticast = DEFAULT_MULTICAST_ENABLE,
+  .multicastUrl    = DEFAULT_MULTICAST_URL,
+  .multicastPort   = DEFAULT_MULTICAST_PORT,
+  .multicastTtl    = DEFAULT_MULTICAST_TTL,
 
-                                          // UDP
-                                          .enableUdp   = DEFAULT_UDP_ENABLE,
-                                          .enableUdpRx = DEFAULT_UDP_RX_ENABLE,
-                                          .enableUdpTx = DEFAULT_UDP_TX_ENABLE,
-                                          .udpUrl      = DEFAULT_UDP_URL,
-                                          .udpPort     = DEFAULT_UDP_PORT };
+  // UDP
+  .enableUdp   = DEFAULT_UDP_ENABLE,
+  .enableUdpRx = DEFAULT_UDP_RX_ENABLE,
+  .enableUdpTx = DEFAULT_UDP_TX_ENABLE,
+  .udpUrl      = DEFAULT_UDP_URL,
+  .udpPort     = DEFAULT_UDP_PORT,
+
+  // Websocket server protocol
+  .enableWebsock = DEFAULT_WEBSOCKETS_ENABLE,
+  .websockPort   = DEFAULT_WEBSOCKETS_PORT,
+  .websockUser   = DEFAULT_WEBSOCKETS_USER,
+  .websockPw     = DEFAULT_WEBSOCKETS_PASSWORD,
+};
 
 transport_t tr_tcpsrv[MAX_TCP_CONNECTIONS] = {}; // tcp/ip (VSCP link protocol)
 transport_t tr_mqtt                        = {}; // MQTT
@@ -528,6 +536,8 @@ initPersistentStorage(void)
                          TAG,
                          "%d");
 
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "multicastUrl", g_persistent.multicastUrl, DEFAULT_MULTICAST_URL, TAG);
+
   // * * * UDP persistent configuration * * *
 
   NVS_GET_OR_SET_DEFAULT(u8,
@@ -571,6 +581,31 @@ initPersistentStorage(void)
                          "%d");
 
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "udpUrl", g_persistent.udpUrl, "255.255.255.255", TAG);
+
+  // * * * Websockets server configuration * * *
+
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "enableWebsock",
+                         g_persistent.enableWebsock,
+                         DEFAULT_WEBSOCKETS_ENABLE,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT(u16,
+                         nvs_get_u16,
+                         nvs_set_u16,
+                         g_nvsHandle,
+                         "websockPort",
+                         g_persistent.websockPort,
+                         DEFAULT_WEBSOCKETS_PORT,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "websockUser", g_persistent.websockUser, DEFAULT_WEBSOCKETS_USER, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "websockPw", g_persistent.websockPw, DEFAULT_WEBSOCKETS_PASSWORD, TAG);
 
   //////////////////////////////////////////////////////////////////////////////////////
   // Commit written value.
@@ -902,6 +937,7 @@ wifi_prov_print_qr(const char *name, const char *username, const char *pop, cons
 void
 app_main(void)
 {
+
   // Initialize NVS partition
   esp_err_t rv = nvs_flash_init();
   if (rv == ESP_ERR_NVS_NO_FREE_PAGES || rv == ESP_ERR_NVS_NEW_VERSION_FOUND) {
