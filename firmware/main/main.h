@@ -198,6 +198,7 @@ typedef struct {
 #define DEFAULT_VSCP_LINK_PASSWORD "secret"
 
 #define DEFAULT_MQTT_ENABLE            false
+#define DEFAULT_MQTT_TLS_ENABLE        false
 #define DEFAULT_MQTT_URL               "mqtt://"
 #define DEFAULT_MQTT_PORT              1883
 #define DEFAULT_MQTT_USER              ""
@@ -206,6 +207,11 @@ typedef struct {
 #define DEFAULT_MQTT_SUBSCRIBE         "can4vscpgw/{{guid}}"
 #define DEFAULT_MQTT_LOG_PUBLISH_TOPIC "can4vscpgw/{{guid}}/log"
 #define DEFAULT_MQTT_CLIENT_ID         "vscp-can4vscpgw"
+#define DEFAULT_MQTT_CA_CERT           ""
+#define DEFAULT_MQTT_CLIENT_CERT       ""
+#define DEFAULT_MQTT_CLIENT_KEY        ""
+#define DEFAULT_MQTT_QOS               0
+#define DEFAULT_MQTT_RETAIN            false
 
 #define DEFAULT_MULTICAST_ENABLE false
 #define DEFAULT_MULTICAST_URL    "224.0.23.158"
@@ -269,6 +275,7 @@ typedef struct {
 
   // MQTT
   uint8_t enableMqtt;    // Enable MQTT
+  uint8_t enableMqttTls; // Enable MQTT TLS
   char mqttUrl[80];      // MQTT URL
   uint16_t mqttPort;     // MQTT port
   char mqttUser[32];     // MQTT username
@@ -277,6 +284,11 @@ typedef struct {
   char mqttSub[80];      // MQTT subscribe topic
   char mqttPubLog[80];   // MQTT topic for log messages
   char mqttClientId[32]; // MQTT client ID
+  char mqttCaCert[1024]; // MQTT CA Certificate (PEM format)
+  char mqttClientCert[1024]; // MQTT Client Certificate (PEM format)
+  char mqttClientKey[1024];  // MQTT Client Private Key (PEM format)
+  uint8_t mqttQos;           // MQTT Quality of Service (0, 1, or 2)
+  uint8_t mqttRetain;        // MQTT retain flag for published messages
 
   // Multicast interface
   uint8_t enableMulticast; // Enable multicast

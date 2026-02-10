@@ -128,6 +128,7 @@ node_persistent_config_t g_persistent = {
   .vscplinkPw     = DEFAULT_VSCP_LINK_PASSWORD,
 
   .enableMqtt   = DEFAULT_MQTT_ENABLE,
+  .enableMqttTls = DEFAULT_MQTT_TLS_ENABLE,
   .mqttUrl      = DEFAULT_MQTT_URL,
   .mqttPort     = DEFAULT_MQTT_PORT,
   .mqttUser     = DEFAULT_MQTT_USER,
@@ -136,6 +137,11 @@ node_persistent_config_t g_persistent = {
   .mqttSub      = DEFAULT_MQTT_SUBSCRIBE,
   .mqttPubLog   = DEFAULT_MQTT_LOG_PUBLISH_TOPIC, // Set in logging configuration
   .mqttClientId = DEFAULT_MQTT_CLIENT_ID,
+  .mqttCaCert   = DEFAULT_MQTT_CA_CERT,
+  .mqttClientCert = DEFAULT_MQTT_CLIENT_CERT,
+  .mqttClientKey = DEFAULT_MQTT_CLIENT_KEY,
+  .mqttQos = DEFAULT_MQTT_QOS,
+  .mqttRetain = DEFAULT_MQTT_RETAIN,
 
   // Multicast
   .enableMulticast = DEFAULT_MULTICAST_ENABLE,
@@ -520,6 +526,16 @@ initPersistentStorage(void)
                          TAG,
                          "%d");
 
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "enableMqttTls",
+                         g_persistent.enableMqttTls,
+                         DEFAULT_MQTT_TLS_ENABLE,
+                         TAG,
+                         "%d");
+
   NVS_GET_OR_SET_DEFAULT(u16,
                          nvs_get_u16,
                          nvs_set_u16,
@@ -538,6 +554,31 @@ initPersistentStorage(void)
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttSub", g_persistent.mqttSub, DEFAULT_MQTT_SUBSCRIBE, TAG);
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttPubLog", g_persistent.mqttPubLog, DEFAULT_MQTT_LOG_PUBLISH_TOPIC, TAG);
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttClientId", g_persistent.mqttClientId, DEFAULT_MQTT_CLIENT_ID, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttCaCert", g_persistent.mqttCaCert, DEFAULT_MQTT_CA_CERT, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttClientCert", g_persistent.mqttClientCert, DEFAULT_MQTT_CLIENT_CERT, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttClientKey", g_persistent.mqttClientKey, DEFAULT_MQTT_CLIENT_KEY, TAG);
+  // NVS_GET_OR_SET_DEFAULT(u8,g_nvsHandle, "mqttQos", g_persistent.mqttQos, DEFAULT_MQTT_QOS, TAG);
+  // NVS_GET_OR_SET_DEFAULT(g_nvsHandle, "mqttRetain", g_persistent.mqttRetain, DEFAULT_MQTT_RETAIN, TAG);
+
+  // // * * * Multicast persistent configuration * * *
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "mqttQos",
+                         g_persistent.mqttQos,
+                         DEFAULT_MQTT_QOS,
+                         TAG,
+                         "%d");
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "mqttRetain",
+                         g_persistent.mqttRetain,
+                         DEFAULT_MQTT_RETAIN,
+                         TAG,
+                         "%d");
 
   // * * * Multicast persistent configuration * * *
   NVS_GET_OR_SET_DEFAULT(u8,

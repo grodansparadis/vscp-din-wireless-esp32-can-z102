@@ -2387,6 +2387,47 @@ config_mqtt_get_handler(httpd_req_t *req)
   sprintf(buf, "Publish:<input type=\"text\" name=\"pub\" value=\"%s\" >", g_persistent.mqttPub);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
+  // QoS selection
+  sprintf(buf, "<br>QoS:<select name=\"qos\">");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  sprintf(buf, "<option value=\"0\" %s>0 - At most once</option>", g_persistent.mqttQos == 0 ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  sprintf(buf, "<option value=\"1\" %s>1 - At least once</option>", g_persistent.mqttQos == 1 ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  sprintf(buf, "<option value=\"2\" %s>2 - Exactly once</option>", g_persistent.mqttQos == 2 ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  sprintf(buf, "</select>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  // Retain flag
+  sprintf(buf, " <input type=\"checkbox\" name=\"retain\" value=\"true\" %s><label> Retain</label>",
+          g_persistent.mqttRetain ? "checked" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "<br><br><fieldset><legend>TLS/SSL Configuration</legend>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  // Enable TLS
+  sprintf(buf, "<input type=\"checkbox\" name=\"enable_tls\" value=\"true\" ");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  sprintf(buf, "%s><label for=\"tls\"> Enable TLS/SSL</label>", g_persistent.enableMqttTls ? "checked" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "<br><br>CA Certificate (PEM):<br><textarea name=\"ca_cert\" rows=\"6\" cols=\"60\">%s</textarea>", 
+          g_persistent.mqttCaCert);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "<br>Client Certificate (PEM):<br><textarea name=\"client_cert\" rows=\"6\" cols=\"60\">%s</textarea>", 
+          g_persistent.mqttClientCert);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "<br>Client Private Key (PEM):<br><textarea name=\"client_key\" rows=\"6\" cols=\"60\">%s</textarea>", 
+          g_persistent.mqttClientKey);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "</fieldset>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
   sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
@@ -2577,6 +2618,121 @@ do_config_mqtt_get_handler(httpd_req_t *req)
       }
       else {
         ESP_LOGE(TAG, "Error getting MQTT pub => rv=%d", rv);
+      }
+
+      // Enable TLS
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "enable_tls", param, WEBPAGE_PARAM_SIZE))) {
+        ESP_LOGD(TAG, "Found query parameter => enable_tls=%s", param);
+        if (NULL != strstr(param, "true")) {
+          g_persistent.enableMqttTls = true;
+        }
+      }
+      else {
+        g_persistent.enableMqttTls = false;
+      }
+
+      // Write changed value to persistent storage
+      rv = nvs_set_u8(g_nvsHandle, "enableMqttTls", g_persistent.enableMqttTls);
+      if (rv != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to update MQTT TLS enable [%s]", esp_err_to_name(rv));
+      }
+
+      // CA Certificate
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "ca_cert", param, WEBPAGE_PARAM_SIZE))) {
+        char *pdecoded = urlDecode(param);
+        if (NULL == pdecoded) {
+          free(param);
+          free(buf);
+          return ESP_ERR_NO_MEM;
+        }
+        ESP_LOGD(TAG, "Found query parameter => ca_cert (length=%d)", strlen(pdecoded));
+        strncpy(g_persistent.mqttCaCert, pdecoded, sizeof(g_persistent.mqttCaCert) - 1);
+        free(pdecoded);
+        // Write changed value to persistent storage
+        rv = nvs_set_str(g_nvsHandle, "mqttCaCert", g_persistent.mqttCaCert);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to update MQTT CA cert [%s]", esp_err_to_name(rv));
+        }
+      }
+      else {
+        ESP_LOGE(TAG, "Error getting MQTT CA cert => rv=%d", rv);
+      }
+
+      // Client Certificate
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "client_cert", param, WEBPAGE_PARAM_SIZE))) {
+        char *pdecoded = urlDecode(param);
+        if (NULL == pdecoded) {
+          free(param);
+          free(buf);
+          return ESP_ERR_NO_MEM;
+        }
+        ESP_LOGD(TAG, "Found query parameter => client_cert (length=%d)", strlen(pdecoded));
+        strncpy(g_persistent.mqttClientCert, pdecoded, sizeof(g_persistent.mqttClientCert) - 1);
+        free(pdecoded);
+        // Write changed value to persistent storage
+        rv = nvs_set_str(g_nvsHandle, "mqttClientCert", g_persistent.mqttClientCert);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to update MQTT client cert [%s]", esp_err_to_name(rv));
+        }
+      }
+      else {
+        ESP_LOGE(TAG, "Error getting MQTT client cert => rv=%d", rv);
+      }
+
+      // Client Private Key
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "client_key", param, WEBPAGE_PARAM_SIZE))) {
+        char *pdecoded = urlDecode(param);
+        if (NULL == pdecoded) {
+          free(param);
+          free(buf);
+          return ESP_ERR_NO_MEM;
+        }
+        ESP_LOGD(TAG, "Found query parameter => client_key (length=%d)", strlen(pdecoded));
+        strncpy(g_persistent.mqttClientKey, pdecoded, sizeof(g_persistent.mqttClientKey) - 1);
+        free(pdecoded);
+        // Write changed value to persistent storage
+        rv = nvs_set_str(g_nvsHandle, "mqttClientKey", g_persistent.mqttClientKey);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to update MQTT client key [%s]", esp_err_to_name(rv));
+        }
+      }
+      else {
+        ESP_LOGE(TAG, "Error getting MQTT client key => rv=%d", rv);
+      }
+
+      // QoS
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "qos", param, WEBPAGE_PARAM_SIZE))) {
+        ESP_LOGD(TAG, "Found query parameter => qos=%s", param);
+        g_persistent.mqttQos = atoi(param);
+        // Clamp to valid range (0-2)
+        if (g_persistent.mqttQos > 2) {
+          g_persistent.mqttQos = 0;
+        }
+        // Write changed value to persistent storage
+        rv = nvs_set_u8(g_nvsHandle, "mqttQos", g_persistent.mqttQos);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to update MQTT QoS [%s]", esp_err_to_name(rv));
+        }
+      }
+      else {
+        ESP_LOGE(TAG, "Error getting MQTT QoS => rv=%d", rv);
+      }
+
+      // Retain
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "retain", param, WEBPAGE_PARAM_SIZE))) {
+        ESP_LOGD(TAG, "Found query parameter => retain=%s", param);
+        if (NULL != strstr(param, "true")) {
+          g_persistent.mqttRetain = true;
+        }
+      }
+      else {
+        g_persistent.mqttRetain = false;
+      }
+
+      // Write changed value to persistent storage
+      rv = nvs_set_u8(g_nvsHandle, "mqttRetain", g_persistent.mqttRetain);
+      if (rv != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to update MQTT retain [%s]", esp_err_to_name(rv));
       }
 
       rv = nvs_commit(g_nvsHandle);
