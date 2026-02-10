@@ -99,6 +99,11 @@ node_persistent_config_t g_persistent = {
   .pmkLen   = 16,    // AES128 (for future use)
   .pmk      = { 0 }, // Default key is all nills
 
+  // CAN/TWAI
+  .canSpeed  = DEFAULT_CAN_SPEED,
+  .canMode   = DEFAULT_CAN_MODE,
+  .canFilter = DEFAULT_CAN_FILTER,
+
   .logType         = DEFAULT_LOG_TYPE,               // Log type
   .logLevel        = DEFAULT_LOG_LEVEL,              // Log level
   .logRetries      = DEFAULT_LOG_RETRIES,            // Number of retries for log message send
@@ -110,6 +115,12 @@ node_persistent_config_t g_persistent = {
   .webPort     = DEFAULT_WEBSERVER_PORT,
   .webUser     = DEFAULT_WEBSERVER_USER,
   .webPassword = DEFAULT_WEBSERVER_PASSWORD,
+
+  // WiFi
+  .wifiPrimarySsid       = "",
+  .wifiPrimaryPassword   = "",
+  .wifiSecondarySsid     = "",
+  .wifiSecondaryPassword = "",
 
   .enableVscpLink = DEFAULT_VSCP_LINK_ENABLE,
   .vscplinkPort   = DEFAULT_VSCP_LINK_PORT,
@@ -379,9 +390,29 @@ initPersistentStorage(void)
                          nvs_get_u8,
                          nvs_set_u8,
                          g_nvsHandle,
-                         "logType",
-                         g_persistent.logType,
-                         DEFAULT_LOG_TYPE,
+                         "canSpeed",
+                         g_persistent.canSpeed,
+                         DEFAULT_CAN_SPEED,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "canMode",
+                         g_persistent.canMode,
+                         DEFAULT_CAN_MODE,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT(u32,
+                         nvs_get_u32,
+                         nvs_set_u32,
+                         g_nvsHandle,
+                         "canFilter",
+                         g_persistent.canFilter,
+                         DEFAULT_CAN_FILTER,
                          TAG,
                          "%d");
 
@@ -446,6 +477,12 @@ initPersistentStorage(void)
 
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "webUser", g_persistent.webUser, DEFAULT_WEBSERVER_USER, TAG);
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "webPassword", g_persistent.webPassword, DEFAULT_WEBSERVER_PASSWORD, TAG);
+
+  // * * * WiFi configuration * * *
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "wifiPriSsid", g_persistent.wifiPrimarySsid, "", TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "wifiPriPass", g_persistent.wifiPrimaryPassword, "", TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "wifiSecSsid", g_persistent.wifiSecondarySsid, "", TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "wifiSecPass", g_persistent.wifiSecondaryPassword, "", TAG);
 
   // * * * VSCP link persistent configuration * * *
   NVS_GET_OR_SET_DEFAULT(u8,
@@ -767,6 +804,22 @@ event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *ev
                  "\n\tSSID     : %s\n\tPassword : %s",
                  (const char *) wifi_sta_cfg->ssid,
                  (const char *) wifi_sta_cfg->password);
+
+        // Save provisioned credentials as primary WiFi
+        strncpy(g_persistent.wifiPrimarySsid, (char *) wifi_sta_cfg->ssid, sizeof(g_persistent.wifiPrimarySsid) - 1);
+        g_persistent.wifiPrimarySsid[sizeof(g_persistent.wifiPrimarySsid) - 1] = '\0';
+
+        strncpy(g_persistent.wifiPrimaryPassword,
+                (char *) wifi_sta_cfg->password,
+                sizeof(g_persistent.wifiPrimaryPassword) - 1);
+        g_persistent.wifiPrimaryPassword[sizeof(g_persistent.wifiPrimaryPassword) - 1] = '\0';
+
+        // Save to NVS
+        nvs_set_str(g_nvsHandle, "wifiPriSsid", g_persistent.wifiPrimarySsid);
+        nvs_set_str(g_nvsHandle, "wifiPriPass", g_persistent.wifiPrimaryPassword);
+        nvs_commit(g_nvsHandle);
+
+        ESP_LOGI(TAG, "Saved provisioned credentials as primary WiFi");
         break;
       }
       case WIFI_PROV_CRED_FAIL: {
@@ -847,6 +900,7 @@ get_device_service_name(char *service_name, size_t max)
 // The data format can be chosen by applications. Here, we are using plain ascii text.
 // Applications can choose to use other formats like protobuf, JSON, XML, etc.
 //
+// Expected format for secondary WiFi: "SEC_SSID:password" or JSON format
 
 esp_err_t
 custom_prov_data_handler(uint32_t session_id,
@@ -856,8 +910,35 @@ custom_prov_data_handler(uint32_t session_id,
                          ssize_t *outlen,
                          void *priv_data)
 {
-  if (inbuf) {
-    ESP_LOGI(TAG, "Received data: %.*s", inlen, (char *) inbuf);
+  if (inbuf && inlen > 0) {
+    ESP_LOGI(TAG, "Received custom data: %.*s", inlen, (char *) inbuf);
+
+    // Parse secondary WiFi credentials
+    // Expected format: "SSID:PASSWORD"
+    char *data_copy = strndup((char *) inbuf, inlen);
+    if (data_copy) {
+      char *colon = strchr(data_copy, ':');
+      if (colon) {
+        *colon         = '\0'; // Split at colon
+        char *ssid     = data_copy;
+        char *password = colon + 1;
+
+        // Save as secondary WiFi credentials
+        strncpy(g_persistent.wifiSecondarySsid, ssid, sizeof(g_persistent.wifiSecondarySsid) - 1);
+        g_persistent.wifiSecondarySsid[sizeof(g_persistent.wifiSecondarySsid) - 1] = '\0';
+
+        strncpy(g_persistent.wifiSecondaryPassword, password, sizeof(g_persistent.wifiSecondaryPassword) - 1);
+        g_persistent.wifiSecondaryPassword[sizeof(g_persistent.wifiSecondaryPassword) - 1] = '\0';
+
+        // Save to NVS
+        nvs_set_str(g_nvsHandle, "wifiSecSsid", g_persistent.wifiSecondarySsid);
+        nvs_set_str(g_nvsHandle, "wifiSecPass", g_persistent.wifiSecondaryPassword);
+        nvs_commit(g_nvsHandle);
+
+        ESP_LOGI(TAG, "Saved secondary WiFi: SSID=%s", g_persistent.wifiSecondarySsid);
+      }
+      free(data_copy);
+    }
   }
 
   char response[] = "SUCCESS";

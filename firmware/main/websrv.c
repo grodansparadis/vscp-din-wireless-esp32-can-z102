@@ -382,6 +382,54 @@ info_get_handler(httpd_req_t *req)
     httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
   }
 
+  // * * *  CAN/TWAI * * *
+  sprintf(buf, "<tr><td class='infoheader'>CAN/TWAI Interface</td><td></td></tr>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  // CAN Mode
+  const char *canModeStr = (g_persistent.canMode == 0) ? "Normal" : "Listen Only";
+  sprintf(buf, "<tr><td class=\"name\">CAN Mode:</td><td class=\"prop\">%s</td></tr>", canModeStr);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  // CAN Speed
+  const char *canSpeedStr;
+  switch (g_persistent.canSpeed) {
+    case 0: canSpeedStr = "5 Kbps"; break;
+    case 1: canSpeedStr = "10 Kbps"; break;
+    case 2: canSpeedStr = "20 Kbps"; break;
+    case 3: canSpeedStr = "25 Kbps"; break;
+    case 4: canSpeedStr = "50 Kbps"; break;
+    case 5: canSpeedStr = "100 Kbps"; break;
+    case 6: canSpeedStr = "125 Kbps"; break;
+    case 7: canSpeedStr = "250 Kbps"; break;
+    case 8: canSpeedStr = "500 Kbps"; break;
+    case 9: canSpeedStr = "800 Kbps"; break;
+    case 10: canSpeedStr = "1000 Kbps"; break;
+    default: canSpeedStr = "Unknown"; break;
+  }
+  sprintf(buf, "<tr><td class=\"name\">CAN Speed:</td><td class=\"prop\">%s</td></tr>", canSpeedStr);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  // CAN Filter
+  sprintf(buf, "<tr><td class=\"name\">CAN Filter:</td><td class=\"prop\">0x%08X</td></tr>", (unsigned int)g_persistent.canFilter);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  // Messages Sent
+  sprintf(buf, "<tr><td class=\"name\">Messages Sent:</td><td class=\"prop\">%u</td></tr>", (unsigned int)g_persistent.nSent);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  // Messages Received
+  sprintf(buf, "<tr><td class=\"name\">Messages Received:</td><td class=\"prop\">%u</td></tr>", (unsigned int)g_persistent.nRecv);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  // Total Errors
+  sprintf(buf, "<tr><td class=\"name\">Total Errors:</td><td class=\"prop\">%u</td></tr>", (unsigned int)g_persistent.nErr);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  // Last Error Code
+  sprintf(buf, "<tr><td class=\"name\">Last Error Code:</td><td class=\"prop\">0x%08X</td></tr>", (unsigned int)g_persistent.lastError);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
   // * * *  Connection * * *
   sprintf(buf, "<tr><td class='infoheader'>Connection</td><td></td></tr>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
@@ -1217,6 +1265,9 @@ config_get_handler(httpd_req_t *req)
   sprintf(buf, "<p><form id=but1 class=\"button\" action='cfgmodule' method='get'><button>Module</button></form></p>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
+  sprintf(buf, "<p><form id=but3 class=\"button\" action='cfgcan' method='get'><button>CAN/TWAI</button></form></p>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
   sprintf(buf,
           "<p><form id=but3 class=\"button\" action='cfgweb' method='get'><button>Web interface</button></form></p>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
@@ -1277,6 +1328,132 @@ config_get_handler(httpd_req_t *req)
 //                                    .user_ctx = NULL };
 
 ///////////////////////////////////////////////////////////////////////////////
+// config_can_get_handler
+//
+
+static esp_err_t
+config_can_get_handler(httpd_req_t *req)
+{
+  char *buf;
+  char *req_buf;
+  size_t req_buf_len;
+
+  buf = (char *) calloc(CHUNK_BUFSIZE, 1);
+  if (NULL == buf) {
+    return ESP_ERR_NO_MEM;
+  }
+
+  // Get application info data
+  const esp_app_desc_t *appDescr = esp_app_get_description();
+
+  // Get header value string length and allocate memory for length + 1,
+  // extra byte for null termination
+  req_buf_len = httpd_req_get_hdr_value_len(req, "Host") + 1;
+  if (req_buf_len > 1) {
+    req_buf = (char *) malloc(req_buf_len);
+    // Copy null terminated value string into buffer
+    if (httpd_req_get_hdr_value_str(req, "Host", req_buf, req_buf_len) == ESP_OK) {
+      ESP_LOGD(TAG, "Found header => Host: %s", req_buf);
+    }
+    free(req_buf);
+  }
+
+  sprintf(buf, WEBPAGE_START_TEMPLATE, g_persistent.nodeName, "CAN/TWAI Configuration");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "<div><form id=but3 class=\"button\" action='/docfgcan' method='get'><fieldset>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  // CAN Mode
+  sprintf(buf, "CAN Mode:<select name=\"mode\">");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "<option value=\"0\" %s>Normal</option>", (g_persistent.canMode == 0) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "<option value=\"1\" %s>Listen Only</option>", (g_persistent.canMode == 1) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "</select>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  // CAN Speed
+  sprintf(buf, "<br><br>CAN Speed:<select name=\"speed\">");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "<option value=\"0\" %s>5 Kbps</option>", (g_persistent.canSpeed == 0) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "<option value=\"1\" %s>10 Kbps</option>", (g_persistent.canSpeed == 1) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "<option value=\"2\" %s>20 Kbps</option>", (g_persistent.canSpeed == 2) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "<option value=\"3\" %s>25 Kbps</option>", (g_persistent.canSpeed == 3) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "<option value=\"4\" %s>50 Kbps</option>", (g_persistent.canSpeed == 4) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "<option value=\"5\" %s>100 Kbps</option>", (g_persistent.canSpeed == 5) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "<option value=\"6\" %s>125 Kbps (CAN4VSCP)</option>", (g_persistent.canSpeed == 6) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "<option value=\"7\" %s>250 Kbps</option>", (g_persistent.canSpeed == 7) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "<option value=\"8\" %s>500 Kbps</option>", (g_persistent.canSpeed == 8) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "<option value=\"9\" %s>800 Kbps</option>", (g_persistent.canSpeed == 9) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "<option value=\"10\" %s>1000 Kbps</option>", (g_persistent.canSpeed == 10) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "</select>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  // CAN Filter (hex format)
+  sprintf(buf, "<br><br>CAN Filter (hex):<input type=\"text\" name=\"filter\" value=\"%08X\" maxlength=\"8\" size=\"10\">", (unsigned int)g_persistent.canFilter);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  // Statistics (read-only)
+  sprintf(buf, "<br><br><fieldset><legend>Statistics (read-only)</legend>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "Messages Sent: %u<br>", (unsigned int)g_persistent.nSent);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "Messages Received: %u<br>", (unsigned int)g_persistent.nRecv);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "Errors: %u<br>", (unsigned int)g_persistent.nErr);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "Last Error Code: 0x%08X", (unsigned int)g_persistent.lastError);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  
+  sprintf(buf, "</fieldset>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "<br><button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  httpd_resp_send_chunk(req, NULL, 0);
+
+  free(buf);
+
+  return ESP_OK;
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // config_module_get_handler
 //
 
@@ -1327,7 +1504,7 @@ config_module_get_handler(httpd_req_t *req)
   //   sprintf(pmkstr + 2 * i, "%02X", g_persistent.pmk[i]);
   // }
   // sprintf(buf,
-  //         "Primay key (32 bytes hex):<input type=\"password\" name=\"key\" maxlength=\"64\" size=\"20\" value=\"%s\"
+  //         "Primay key (32 bytes hex):<input type=\"password\" name=\"key\" maxlength=\"64\" size=\"20\" value=\"%s\" >",
   //         >", pmkstr);
   // httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
   // free(pmkstr);
@@ -1456,6 +1633,92 @@ do_config_module_get_handler(httpd_req_t *req)
   const char *resp_str =
     "<html><head><meta charset='utf-8'><meta http-equiv=\"refresh\" content=\"1;url=cfgmodule\" "
     "/><style>" WEBPAGE_STYLE_CSS "</style></head><body><h2 class=\"name\">saving module data...</h2></body></html>";
+  httpd_resp_send(req, resp_str, HTTPD_RESP_USE_STRLEN);
+
+  return ESP_OK;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// do_config_can_get_handler
+//
+
+static esp_err_t
+do_config_can_get_handler(httpd_req_t *req)
+{
+  esp_err_t rv;
+  char *buf;
+  size_t buf_len;
+
+  // Read URL query string length and allocate memory for length + 1,
+  // extra byte for null termination
+  buf_len = httpd_req_get_url_query_len(req) + 1;
+  if (buf_len > 1) {
+    buf = malloc(buf_len);
+    if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
+
+      ESP_LOGD(TAG, "Found URL query => %s", buf);
+      char *param = (char *) malloc(WEBPAGE_PARAM_SIZE);
+      if (NULL == param) {
+        free(buf);
+        return ESP_ERR_NO_MEM;
+      }
+
+      // CAN Mode
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "mode", param, WEBPAGE_PARAM_SIZE))) {
+        ESP_LOGD(TAG, "Found query parameter => mode=%s", param);
+        g_persistent.canMode = (uint8_t)atoi(param);
+        // Write changed value to persistent storage
+        rv = nvs_set_u8(g_nvsHandle, "canMode", g_persistent.canMode);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to update CAN mode [%s]", esp_err_to_name(rv));
+        }
+      }
+      else {
+        ESP_LOGE(TAG, "Error getting CAN mode => rv=%d", rv);
+      }
+
+      // CAN Speed
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "speed", param, WEBPAGE_PARAM_SIZE))) {
+        ESP_LOGD(TAG, "Found query parameter => speed=%s", param);
+        g_persistent.canSpeed = (uint8_t)atoi(param);
+        // Write changed value to persistent storage
+        rv = nvs_set_u8(g_nvsHandle, "canSpeed", g_persistent.canSpeed);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to update CAN speed [%s]", esp_err_to_name(rv));
+        }
+      }
+      else {
+        ESP_LOGE(TAG, "Error getting CAN speed => rv=%d", rv);
+      }
+
+      // CAN Filter
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "filter", param, WEBPAGE_PARAM_SIZE))) {
+        ESP_LOGD(TAG, "Found query parameter => filter=%s", param);
+        uint32_t filter_val = (uint32_t)strtoul(param, NULL, 16);
+        g_persistent.canFilter = filter_val;
+        // Write changed value to persistent storage
+        rv = nvs_set_u32(g_nvsHandle, "filter", g_persistent.canFilter);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to update CAN filter [%s]", esp_err_to_name(rv));
+        }
+      }
+      else {
+        ESP_LOGE(TAG, "Error getting CAN filter => rv=%d", rv);
+      }
+
+      rv = nvs_commit(g_nvsHandle);
+      if (rv != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to commit updates to nvs\n");
+      }
+
+      free(param);
+    }
+
+    free(buf);
+  }
+  const char *resp_str =
+    "<html><head><meta charset='utf-8'><meta http-equiv=\"refresh\" content=\"1;url=cfgcan\" "
+    "/><style>" WEBPAGE_STYLE_CSS "</style></head><body><h2 class=\"name\">saving CAN/TWAI data...</h2></body></html>";
   httpd_resp_send(req, resp_str, HTTPD_RESP_USE_STRLEN);
 
   return ESP_OK;
@@ -1599,6 +1862,32 @@ config_wifi_get_handler(httpd_req_t *req)
   sprintf(buf, "<div><form id=but3 class=\"button\" action='/docfgwifi' method='get'><fieldset>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
+  // Display current WiFi configuration
+  sprintf(buf, "<fieldset><legend>Current WiFi Configuration</legend>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "Primary SSID:<input type=\"text\" name=\"primary_ssid\" value=\"%s\" maxlength=\"32\" size=\"25\">", 
+          g_persistent.wifiPrimarySsid);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "<br>Primary Password:<input type=\"password\" name=\"primary_password\" value=\"%s\" maxlength=\"64\" size=\"25\">", 
+          g_persistent.wifiPrimaryPassword);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "<br><br>Secondary SSID:<input type=\"text\" name=\"secondary_ssid\" value=\"%s\" maxlength=\"32\" size=\"25\">", 
+          g_persistent.wifiSecondarySsid);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "<br>Secondary Password:<input type=\"password\" name=\"secondary_password\" value=\"%s\" maxlength=\"64\" size=\"25\">", 
+          g_persistent.wifiSecondaryPassword);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "</fieldset><br>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "<fieldset><legend>Available WiFi Networks (Click SSID to copy to Primary/Secondary)</legend>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
   uint16_t count = 5;
   wifi_ap_record_t ap_info[5];
   uint16_t ap_count = 0;
@@ -1684,7 +1973,19 @@ config_wifi_get_handler(httpd_req_t *req)
 
 wifi_scan_done:
 
-  sprintf(buf, "<button class=\"bred bgrn:hover\">Rescan</button></fieldset></form></div>");
+  sprintf(buf, "</fieldset><br>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save Configuration</button>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "</fieldset></form></div>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "<br><div><form id=rescan class=\"button\" action='/cfgwifi' method='get'>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "<button class=\"button\">Rescan Networks</button></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
@@ -1718,29 +2019,84 @@ do_config_wifi_get_handler(httpd_req_t *req)
       ESP_LOGD(TAG, "Found URL query => %s", buf);
       char *param = malloc(WEBPAGE_PARAM_SIZE);
       if (NULL == param) {
+        free(buf);
         return ESP_ERR_NO_MEM;
-        free(param);
       }
 
-      // name
-      if (ESP_OK == (rv = httpd_query_key_value(buf, "node_name", param, WEBPAGE_PARAM_SIZE))) {
+      // Primary SSID
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "primary_ssid", param, WEBPAGE_PARAM_SIZE))) {
         char *pdecoded = urlDecode(param);
         if (NULL == pdecoded) {
           free(param);
           free(buf);
           return ESP_ERR_NO_MEM;
         }
-        ESP_LOGD(TAG, "Found query parameter => name=%s", pdecoded);
-        strncpy(g_persistent.nodeName, pdecoded, 31);
+        ESP_LOGD(TAG, "Found query parameter => primary_ssid=%s", pdecoded);
+        strncpy(g_persistent.wifiPrimarySsid, pdecoded, sizeof(g_persistent.wifiPrimarySsid) - 1);
+        g_persistent.wifiPrimarySsid[sizeof(g_persistent.wifiPrimarySsid) - 1] = '\0';
         free(pdecoded);
         // Write changed value to persistent storage
-        rv = nvs_set_str(g_nvsHandle, "nodeName", g_persistent.nodeName);
+        rv = nvs_set_str(g_nvsHandle, "wifiPriSsid", g_persistent.wifiPrimarySsid);
         if (rv != ESP_OK) {
-          ESP_LOGE(TAG, "Failed to update node name [%s]", esp_err_to_name(rv));
+          ESP_LOGE(TAG, "Failed to update primary SSID [%s]", esp_err_to_name(rv));
         }
       }
-      else {
-        ESP_LOGE(TAG, "Error getting node_name => rv=%d", rv);
+
+      // Primary Password
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "primary_password", param, WEBPAGE_PARAM_SIZE))) {
+        char *pdecoded = urlDecode(param);
+        if (NULL == pdecoded) {
+          free(param);
+          free(buf);
+          return ESP_ERR_NO_MEM;
+        }
+        ESP_LOGD(TAG, "Found query parameter => primary_password");
+        strncpy(g_persistent.wifiPrimaryPassword, pdecoded, sizeof(g_persistent.wifiPrimaryPassword) - 1);
+        g_persistent.wifiPrimaryPassword[sizeof(g_persistent.wifiPrimaryPassword) - 1] = '\0';
+        free(pdecoded);
+        // Write changed value to persistent storage
+        rv = nvs_set_str(g_nvsHandle, "wifiPriPass", g_persistent.wifiPrimaryPassword);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to update primary password [%s]", esp_err_to_name(rv));
+        }
+      }
+
+      // Secondary SSID
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "secondary_ssid", param, WEBPAGE_PARAM_SIZE))) {
+        char *pdecoded = urlDecode(param);
+        if (NULL == pdecoded) {
+          free(param);
+          free(buf);
+          return ESP_ERR_NO_MEM;
+        }
+        ESP_LOGD(TAG, "Found query parameter => secondary_ssid=%s", pdecoded);
+        strncpy(g_persistent.wifiSecondarySsid, pdecoded, sizeof(g_persistent.wifiSecondarySsid) - 1);
+        g_persistent.wifiSecondarySsid[sizeof(g_persistent.wifiSecondarySsid) - 1] = '\0';
+        free(pdecoded);
+        // Write changed value to persistent storage
+        rv = nvs_set_str(g_nvsHandle, "wifiSecSsid", g_persistent.wifiSecondarySsid);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to update secondary SSID [%s]", esp_err_to_name(rv));
+        }
+      }
+
+      // Secondary Password
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "secondary_password", param, WEBPAGE_PARAM_SIZE))) {
+        char *pdecoded = urlDecode(param);
+        if (NULL == pdecoded) {
+          free(param);
+          free(buf);
+          return ESP_ERR_NO_MEM;
+        }
+        ESP_LOGD(TAG, "Found query parameter => secondary_password");
+        strncpy(g_persistent.wifiSecondaryPassword, pdecoded, sizeof(g_persistent.wifiSecondaryPassword) - 1);
+        g_persistent.wifiSecondaryPassword[sizeof(g_persistent.wifiSecondaryPassword) - 1] = '\0';
+        free(pdecoded);
+        // Write changed value to persistent storage
+        rv = nvs_set_str(g_nvsHandle, "wifiSecPass", g_persistent.wifiSecondaryPassword);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to update secondary password [%s]", esp_err_to_name(rv));
+        }
       }
 
       rv = nvs_commit(g_nvsHandle);
@@ -1754,8 +2110,9 @@ do_config_wifi_get_handler(httpd_req_t *req)
     free(buf);
   }
   const char *resp_str =
-    "<html><head><meta charset='utf-8'><meta http-equiv=\"refresh\" content=\"1;url=cfgwifi\" "
-    "/><style>" WEBPAGE_STYLE_CSS "</style></head><body><h2 class=\"name\">saving module data...</h2></body></html>";
+    "<html><head><meta charset='utf-8'><meta http-equiv=\"refresh\" content=\"2;url=cfgwifi\" "
+    "/><style>" WEBPAGE_STYLE_CSS "</style></head><body><h2 class=\"name\">Saving WiFi configuration...<br>"
+    "Device will attempt to connect to the configured networks.</h2></body></html>";
   httpd_resp_send(req, resp_str, HTTPD_RESP_USE_STRLEN);
 
   return ESP_OK;
@@ -2080,7 +2437,7 @@ do_config_mqtt_get_handler(httpd_req_t *req)
       }
 
       // Write changed value to persistent storage
-      nvs_set_u8(g_nvsHandle, "mqtt_enable", g_persistent.enableMqtt);
+      nvs_set_u8(g_nvsHandle, "enableMqtt", g_persistent.enableMqtt);
       if (rv != ESP_OK) {
         ESP_LOGE(TAG, "Failed to update MQTT enable [%s]", esp_err_to_name(rv));
       }
@@ -3636,6 +3993,16 @@ default_get_handler(httpd_req_t *req)
   if (0 == strncmp(req->uri, "/docfgmodule", 12)) {
     ESP_LOGV(TAG, "--------- docfgmodule ---------\n");
     return do_config_module_get_handler(req);
+  }
+
+  if (0 == strncmp(req->uri, "/cfgcan", 7)) {
+    ESP_LOGV(TAG, "--------- cfgcan ---------\n");
+    return config_can_get_handler(req);
+  }
+
+  if (0 == strncmp(req->uri, "/docfgcan", 9)) {
+    ESP_LOGV(TAG, "--------- docfgcan ---------\n");
+    return do_config_can_get_handler(req);
   }
 
   if (0 == strncmp(req->uri, "/cfgwifi", 8)) {

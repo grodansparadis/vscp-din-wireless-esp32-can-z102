@@ -179,6 +179,10 @@ typedef struct {
 #define DEFAULT_LOG_URL   " "
 #define DEFAULT_LOG_PORT  514
 
+#define DEFAULT_CAN_MODE   0          // CAN4VSCP_NORMAL
+#define DEFAULT_CAN_SPEED  6          // CAN4VSCP_125K
+#define DEFAULT_CAN_FILTER 0xFFFFFFFF // Accept all
+
 #define DEFAULT_LOG_TYPE         LOG_TYPE_STD
 #define DEFAULT_LOG_LEVEL        0
 #define DEFAULT_LOG_RETRIES      3
@@ -235,7 +239,7 @@ typedef struct {
   uint32_t nRecv;     // Number of received messages (not editable)
   uint32_t nErr;      // Number of errors (not editable)
   uint32_t lastError; // Last error code (not editable)
-  uint32_t filter;    // CAN filter for incoming data
+  uint32_t canFilter;    // CAN filter for incoming data
 
   // Log
   uint8_t logType;         // Log type
@@ -246,23 +250,29 @@ typedef struct {
   char logMqttTopic[80];   // MQTT topic for log messages
   uint8_t logwrite2Stdout; // Write log to stdout
 
+  // WiFi configuration
+  char wifiPrimarySsid[33];     // Primary WiFi SSID
+  char wifiPrimaryPassword[65]; // Primary WiFi Password
+  char wifiSecondarySsid[33];   // Secondary WiFi SSID (fallback)
+  char wifiSecondaryPassword[65]; // Secondary WiFi Password (fallback)
+
   // web server
   uint16_t webPort;     // Web server port
   char webUser[32];     // Web server user
   char webPassword[32]; // Web server password
 
   // VSCP link protocol
-  uint8_t enableVscpLink;    // Enable VSCP link protocol
-  uint16_t vscplinkPort;     // VSCP link protocol port
-  char vscplinkUser[32];     // VSCP link protocol user
-  char vscplinkPw[32]; // VSCP link protocol password
+  uint8_t enableVscpLink; // Enable VSCP link protocol
+  uint16_t vscplinkPort;  // VSCP link protocol port
+  char vscplinkUser[32];  // VSCP link protocol user
+  char vscplinkPw[32];    // VSCP link protocol password
 
   // MQTT
   uint8_t enableMqtt;    // Enable MQTT
   char mqttUrl[80];      // MQTT URL
   uint16_t mqttPort;     // MQTT port
   char mqttUser[32];     // MQTT username
-  char mqttPw[32]; // MQTT password
+  char mqttPw[32];       // MQTT password
   char mqttPub[80];      // MQTT publish topic
   char mqttSub[80];      // MQTT subscribe topic
   char mqttPubLog[80];   // MQTT topic for log messages
