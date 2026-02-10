@@ -204,9 +204,9 @@ client_task(void *pvParameters)
     memset(rxbuf, 0, sizeof(rxbuf));
     len = (rv = recv(ctx.sock, rxbuf, sizeof(rxbuf) - 1, 0));
     if (rv < 0) {
-      if (errno == EAGAIN) {
 
-        vscp_link_idle_worker(&ctx);
+      if (errno == EAGAIN) {
+        vscp_link_idle_worker(&ctx); // Handle rcvloop etc
         continue;
       }
 
@@ -257,7 +257,7 @@ client_task(void *pvParameters)
       vscp_link_idle_worker(&ctx);
       //}
 
-      ESP_LOGI(TAG, "Command handled");
+      ESP_LOGV(TAG, "Command handled");
     }
   };
 

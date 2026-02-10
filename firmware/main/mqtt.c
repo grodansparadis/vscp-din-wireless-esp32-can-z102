@@ -548,10 +548,10 @@ mqtt_start(void)
                 /*.verification.certificate = (const char *) mqtt_eclipse_io_pem_start*/ 
               },    
     .session.disable_clean_session = true,
-    .session.keepalive = 60,          
+    .session.keepalive = 60,
     .credentials.client_id               = clientid,
     .credentials.username                = g_persistent.mqttUser,
-    .credentials.authentication.password = g_persistent.mqttPassword,
+    .credentials.authentication.password = g_persistent.mqttPw,
     .task.priority = 5,
     //.task.stack_size = 2 * 1024,
     //.buffer.size = 1024,

@@ -1815,7 +1815,7 @@ config_vscplink_get_handler(httpd_req_t *req)
   sprintf(buf, "Username:<input type=\"text\" name=\"user\" value=\"%s\" >", g_persistent.vscplinkUser);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "Password:<input type=\"password\" name=\"password\" value=\"%s\" >", g_persistent.vscplinkPassword);
+  sprintf(buf, "Password:<input type=\"password\" name=\"password\" value=\"%s\" >", g_persistent.vscplinkPw);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
@@ -1868,7 +1868,7 @@ do_config_vscplink_get_handler(httpd_req_t *req)
       }
 
       // Write changed value to persistent storage
-      rv = nvs_set_u8(g_nvsHandle, "vscp_enable", g_persistent.enableVscpLink);
+      rv = nvs_set_u8(g_nvsHandle, "vscplinkEnable", g_persistent.enableVscpLink);
       if (rv != ESP_OK) {
         ESP_LOGE(TAG, "Failed to update vscp link srv enable [%s]", esp_err_to_name(rv));
       }
@@ -1878,7 +1878,7 @@ do_config_vscplink_get_handler(httpd_req_t *req)
         ESP_LOGD(TAG, "Found query parameter => port=%s", param);
         g_persistent.vscplinkPort = atoi(param);
         // Write changed value to persistent storage
-        rv = nvs_set_u16(g_nvsHandle, "vscp_port", g_persistent.vscplinkPort);
+        rv = nvs_set_u16(g_nvsHandle, "vscplinkPort", g_persistent.vscplinkPort);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update VSCP link srv port [%s]", esp_err_to_name(rv));
         }
@@ -1898,7 +1898,7 @@ do_config_vscplink_get_handler(httpd_req_t *req)
         ESP_LOGD(TAG, "Found query parameter => user=%s", pdecoded);
         strncpy(g_persistent.vscplinkUser, pdecoded, sizeof(g_persistent.vscplinkUser) - 1);
         // Write changed value to persistent storage
-        rv = nvs_set_str(g_nvsHandle, "vscp_user", g_persistent.vscplinkUser);
+        rv = nvs_set_str(g_nvsHandle, "vscplinkUser", g_persistent.vscplinkUser);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update VSCP link srv user [%s]", esp_err_to_name(rv));
         }
@@ -1916,9 +1916,9 @@ do_config_vscplink_get_handler(httpd_req_t *req)
           return ESP_ERR_NO_MEM;
         }
         ESP_LOGD(TAG, "Found query parameter => password=%s", pdecoded);
-        strncpy(g_persistent.vscplinkPassword, pdecoded, sizeof(g_persistent.vscplinkPassword) - 1);
+        strncpy(g_persistent.vscplinkPw, pdecoded, sizeof(g_persistent.vscplinkPw) - 1);
         // Write changed value to persistent storage
-        rv = nvs_set_str(g_nvsHandle, "vscp_password", g_persistent.vscplinkPassword);
+        rv = nvs_set_str(g_nvsHandle, "vscplinkPw", g_persistent.vscplinkPw);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update VSCP link srv password err=%02X [%s]", rv, esp_err_to_name(rv));
         }
@@ -2021,7 +2021,7 @@ config_mqtt_get_handler(httpd_req_t *req)
   sprintf(buf, "Username:<input type=\"text\" name=\"user\" value=\"%s\" >", g_persistent.mqttUser);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "Password:<input type=\"password\" name=\"password\" value=\"%s\" >", g_persistent.mqttPassword);
+  sprintf(buf, "Password:<input type=\"password\" name=\"password\" value=\"%s\" >", g_persistent.mqttPw);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, "Subscribe:<input type=\"text\" name=\"sub\" value=\"%s\" >", g_persistent.mqttSub);
@@ -2169,9 +2169,9 @@ do_config_mqtt_get_handler(httpd_req_t *req)
           return ESP_ERR_NO_MEM;
         }
         ESP_LOGD(TAG, "Found query parameter => password=%s", pdecoded);
-        strncpy(g_persistent.mqttPassword, pdecoded, sizeof(g_persistent.mqttPassword) - 1);
+        strncpy(g_persistent.mqttPw, pdecoded, sizeof(g_persistent.mqttPw) - 1);
         // Write changed value to persistent storage
-        rv = nvs_set_str(g_nvsHandle, "mqttPassword", g_persistent.mqttPassword);
+        rv = nvs_set_str(g_nvsHandle, "mqttPw", g_persistent.mqttPw);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update MQTT password [%s]", esp_err_to_name(rv));
         }

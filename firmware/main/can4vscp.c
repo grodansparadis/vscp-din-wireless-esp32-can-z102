@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2022  Meatpi Electronics.
  * Written by Ali Slim <ali@meatpi.com>
- * Changes Copyright (C) 2022-2026 Ake Hedman, the VSCP Project <ake@vscp.org>
+ * Changes and additions Copyright (C) 2022-2026 Ake Hedman, the VSCP Project <ake@vscp.org>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,8 +44,6 @@
 
 #include "nvs_flash.h"
 
-// #include <driver/temperature_sensor.h>
-
 #include "lwip/sockets.h"
 #include "main.h"
 #include "can4vscp.h"
@@ -58,9 +56,17 @@ static EventGroupHandle_t s_can4vscp_event_group;
 extern SemaphoreHandle_t ctrl_task_sem;
 // extern QueueHandle_t xmsg_Rx_Queue;
 
+
+
 // Global stuff
+extern node_persistent_config_t g_persistent;
 extern transport_t tr_twai_rx;
+extern transport_t tr_twai_tx;
 extern transport_t tr_tcpsrv[MAX_TCP_CONNECTIONS];
+extern transport_t tr_mqtt;
+extern transport_t tr_multicast;
+extern transport_t tr_udp;
+extern transport_t tr_websockets;
 
 #define TAG __func__
 enum bus_state { OFF_BUS, ON_BUS };
@@ -406,14 +412,50 @@ twai_receive_task(void *arg)
 
         ESP_LOGI(TAG, "VSCP Event received");
 
-        for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
-          // If not open take next
-          if (!tr_tcpsrv[i].open)
-            continue;
-          // Put message in queue for task to handle
-          if (pdPASS != (rv = xQueueSendToBack(tr_tcpsrv[i].msg_queue, (void *) &rxmsg, (TickType_t) 10))) {
-            tr_tcpsrv[i].overruns++;
-            ESP_LOGD(TAG, "VSCP link protocol buffer full: Failed to save message to queue");
+        // VSCP link
+        if (g_persistent.enableVscpLink) {
+          // Send to all open tcp/ip link clients
+          for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
+            // If not open take next
+            if (!tr_tcpsrv[i].open)
+              continue;
+            // Put message in queue for task to handle
+            if (pdPASS != (rv = xQueueSendToBack(tr_tcpsrv[i].msg_queue, (void *) &rxmsg, (TickType_t) 10))) {
+              tr_tcpsrv[i].overruns++;
+              ESP_LOGD(TAG, "VSCP link protocol buffer full: Failed to save message to queue");
+            }
+          }
+        }
+
+        // MQTT
+        if (g_persistent.enableMqtt) {
+          if (pdPASS != (rv = xQueueSendToBack(tr_mqtt.msg_queue, (void *) &rxmsg, (TickType_t) 10))) {
+            tr_mqtt.overruns++;
+            ESP_LOGD(TAG, "MQTT buffer full: Failed to save message to queue");
+          }
+        }
+
+        // Multicast
+        if (g_persistent.enableMulticast) {
+          if (pdPASS != (rv = xQueueSendToBack(tr_multicast.msg_queue, (void *) &rxmsg, (TickType_t) 10))) {
+            tr_multicast.overruns++;
+            ESP_LOGD(TAG, "Multicast buffer full: Failed to save message to queue");
+          }
+        }
+
+        // UDP
+        if (g_persistent.enableUdpTx) {
+          if (pdPASS != (rv = xQueueSendToBack(tr_udp.msg_queue, (void *) &rxmsg, (TickType_t) 10))) {
+            tr_udp.overruns++;
+            ESP_LOGD(TAG, "UDP buffer full: Failed to save message to queue");
+          }
+        }
+
+        // Websockets
+        if (g_persistent.enableWebsock) {
+          if (pdPASS != (rv = xQueueSendToBack(tr_websockets.msg_queue, (void *) &rxmsg, (TickType_t) 10))) {
+            tr_websockets.overruns++;
+            ESP_LOGD(TAG, "Websocket buffer full: Failed to save message to queue");
           }
         }
 

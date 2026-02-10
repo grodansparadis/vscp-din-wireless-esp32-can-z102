@@ -111,16 +111,16 @@ node_persistent_config_t g_persistent = {
   .webUser     = DEFAULT_WEBSERVER_USER,
   .webPassword = DEFAULT_WEBSERVER_PASSWORD,
 
-  .enableVscpLink   = DEFAULT_VSCP_LINK_ENABLE,
-  .vscplinkPort     = DEFAULT_VSCP_LINK_PORT,
-  .vscplinkUser     = DEFAULT_VSCP_LINK_USER,
-  .vscplinkPassword = DEFAULT_VSCP_LINK_PASSWORD,
+  .enableVscpLink = DEFAULT_VSCP_LINK_ENABLE,
+  .vscplinkPort   = DEFAULT_VSCP_LINK_PORT,
+  .vscplinkUser   = DEFAULT_VSCP_LINK_USER,
+  .vscplinkPw     = DEFAULT_VSCP_LINK_PASSWORD,
 
   .enableMqtt   = DEFAULT_MQTT_ENABLE,
   .mqttUrl      = DEFAULT_MQTT_URL,
   .mqttPort     = DEFAULT_MQTT_PORT,
   .mqttUser     = DEFAULT_MQTT_USER,
-  .mqttPassword = DEFAULT_MQTT_PASSWORD,
+  .mqttPw       = DEFAULT_MQTT_PASSWORD,
   .mqttPub      = DEFAULT_MQTT_PUBLISH,
   .mqttSub      = DEFAULT_MQTT_SUBSCRIBE,
   .mqttPubLog   = DEFAULT_MQTT_LOG_PUBLISH_TOPIC, // Set in logging configuration
@@ -150,6 +150,7 @@ transport_t tr_tcpsrv[MAX_TCP_CONNECTIONS] = {}; // tcp/ip (VSCP link protocol)
 transport_t tr_mqtt                        = {}; // MQTT
 transport_t tr_multicast                   = {}; // Multicast
 transport_t tr_udp                         = {}; // UDP
+transport_t tr_websockets                  = {}; // Websockets
 
 SemaphoreHandle_t ctrl_task_sem;
 
@@ -468,11 +469,7 @@ initPersistentStorage(void)
                          "%d");
 
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "vscplinkUser", g_persistent.vscplinkUser, DEFAULT_VSCP_LINK_USER, TAG);
-  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle,
-                             "vscplinkPassword",
-                             g_persistent.vscplinkPassword,
-                             DEFAULT_VSCP_LINK_PASSWORD,
-                             TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "vscplinkPw", g_persistent.vscplinkPw, DEFAULT_VSCP_LINK_PASSWORD, TAG);
 
   // * * * MQTT persistent configuration * * *
 
@@ -498,7 +495,7 @@ initPersistentStorage(void)
 
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttUrl", g_persistent.mqttUrl, DEFAULT_MQTT_URL, TAG);
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttUser", g_persistent.mqttUser, DEFAULT_MQTT_USER, TAG);
-  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttPassword", g_persistent.mqttPassword, DEFAULT_MQTT_PASSWORD, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttPw", g_persistent.mqttPw, DEFAULT_MQTT_PASSWORD, TAG);
 
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttPub", g_persistent.mqttPub, DEFAULT_MQTT_PUBLISH, TAG);
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttSub", g_persistent.mqttSub, DEFAULT_MQTT_SUBSCRIBE, TAG);
@@ -678,7 +675,7 @@ validate_user(const char *user, const char *pw)
   char password[VSCP_LINK_MAX_PASSWORD_LENGTH];
 
   length = sizeof(username);
-  rv     = nvs_get_str(g_nvsHandle, "username", username, &length);
+  rv     = nvs_get_str(g_nvsHandle, "vscplinkUser", username, &length);
   switch (rv) {
 
     case ESP_OK:
@@ -694,7 +691,7 @@ validate_user(const char *user, const char *pw)
   }
 
   length = sizeof(password);
-  rv     = nvs_get_str(g_nvsHandle, "password", password, &length);
+  rv     = nvs_get_str(g_nvsHandle, "vscplinkPw", password, &length);
   switch (rv) {
 
     case ESP_OK:
@@ -994,9 +991,10 @@ app_main(void)
   }
   tr_mqtt.msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // MQTT empties
   // QueueHandle_t test = xQueueCreate(10, sizeof( twai_message_t) );
-
-  tr_multicast.msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // Multicast empties
-  tr_udp.msg_queue       = xQueueCreate(10, sizeof(twai_message_t)); // UDP empties
+  tr_mqtt.msg_queue       = xQueueCreate(10, sizeof(twai_message_t)); // MQTT empties
+  tr_multicast.msg_queue  = xQueueCreate(10, sizeof(twai_message_t)); // Multicast empties
+  tr_udp.msg_queue        = xQueueCreate(10, sizeof(twai_message_t)); // UDP empties
+  tr_websockets.msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // Websockets empties
 
   ctrl_task_sem = xSemaphoreCreateBinary();
 
@@ -1238,7 +1236,7 @@ app_main(void)
   server = start_webserver();
 
   // ***************************************************************************
-  //                                   TWAI
+  //                                 CAN/TWAI
   // ***************************************************************************
 
   // Install TWAI driver

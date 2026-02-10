@@ -91,6 +91,8 @@ setContextDefaults(ctx_t *pctx);
 
 /*!
   VSCP tcp/ip link protocol task
+  Start a client task for each accepted connection. The client task handles 
+  the VSCP link protocol for the connection.
   @param pvParameters Task parameters
 */
 void

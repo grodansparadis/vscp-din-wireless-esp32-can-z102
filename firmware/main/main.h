@@ -214,10 +214,10 @@ typedef struct {
 #define DEFAULT_UDP_URL       "255.255.255.255" // Broadcast
 #define DEFAULT_UDP_PORT      9598
 
-#define DEFAULT_WEBSOCKETS_ENABLE    false
-#define DEFAULT_WEBSOCKETS_PORT      8080
-#define DEFAULT_WEBSOCKETS_USER      "vscp"
-#define DEFAULT_WEBSOCKETS_PASSWORD  "secret"
+#define DEFAULT_WEBSOCKETS_ENABLE   false
+#define DEFAULT_WEBSOCKETS_PORT     8080
+#define DEFAULT_WEBSOCKETS_USER     "vscp"
+#define DEFAULT_WEBSOCKETS_PASSWORD "secret"
 
 typedef struct {
 
@@ -229,11 +229,13 @@ typedef struct {
   uint32_t bootCnt;  // Number of restarts (not editable)
 
   // CAN
-  uint8_t canMode;  // CAN mode (normal, listen only, etc)
-  uint8_t canSpeed; // CAN speed (125k, 250k, etc
-  uint32_t nSent;   // Number of sent messages (not editable)
-  uint32_t nRecv;   // Number of received messages (not editable)
-  uint32_t nErr;    // Number of errors (not editable)
+  uint8_t canMode;    // CAN mode (normal, listen only, etc)
+  uint8_t canSpeed;   // CAN speed (125k, 250k, etc
+  uint32_t nSent;     // Number of sent messages (not editable)
+  uint32_t nRecv;     // Number of received messages (not editable)
+  uint32_t nErr;      // Number of errors (not editable)
+  uint32_t lastError; // Last error code (not editable)
+  uint32_t filter;    // CAN filter for incoming data
 
   // Log
   uint8_t logType;         // Log type
@@ -253,14 +255,14 @@ typedef struct {
   uint8_t enableVscpLink;    // Enable VSCP link protocol
   uint16_t vscplinkPort;     // VSCP link protocol port
   char vscplinkUser[32];     // VSCP link protocol user
-  char vscplinkPassword[32]; // VSCP link protocol password
+  char vscplinkPw[32]; // VSCP link protocol password
 
   // MQTT
   uint8_t enableMqtt;    // Enable MQTT
   char mqttUrl[80];      // MQTT URL
   uint16_t mqttPort;     // MQTT port
   char mqttUser[32];     // MQTT username
-  char mqttPassword[32]; // MQTT password
+  char mqttPw[32]; // MQTT password
   char mqttPub[80];      // MQTT publish topic
   char mqttSub[80];      // MQTT subscribe topic
   char mqttPubLog[80];   // MQTT topic for log messages
@@ -280,10 +282,10 @@ typedef struct {
   uint16_t udpPort;    // UDP port
 
   // Websocket server protocol
-  uint8_t enableWebsock;    // Enable Websocket server protocol
-  uint16_t websockPort;     // Websocket server protocol port
-  char websockUser[32];     // Websocket server protocol user
-  char websockPw[32]; // Websocket server protocol password
+  uint8_t enableWebsock; // Enable Websocket server protocol
+  uint16_t websockPort;  // Websocket server protocol port
+  char websockUser[32];  // Websocket server protocol user
+  char websockPw[32];    // Websocket server protocol password
 
 } node_persistent_config_t;
 
