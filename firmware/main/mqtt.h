@@ -98,4 +98,13 @@ mqtt_send_vscp_event(const char *topic, const vscpEvent *pev);
 int
 mqtt_log(char *msg);
 
+/*!
+ * @fn mqtt_task
+ * @brief MQTT task
+ *
+ * @param pvParameters Task parameters
+ */
+void
+mqtt_task(void *pvParameters);
+
 #endif

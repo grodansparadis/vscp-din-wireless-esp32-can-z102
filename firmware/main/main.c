@@ -3,6 +3,18 @@
 
   VSCP Wireless CAN4VSCP Gateway (VSCP-WCANG, Frankfurt-WiFi)
 
+  Main application entry point and system initialization for ESP32-C3 based
+  VSCP CAN gateway with WiFi connectivity. This module handles:
+
+  - System initialization and boot sequence
+  - NVS (Non-Volatile Storage) configuration management
+  - WiFi provisioning (BLE or SoftAP based)
+  - CAN/TWAI driver initialization and message routing
+  - Network service initialization (MQTT, TCP, UDP, Multicast, WebSockets)
+  - Web server for configuration interface
+  - Event handling for WiFi and provisioning events
+  - Main application loop for message distribution
+
   This file is part of the VSCP (https://www.vscp.org)
 
   The MIT License (MIT)
@@ -68,6 +80,7 @@
 #include "udpclient.h"
 #include "udpsrv.h"
 #include "websrv.h"
+#include "mqtt.h"
 
 #include "main.h"
 
@@ -76,22 +89,22 @@
 
 static const char *TAG = "main";
 
-/*
-  VSCP firmware level 2 protocol configuration
-  is done here. Config is defined in
-  vscp-firmware-level2.h
-*/
-// static vscp_frmw2_firmware_config_t vscp_config = {
-//   .m_level = VSCP_LEVEL1, // Level I
-//   .m_puserdata = NULL,     // No user data
-// };
+// ============================================================================
+//                           Global Variables
+// ============================================================================
 
-// * * * Globals * * *
-
-// Handle for nvs storage
+// NVS (Non-Volatile Storage) handle for persistent configuration
 nvs_handle_t g_nvsHandle;
 
-// Persistent configuration defaults  g_persistent.guid
+/**
+ * @brief Global persistent configuration structure
+ *
+ * Contains all device configuration parameters including network settings,
+ * CAN parameters, MQTT/UDP/TCP settings, and user credentials. Values are
+ * initialized with defaults and loaded from NVS during startup.
+ *
+ * Modified via web interface and saved to NVS for persistence across reboots.
+ */
 node_persistent_config_t g_persistent = {
   .nodeName = DEFAULT_NODE_NAME,
   .guid     = { 0 }, // Default GUID is constructed from MAC address
@@ -127,21 +140,21 @@ node_persistent_config_t g_persistent = {
   .vscplinkUser   = DEFAULT_VSCP_LINK_USER,
   .vscplinkPw     = DEFAULT_VSCP_LINK_PASSWORD,
 
-  .enableMqtt   = DEFAULT_MQTT_ENABLE,
-  .enableMqttTls = DEFAULT_MQTT_TLS_ENABLE,
-  .mqttUrl      = DEFAULT_MQTT_URL,
-  .mqttPort     = DEFAULT_MQTT_PORT,
-  .mqttUser     = DEFAULT_MQTT_USER,
-  .mqttPw       = DEFAULT_MQTT_PASSWORD,
-  .mqttPub      = DEFAULT_MQTT_PUBLISH,
-  .mqttSub      = DEFAULT_MQTT_SUBSCRIBE,
-  .mqttPubLog   = DEFAULT_MQTT_LOG_PUBLISH_TOPIC, // Set in logging configuration
-  .mqttClientId = DEFAULT_MQTT_CLIENT_ID,
-  .mqttCaCert   = DEFAULT_MQTT_CA_CERT,
+  .enableMqtt     = DEFAULT_MQTT_ENABLE,
+  .enableMqttTls  = DEFAULT_MQTT_TLS_ENABLE,
+  .mqttUrl        = DEFAULT_MQTT_URL,
+  .mqttPort       = DEFAULT_MQTT_PORT,
+  .mqttUser       = DEFAULT_MQTT_USER,
+  .mqttPw         = DEFAULT_MQTT_PASSWORD,
+  .mqttPub        = DEFAULT_MQTT_PUBLISH,
+  .mqttSub        = DEFAULT_MQTT_SUBSCRIBE,
+  .mqttPubLog     = DEFAULT_MQTT_LOG_PUBLISH_TOPIC, // Set in logging configuration
+  .mqttClientId   = DEFAULT_MQTT_CLIENT_ID,
+  .mqttCaCert     = DEFAULT_MQTT_CA_CERT,
   .mqttClientCert = DEFAULT_MQTT_CLIENT_CERT,
-  .mqttClientKey = DEFAULT_MQTT_CLIENT_KEY,
-  .mqttQos = DEFAULT_MQTT_QOS,
-  .mqttRetain = DEFAULT_MQTT_RETAIN,
+  .mqttClientKey  = DEFAULT_MQTT_CLIENT_KEY,
+  .mqttQos        = DEFAULT_MQTT_QOS,
+  .mqttRetain     = DEFAULT_MQTT_RETAIN,
 
   // Multicast
   .enableMulticast = DEFAULT_MULTICAST_ENABLE,
@@ -163,26 +176,45 @@ node_persistent_config_t g_persistent = {
   .websockPw     = DEFAULT_WEBSOCKETS_PASSWORD,
 };
 
-transport_t tr_tcpsrv[MAX_TCP_CONNECTIONS] = {}; // tcp/ip (VSCP link protocol)
-transport_t tr_mqtt                        = {}; // MQTT
-transport_t tr_multicast                   = {}; // Multicast
-transport_t tr_udp                         = {}; // UDP
-transport_t tr_websockets                  = {}; // Websockets
+/**
+ * @brief Transport layer message queue structures
+ *
+ * Each transport mechanism (TCP, MQTT, Multicast, UDP, WebSockets) has its own
+ * message queue for receiving CAN messages. Messages are distributed from the
+ * CAN receive queue to all active transport queues.
+ */
+transport_t tr_tcpsrv[MAX_TCP_CONNECTIONS] = {}; // TCP/IP VSCP link protocol connections
+transport_t tr_mqtt                        = {}; // MQTT client transport
+transport_t tr_multicast                   = {}; // Multicast UDP transport
+transport_t tr_udp                         = {}; // UDP broadcast transport
+transport_t tr_websockets                  = {}; // WebSocket server transport
 
+// Semaphore for controlling access to main event distribution task
 SemaphoreHandle_t ctrl_task_sem;
 
-// CAN/TWAI
+// ============================================================================
+//                        CAN/TWAI Message Queues
+// ============================================================================
 
-// static const twai_timing_config_t t_config = TWAI_TIMING_CONFIG_125KBITS();
-// static const twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
-// static const twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(TX_GPIO_NUM, RX_GPIO_NUM,
-// TWAI_MODE_NORMAL);
-
+/**
+ * @brief CAN message queues for transmit and receive
+ *
+ * tr_twai_tx: Outgoing CAN messages from all network interfaces
+ * tr_twai_rx: Incoming CAN messages distributed to network interfaces
+ */
 static QueueHandle_t tr_twai_tx;
 static QueueHandle_t tr_twai_rx;
 
-// Web server
+// ============================================================================
+//                           Web Server Handle
+// ============================================================================
+
+// HTTP server handle for configuration web interface
 static httpd_handle_t server = NULL;
+
+// ============================================================================
+//                    WiFi Provisioning Security (Version 2)
+// ============================================================================
 
 #if CONFIG_WCANG_PROV_SECURITY_VERSION_2
 
@@ -190,7 +222,10 @@ static httpd_handle_t server = NULL;
 #define WCANG_PROV_SEC2_USERNAME "testuser"
 #define WCANG_PROV_SEC2_PWD      "testpassword"
 
-/* This salt,verifier has been generated for username = "testuser" and password = "testpassword"
+/**
+ * Salt and verifier for SEC2 provisioning authentication
+ *
+ * This salt/verifier pair has been generated for username = "testuser" and password = "testpassword"
  * IMPORTANT NOTE: For production cases, this must be unique to every device
  * and should come from device manufacturing partition.*/
 static const char sec2_salt[] = { 0x2f, 0x3d, 0x3c, 0xf8, 0x0d, 0xbd, 0x0c, 0xa9,
@@ -222,10 +257,22 @@ static const char sec2_verifier[] = {
 };
 #endif
 
-///////////////////////////////////////////////////////////////////////////////
-// wcang_get_sec2_salt
-//
+// ============================================================================
+//                  Provisioning Security Helper Functions
+// ============================================================================
 
+/**
+ * @brief Get SEC2 provisioning salt value
+ *
+ * Returns the salt value used for SEC2 (SRP6a) authentication during WiFi
+ * provisioning. In development mode, returns hardcoded test salt. In production
+ * mode, should retrieve device-specific salt from secure storage.
+ *
+ * @param[out] salt      Pointer to store salt buffer address
+ * @param[out] salt_len  Pointer to store salt length
+ *
+ * @return ESP_OK on success, ESP_FAIL if not implemented
+ */
 static esp_err_t
 wcang_get_sec2_salt(const char **salt, uint16_t *salt_len)
 {
@@ -240,10 +287,20 @@ wcang_get_sec2_salt(const char **salt, uint16_t *salt_len)
 #endif
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// wcang_get_sec2_verifier
-//
-
+/**
+ * @brief Get SEC2 provisioning verifier value
+ *
+ * Returns the verifier value used for SEC2 (SRP6a) authentication during WiFi
+ * provisioning. In development mode, returns hardcoded test verifier. In production
+ * mode, should retrieve device-specific verifier from secure storage.
+ *
+ * The verifier is derived from the username, password, and salt using SRP6a protocol.
+ *
+ * @param[out] verifier      Pointer to store verifier buffer address
+ * @param[out] verifier_len  Pointer to store verifier length
+ *
+ * @return ESP_OK on success, ESP_FAIL if not implemented
+ */
 static esp_err_t
 wcang_get_sec2_verifier(const char **verifier, uint16_t *verifier_len)
 {
@@ -260,10 +317,29 @@ wcang_get_sec2_verifier(const char **verifier, uint16_t *verifier_len)
 }
 #endif
 
-///////////////////////////////////////////////////////////////////////////////
-// initPersistentStorage (NVS)
-//
+// ============================================================================
+//                    NVS Configuration Management
+// ============================================================================
 
+/**
+ * @brief Initialize and load persistent configuration from NVS
+ *
+ * Opens the NVS namespace "config" and loads all device configuration parameters.
+ * If a parameter doesn't exist in NVS, it's initialized with the default value
+ * and written to NVS. The boot counter is incremented on each call.
+ *
+ * Configuration includes:
+ * - Node name and GUID
+ * - CAN/TWAI settings (mode, speed, filter)
+ * - WiFi credentials (primary and secondary)
+ * - Web server settings
+ * - VSCP link protocol settings
+ * - MQTT configuration (URL, credentials, TLS certificates)
+ * - Multicast/UDP/WebSocket settings
+ *
+ * @note This function should be called once during system initialization
+ * @note GUID is constructed from MAC address if not previously set
+ */
 void
 initPersistentStorage(void)
 {
@@ -278,6 +354,7 @@ initPersistentStorage(void)
 
     // * * * Module persistent configuration * * *
 
+    // Load boot counter and increment it
     NVS_GET_OR_SET_DEFAULT(u32, nvs_get_u32, nvs_set_u32, g_nvsHandle, "bootCnt", g_persistent.bootCnt, 0, TAG, "%d");
 
     ESP_LOGD(TAG, "Updating restart counter in NVS ... ");
@@ -289,10 +366,10 @@ initPersistentStorage(void)
       ESP_LOGI(TAG, "Failed to read restart counter!");
     }
 
-    // Node name
+    // Load or set default node name
     NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "nodeName", g_persistent.nodeName, DEFAULT_NODE_NAME, TAG);
 
-    // Get GUID
+    // Load GUID, or construct from MAC address if not set
     length = 16;
     rv     = nvs_get_blob(g_nvsHandle, "guid", g_persistent.guid, &length);
     switch (rv) {
@@ -559,8 +636,6 @@ initPersistentStorage(void)
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttClientKey", g_persistent.mqttClientKey, DEFAULT_MQTT_CLIENT_KEY, TAG);
   // NVS_GET_OR_SET_DEFAULT(u8,g_nvsHandle, "mqttQos", g_persistent.mqttQos, DEFAULT_MQTT_QOS, TAG);
   // NVS_GET_OR_SET_DEFAULT(g_nvsHandle, "mqttRetain", g_persistent.mqttRetain, DEFAULT_MQTT_RETAIN, TAG);
-
-  // // * * * Multicast persistent configuration * * *
   NVS_GET_OR_SET_DEFAULT(u8,
                          nvs_get_u8,
                          nvs_set_u8,
@@ -695,7 +770,16 @@ initPersistentStorage(void)
   }
 }
 
-/* Signal Wi-Fi events on this event-group */
+// ============================================================================
+//                      WiFi Event Synchronization
+// ============================================================================
+
+/**
+ * @brief Event group for WiFi connection status
+ *
+ * WIFI_CONNECTED_EVENT bit is set when device successfully connects to WiFi
+ * and obtains an IP address. Used to synchronize network service initialization.
+ */
 const int WIFI_CONNECTED_EVENT = BIT0;
 static EventGroupHandle_t wifi_event_group;
 
@@ -704,10 +788,16 @@ static EventGroupHandle_t wifi_event_group;
 #define PROV_TRANSPORT_BLE    "ble"
 #define QRCODE_BASE_URL       "https://espressif.github.io/esp-jumpstart/qrcode.html"
 
-///////////////////////////////////////////////////////////////////////////////
-// startOTA
-//
+// ============================================================================
+//                      Firmware Update Functions
+// ============================================================================
 
+/**
+ * @brief Initiate OTA (Over-The-Air) firmware update
+ *
+ * Starts firmware update process using default firmware server URL.
+ * Currently placeholder for future OTA implementation.
+ */
 void
 startOTA(void)
 {
@@ -716,10 +806,16 @@ startOTA(void)
   // vscp_fwhlp_initiate_ota_update("http://firmware.vscp.org/firmware/vscp-din-wireless-esp32-can-z102-latest.bin");
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// app_initiate_firmware_upload
-//
-
+/**
+ * @brief Initiate firmware update from specific URL
+ *
+ * Starts OTA firmware update using the provided URL. Currently placeholder
+ * for future implementation.
+ *
+ * @param url  HTTP(S) URL pointing to firmware binary file
+ *
+ * @return VSCP_ERROR_SUCCESS on success, error code otherwise
+ */
 int
 app_initiate_firmware_upload(const char *url)
 {
@@ -730,20 +826,35 @@ app_initiate_firmware_upload(const char *url)
   return VSCP_ERROR_SUCCESS;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// getMilliSeconds
-//
+// ============================================================================
+//                        Utility Functions
+// ============================================================================
 
+/**
+ * @brief Get current time in milliseconds
+ *
+ * Returns system uptime in milliseconds since boot using ESP timer.
+ * Used for timestamping and timeout calculations.
+ *
+ * @return Milliseconds since system boot
+ */
 uint32_t
 getMilliSeconds(void)
 {
   return (esp_timer_get_time() / 1000);
 };
 
-///////////////////////////////////////////////////////////////////////////////
-// validate_user
-//
-
+/**
+ * @brief Validate user credentials against stored values
+ *
+ * Checks provided username and password against credentials stored in NVS.
+ * Used for VSCP link protocol authentication and web interface access.
+ *
+ * @param user  Username string to validate
+ * @param pw    Password string to validate
+ *
+ * @return true if credentials match, false otherwise
+ */
 bool
 validate_user(const char *user, const char *pw)
 {
@@ -792,13 +903,23 @@ validate_user(const char *user, const char *pw)
   return false;
 }
 
+/**
+ * @brief Retrieve device GUID from NVS
+ *
+ * Reads the 16-byte GUID from persistent storage. GUID is used as unique
+ * identifier for VSCP node addressing.
+ *
+ * @param[out] pguid  Buffer to store 16-byte GUID (must be pre-allocated)
+ *
+ * @return true if GUID successfully retrieved, false on error
+ */
 bool
 get_device_guid(uint8_t *pguid)
 {
   esp_err_t rv;
   size_t length = 16;
 
-  // Ceck pointer
+  // Check pointer
   if (NULL == pguid) {
     return false;
   }
@@ -821,12 +942,26 @@ get_device_guid(uint8_t *pguid)
   return true;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// event_handler
-//
-// Event handler for catching system events
-//
+// ============================================================================
+//                       System Event Handler
+// ============================================================================
 
+/**
+ * @brief Main event handler for WiFi and provisioning events
+ *
+ * Handles various system events:
+ * - WIFI_PROV_EVENT: Provisioning lifecycle (start, credentials, success, fail, end)
+ * - WIFI_EVENT: WiFi state changes (STA start, connect, disconnect)
+ * - IP_EVENT: IP address assignment (GOT_IP)
+ *
+ * When credentials are received via provisioning, they are automatically saved
+ * as the primary WiFi configuration in NVS.
+ *
+ * @param arg        User data (unused)
+ * @param event_base Event base identifier (WIFI_PROV_EVENT, WIFI_EVENT, IP_EVENT)
+ * @param event_id   Specific event ID within the base
+ * @param event_data Event-specific data structure
+ */
 static void
 event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
@@ -846,7 +981,7 @@ event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *ev
                  (const char *) wifi_sta_cfg->ssid,
                  (const char *) wifi_sta_cfg->password);
 
-        // Save provisioned credentials as primary WiFi
+        // Automatically save provisioned credentials as primary WiFi configuration
         strncpy(g_persistent.wifiPrimarySsid, (char *) wifi_sta_cfg->ssid, sizeof(g_persistent.wifiPrimarySsid) - 1);
         g_persistent.wifiPrimarySsid[sizeof(g_persistent.wifiPrimarySsid) - 1] = '\0';
 
@@ -895,12 +1030,13 @@ event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *ev
     }
   }
   else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+    // WiFi station started, initiate connection
     esp_wifi_connect();
   }
   else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
     ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
     ESP_LOGI(TAG, "Connected with IP Address:" IPSTR, IP2STR(&event->ip_info.ip));
-    /* Signal main application to continue execution */
+    // Signal main application that WiFi connection is established
     xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_EVENT);
   }
   else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
@@ -909,10 +1045,17 @@ event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *ev
   }
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// wifi_init_sta
-//
+// ============================================================================
+//                      WiFi Station Initialization
+// ============================================================================
 
+/**
+ * @brief Initialize WiFi in station mode and start connection
+ *
+ * Configures ESP32 WiFi to operate in station (client) mode and initiates
+ * connection to the configured access point. Used after successful provisioning
+ * when credentials are already stored.
+ */
 static void
 wifi_init_sta(void)
 {
@@ -921,10 +1064,19 @@ wifi_init_sta(void)
   ESP_ERROR_CHECK(esp_wifi_start());
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// get_device_service_name
-//
-
+/**
+ * @brief Generate unique device service name for provisioning
+ *
+ * Creates a unique service name using the device's MAC address. This name is
+ * used as:
+ * - WiFi SSID when using SoftAP provisioning
+ * - BLE device name when using BLE provisioning
+ *
+ * Format: "PROV_XXYYZZ" where XX, YY, ZZ are last 3 bytes of MAC address
+ *
+ * @param[out] service_name  Buffer to store generated service name
+ * @param max                Maximum buffer size
+ */
 static void
 get_device_service_name(char *service_name, size_t max)
 {
@@ -934,15 +1086,32 @@ get_device_service_name(char *service_name, size_t max)
   snprintf(service_name, max, "%s%02X%02X%02X", ssid_prefix, eth_mac[3], eth_mac[4], eth_mac[5]);
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// custom_prov_data_handler
-//
-// Handler for the optional provisioning endpoint registered by the application.
-// The data format can be chosen by applications. Here, we are using plain ascii text.
-// Applications can choose to use other formats like protobuf, JSON, XML, etc.
-//
-// Expected format for secondary WiFi: "SEC_SSID:password" or JSON format
+// ============================================================================
+//                   Custom Provisioning Data Handler
+// ============================================================================
 
+/**
+ * @brief Handle custom data during WiFi provisioning
+ *
+ * This handler is called when custom data is sent to the "VSCP-WCANG" provisioning
+ * endpoint. It allows configuring secondary WiFi credentials during the initial
+ * provisioning process.
+ *
+ * Expected data format: "SSID:PASSWORD"
+ * Example: "MyBackupWiFi:SecretPass123"
+ *
+ * The secondary WiFi credentials are saved to NVS and can be used as a fallback
+ * if the primary WiFi becomes unavailable.
+ *
+ * @param session_id  Provisioning session identifier
+ * @param inbuf       Input data buffer containing custom configuration
+ * @param inlen       Length of input data
+ * @param outbuf      Output buffer for response (unused, set to NULL)
+ * @param outlen      Output length (unused, set to 0)
+ * @param priv_data   Private user data (unused)
+ *
+ * @return ESP_OK on success, error code otherwise
+ */
 esp_err_t
 custom_prov_data_handler(uint32_t session_id,
                          const uint8_t *inbuf,
@@ -954,13 +1123,13 @@ custom_prov_data_handler(uint32_t session_id,
   if (inbuf && inlen > 0) {
     ESP_LOGI(TAG, "Received custom data: %.*s", inlen, (char *) inbuf);
 
-    // Parse secondary WiFi credentials
-    // Expected format: "SSID:PASSWORD"
+    // Parse secondary WiFi credentials from format "SSID:PASSWORD"
     char *data_copy = strndup((char *) inbuf, inlen);
     if (data_copy) {
       char *colon = strchr(data_copy, ':');
       if (colon) {
-        *colon         = '\0'; // Split at colon
+        // Split string at colon to separate SSID and password
+        *colon         = '\0';
         char *ssid     = data_copy;
         char *password = colon + 1;
 
@@ -990,15 +1159,28 @@ custom_prov_data_handler(uint32_t session_id,
     return ESP_ERR_NO_MEM;
   }
 
-  *outlen = strlen(response) + 1; /* +1 for NULL terminating byte */
+  *outlen = strlen(response) + 1; // Include NULL terminator
 
   return ESP_OK;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// wifi_prov_print_qr
-//
-
+/**
+ * @brief Generate and display QR code for WiFi provisioning
+ *
+ * Creates a QR code containing provisioning information that can be scanned
+ * by the ESP provisioning mobile app. The QR code includes:
+ * - Service name (device identifier)
+ * - Security credentials (username/password or POP)
+ * - Transport method (BLE or SoftAP)
+ *
+ * The QR code is displayed on the terminal (if configured) and a URL is
+ * provided for browser-based provisioning.
+ *
+ * @param name       Service/device name
+ * @param username   Username for SEC2 authentication (SEC2 only)
+ * @param pop        Proof of possession string
+ * @param transport  Transport method ("ble" or "softap")
+ */
 static void
 wifi_prov_print_qr(const char *name, const char *username, const char *pop, const char *transport)
 {
@@ -1006,6 +1188,8 @@ wifi_prov_print_qr(const char *name, const char *username, const char *pop, cons
     ESP_LOGW(TAG, "Cannot generate QR code payload. Data missing.");
     return;
   }
+
+  // Build JSON payload with provisioning information
   char payload[150] = { 0 };
   if (pop) {
 #if CONFIG_WCANG_PROV_SECURITY_VERSION_1
@@ -1042,130 +1226,185 @@ wifi_prov_print_qr(const char *name, const char *username, const char *pop, cons
   ESP_LOGI(TAG, "Scan this QR code from the provisioning application for Provisioning.");
   esp_qrcode_config_t cfg = ESP_QRCODE_CONFIG_DEFAULT();
   esp_qrcode_generate(&cfg, payload);
-#endif /* CONFIG_APP_WIFI_PROV_SHOW_QR */
+#endif
+  // Provide URL for browser-based provisioning as alternative to QR code
   ESP_LOGI(TAG,
            "If QR code is not visible, copy paste the below URL in a browser.\n%s?data=%s",
            QRCODE_BASE_URL,
            payload);
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// app_main
-//
+// ============================================================================
+//                      Application Entry Point
+// ============================================================================
 
+/**
+ * @brief Main application entry point
+ *
+ * Initializes all system components and enters the main event loop:
+ *
+ * 1. NVS Flash: Initialize non-volatile storage for configuration
+ * 2. Networking: Initialize TCP/IP stack and event loop
+ * 3. GPIO: Configure status LEDs (connected, active)
+ * 4. Message Queues: Create FreeRTOS queues for CAN and network transports
+ * 5. WiFi: Register event handlers and initialize WiFi subsystem
+ * 6. Provisioning: Handle initial WiFi setup (BLE or SoftAP based)
+ * 7. Configuration: Load persistent settings from NVS
+ * 8. Web Server: Start HTTP configuration interface
+ * 9. CAN/TWAI: Initialize CAN bus driver with configured parameters
+ * 10. Network Services: Start TCP server for VSCP link protocol
+ * 11. Main Loop: Distribute CAN messages to active network transports
+ *
+ * The main loop waits for CAN messages on tr_twai_rx queue and distributes
+ * them to all enabled transport mechanisms (TCP, MQTT, UDP, etc.).
+ */
 void
 app_main(void)
 {
 
-  // Initialize NVS partition
+  // ============================================================================
+  //                      NVS (Non-Volatile Storage) Init
+  // ============================================================================
+
+  // Initialize NVS partition for configuration storage
   esp_err_t rv = nvs_flash_init();
   if (rv == ESP_ERR_NVS_NO_FREE_PAGES || rv == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-
-    // NVS partition was truncated
-    // and needs to be erased
+    // NVS partition was truncated or version updated - erase and retry
     ESP_ERROR_CHECK(nvs_flash_erase());
-
-    // Retry nvs_flash_init
     ESP_ERROR_CHECK(nvs_flash_init());
   }
 
-  // Create microsecond timer
-  // ESP_ERROR_CHECK(esp_timer_create());
+  // ============================================================================
+  //                      Network Stack Initialization
+  // ============================================================================
 
-  // Start timer
-  // esp_timer_start_periodic();
-
-  // Initialize TCP/IP
+  // Initialize TCP/IP stack (LwIP)
   ESP_ERROR_CHECK(esp_netif_init());
 
-  // Initialize the event loop
+  // Create default event loop for system events
   ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+  // Create event group for WiFi connection synchronization
   wifi_event_group = xEventGroupCreate();
+
+  // ============================================================================
+  //                      GPIO Configuration (Status LEDs)
+  // ============================================================================
 
   gpio_config_t io_conf = {};
 
-  // Disable interrupt
-  io_conf.intr_type = GPIO_INTR_DISABLE;
+  // Configure LED GPIO pins as outputs without interrupts
+  io_conf.intr_type    = GPIO_INTR_DISABLE;   // No interrupts
+  io_conf.mode         = GPIO_MODE_OUTPUT;    // Output mode
+  io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL; // LED pin mask
+  io_conf.pull_down_en = 0;                   // No pull-down
+  io_conf.pull_up_en   = 0;                   // No pull-up
 
-  // Set as output mode
-  io_conf.mode = GPIO_MODE_OUTPUT;
-
-  // Bit mask of the pins that you want to be able to set
-  io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL;
-
-  // Disable pull-down mode
-  io_conf.pull_down_en = 0;
-
-  // Disable pull-up mode
-  io_conf.pull_up_en = 0;
-
-  // Configure GPIO with the given settings
+  // Apply GPIO configuration
   gpio_config(&io_conf);
 
-  gpio_set_level(CONNECTED_LED_GPIO_NUM, 1);
-  gpio_set_level(ACTIVE_LED_GPIO_NUM, 1);
+  // Initialize status LEDs (active high)
+  gpio_set_level(CONNECTED_LED_GPIO_NUM, 1); // Connection status LED
+  gpio_set_level(ACTIVE_LED_GPIO_NUM, 1);    // Activity indicator LED
 
-  // TWAI message buffers
-  tr_twai_rx = xQueueCreate(10, sizeof(twai_message_t)); // Incoming CAN
-  tr_twai_tx = xQueueCreate(40, sizeof(twai_message_t)); // Outgoing CAN (All fills)
+  // ============================================================================
+  //                      FreeRTOS Message Queue Creation
+  // ============================================================================
+
+  /**
+   * Message queue architecture:
+   * - tr_twai_rx: Receives CAN messages from bus (distributed to all transports)
+   * - tr_twai_tx: Transmits CAN messages to bus (from all transports)
+   * - tr_tcpsrv[]: One queue per TCP connection for VSCP link protocol
+   * - tr_mqtt: MQTT transport message queue
+   * - tr_multicast: UDP multicast transport queue
+   * - tr_udp: UDP unicast/broadcast transport queue
+   * - tr_websockets: WebSocket transport queue
+   */
+  tr_twai_rx = xQueueCreate(10, sizeof(twai_message_t)); // Incoming CAN messages  <-- from bus
+  tr_twai_tx = xQueueCreate(40, sizeof(twai_message_t)); // Outgoing CAN messages  --> to bus
+
+  // Create message queues for each TCP connection
   for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
-    tr_tcpsrv[i].msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // tcp/ip link channel i
+    tr_tcpsrv[i].tocan_queue   = xQueueCreate(10, sizeof(twai_message_t));
+    tr_tcpsrv[i].fromcan_queue = xQueueCreate(10, sizeof(twai_message_t));
   }
-  tr_mqtt.msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // MQTT empties
-  // QueueHandle_t test = xQueueCreate(10, sizeof( twai_message_t) );
-  tr_mqtt.msg_queue       = xQueueCreate(10, sizeof(twai_message_t)); // MQTT empties
-  tr_multicast.msg_queue  = xQueueCreate(10, sizeof(twai_message_t)); // Multicast empties
-  tr_udp.msg_queue        = xQueueCreate(10, sizeof(twai_message_t)); // UDP empties
-  tr_websockets.msg_queue = xQueueCreate(10, sizeof(twai_message_t)); // Websockets empties
 
+  // Create message queues for network transports
+  tr_mqtt.tocan_queue         = xQueueCreate(10, sizeof(twai_message_t));
+  tr_mqtt.fromcan_queue       = xQueueCreate(10, sizeof(twai_message_t));
+  tr_multicast.tocan_queue    = xQueueCreate(10, sizeof(twai_message_t));
+  tr_multicast.fromcan_queue  = xQueueCreate(10, sizeof(twai_message_t));
+  tr_udp.tocan_queue          = xQueueCreate(10, sizeof(twai_message_t));
+  tr_udp.fromcan_queue        = xQueueCreate(10, sizeof(twai_message_t));
+  tr_websockets.tocan_queue   = xQueueCreate(10, sizeof(twai_message_t));
+  tr_websockets.fromcan_queue = xQueueCreate(10, sizeof(twai_message_t));
+
+  // Create control semaphore for main task synchronization
   ctrl_task_sem = xSemaphoreCreateBinary();
 
-  // Register our event handler for Wi-Fi, IP and Provisioning related events
+  // ============================================================================
+  //                      WiFi Event Handler Registration
+  // ============================================================================
+
+  // Register event handlers for WiFi provisioning, WiFi state, and IP events
   ESP_ERROR_CHECK(esp_event_handler_register(WIFI_PROV_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
   ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
   ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL));
 
-  // Initialize Wi-Fi including netif with default config
+  // ============================================================================
+  //                      WiFi Stack Initialization
+  // ============================================================================
+
+  // Create WiFi station network interface
   esp_netif_create_default_wifi_sta();
 
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_SOFTAP
+  // Create WiFi AP interface for SoftAP provisioning
   esp_netif_create_default_wifi_ap();
-#endif // CONFIG_WCANG_PROV_TRANSPORT_SOFTAP
+#endif
 
+  // Initialize WiFi driver with default configuration
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-  // --------------------------------------------------------
-  //                      Provisioning
-  // --------------------------------------------------------
+  // ============================================================================
+  //                      WiFi Provisioning Setup
+  // ============================================================================
 
-  // Configuration for the provisioning manager
+  /**
+   * WiFi provisioning allows initial configuration via:
+   * - BLE (CONFIG_WCANG_PROV_TRANSPORT_BLE): Bluetooth Low Energy
+   * - SoftAP (CONFIG_WCANG_PROV_TRANSPORT_SOFTAP): Temporary WiFi AP
+   *
+   * Security options:
+   * - SEC1: Proof of Possession (POP) based authentication
+   * - SEC2: Username/Password based authentication (SRP6a)
+   */
+
+  // Configure provisioning manager
   wifi_prov_mgr_config_t config = {
-  // What is the Provisioning Scheme that we want ?
-  // wifi_prov_scheme_softap or wifi_prov_scheme_ble
+  // Select provisioning transport scheme (BLE or SoftAP)
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_BLE
     .scheme = wifi_prov_scheme_ble,
-#endif // CONFIG_WCANG_PROV_TRANSPORT_BLE
+#endif
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_SOFTAP
     .scheme = wifi_prov_scheme_softap,
-#endif // CONFIG_WCANG_PROV_TRANSPORT_SOFTAP
+#endif
 
-  /*
-   * Any default scheme specific event handler that you would
-   * like to choose. Since our example application requires
-   * neither BT nor BLE, we can choose to release the associated
-   * memory once provisioning is complete, or not needed
-   * (in case when device is already provisioned). Choosing
-   * appropriate scheme specific event handler allows the manager
-   * to take care of this automatically. This can be set to
-   * WIFI_PROV_EVENT_HANDLER_NONE when using wifi_prov_scheme_softap
+  /**
+   * Event handler configuration:
+   * - BLE: WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM
+   *   Automatically releases BT/BLE memory after provisioning
+   * - SoftAP: WIFI_PROV_EVENT_HANDLER_NONE
+   *   No special memory management needed
    */
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_BLE
     .scheme_event_handler = WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM
-#endif /* CONFIG_WCANG_PROV_TRANSPORT_BLE */
+#endif
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_SOFTAP
                               .scheme_event_handler = WIFI_PROV_EVENT_HANDLER_NONE
-#endif /* CONFIG_WCANG_PROV_TRANSPORT_SOFTAP */
+#endif
   };
 
   /*
@@ -1266,70 +1505,50 @@ app_main(void)
     wifi_prov_security2_params_t *sec_params = &sec2_params;
 #endif
 
-    /*
-     * What is the service key (could be NULL)
-     * This translates to :
-     *     - Wi-Fi password when scheme is wifi_prov_scheme_softap
-     *          (Minimum expected length: 8, maximum 64 for WPA2-PSK)
-     *     - simply ignored when scheme is wifi_prov_scheme_ble
-     */
+    // Service key for provisioning (password for SoftAP, ignored for BLE)
     const char *service_key = NULL;
 
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_BLE
-    /*
-     * This step is only useful when scheme is wifi_prov_scheme_ble. This will
-     * set a custom 128 bit UUID which will be included in the BLE advertisement
-     * and will correspond to the primary GATT service that provides provisioning
-     * endpoints as GATT characteristics. Each GATT characteristic will be
-     * formed using the primary service UUID as base, with different auto assigned
-     * 12th and 13th bytes (assume counting starts from 0th byte). The client side
-     * applications must identify the endpoints by reading the User Characteristic
-     * Description descriptor (0x2901) for each characteristic, which contains the
-     * endpoint name of the characteristic
+    /**
+     * Set custom 128-bit UUID for BLE provisioning service
+     *
+     * This UUID is advertised in BLE advertisements and identifies the primary
+     * GATT service for provisioning. Each characteristic is formed using this
+     * UUID as a base with auto-assigned 12th and 13th bytes.
+     *
+     * Clients identify endpoints by reading the User Characteristic Description
+     * descriptor (0x2901) for each characteristic.
      */
     uint8_t custom_service_uuid[] = {
-      /*
-       * LSB <---------------------------------------
-       * ---------------------------------------> MSB
-       */
+      // LSB <-----------------------------------------------------------------> MSB
       0xb4, 0xdf, 0x5a, 0x1c, 0x3f, 0x6b, 0xf4, 0xbf, 0xea, 0x4a, 0x82, 0x03, 0x04, 0x90, 0x1a, 0x02,
     };
 
-    /*
-     * If your build fails with linker errors at this point, then you may have
-     * forgotten to enable the BT stack or BTDM BLE settings in the SDK (e.g. see
-     * the sdkconfig.defaults in the example project)
-     */
     wifi_prov_scheme_ble_set_service_uuid(custom_service_uuid);
-#endif /* CONFIG_WCANG_PROV_TRANSPORT_BLE */
+#endif
 
-    /*
-     * An optional endpoint that applications can create if they expect to
-     * get some additional custom data during provisioning workflow.
-     * The endpoint name can be anything of your choice.
-     * This call must be made before starting the provisioning.
+    /**
+     * Create custom provisioning endpoint for secondary WiFi configuration
+     *
+     * The "VSCP-WCANG" endpoint allows sending additional configuration data
+     * during provisioning (e.g., secondary WiFi credentials). Must be created
+     * before starting provisioning.
      */
     wifi_prov_mgr_endpoint_create("VSCP-WCANG");
 
-    /* Start provisioning service */
+    // Start provisioning service with configured security and service name
     ESP_ERROR_CHECK(wifi_prov_mgr_start_provisioning(security, (const void *) sec_params, service_name, service_key));
 
-    /*
-     * The handler for the optional endpoint created above.
-     * This call must be made after starting the provisioning, and only if the endpoint
-     * has already been created above.
+    /**
+     * Register handler for custom endpoint
+     *
+     * The custom_prov_data_handler receives data sent to the "VSCP-WCANG" endpoint,
+     * allowing configuration of secondary WiFi and other custom parameters.
+     * Must be registered after starting provisioning.
      */
     wifi_prov_mgr_endpoint_register("VSCP-WCANG", custom_prov_data_handler, NULL);
 
-    /*
-     * Uncomment the following to wait for the provisioning to finish and then release
-     * the resources of the manager. Since in this case de-initialization is triggered
-     * by the default event loop handler, we don't need to call the following
-     */
-    // wifi_prov_mgr_wait();
-    // wifi_prov_mgr_deinit();
-
-    /* Print QR code for provisioning */
+    // Display QR code for easy provisioning via mobile app
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_BLE
     wifi_prov_print_qr(service_name, username, pop, PROV_TRANSPORT_BLE);
 #else  /* CONFIG_WCANG_PROV_TRANSPORT_SOFTAP */
@@ -1337,96 +1556,144 @@ app_main(void)
 #endif /* CONFIG_WCANG_PROV_TRANSPORT_BLE */
   }
   else {
+    // Device already provisioned - skip provisioning and connect directly
     ESP_LOGI(TAG, "Already provisioned, starting Wi-Fi STA");
 
-    /*
-     * We don't need the manager as device is already provisioned,
-     * so let's release it's resources
-     */
+    // Release provisioning manager resources
     wifi_prov_mgr_deinit();
 
-    /* Start Wi-Fi station */
+    // Start WiFi in station mode with saved credentials
     wifi_init_sta();
   }
 
-  /* Wait for Wi-Fi connection */
+  // ============================================================================
+  //                    Wait for WiFi Connection
+  // ============================================================================
+
+  // Block until WiFi connection established and IP address obtained
   xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_EVENT, false, true, portMAX_DELAY);
 
+  // ============================================================================
+  //                    Load Configuration from NVS
+  // ============================================================================
+
+  // Load all persistent configuration from NVS and increment boot counter
   initPersistentStorage();
 
-  // First start of web server
+  // ============================================================================
+  //                    Start Web Configuration Server
+  // ============================================================================
+
+  // Start HTTP server for web-based configuration interface
   server = start_webserver();
 
-  // ***************************************************************************
-  //                                 CAN/TWAI
-  // ***************************************************************************
+  // ============================================================================
+  //                    CAN/TWAI Initialization
+  // ============================================================================
 
-  // Install TWAI driver
-  // ESP_ERROR_CHECK(twai_driver_install(&g_config, &t_config, &f_config));
-  // ESP_LOGI(TAG, "Driver installed");
+  /**
+   * Initialize CAN (TWAI) bus driver:
+   * - Configure timing based on bitrate (125K default)
+   * - Set up message filtering
+   * - Enable/disable listen-only mode based on configuration
+   * - Create receive task for incoming CAN messages
+   */
 
-  // Start TWAI
+  // Initialize CAN interface with 125 kbps bitrate
   can4vscp_init(CAN4VSCP_125K);
 
-  // if (config_server_get_can_mode() == VSCP2CAN_NORMAL) {
-  // 	can4vscp_set_silent(0);
-  // }
-  // else
-  // {
-  // 	can4vscp_set_silent(1);
-  // }
-
+  // Apply configured bitrate (loaded from NVS)
   can4vscp_setBitrate(CAN4VSCP_125K);
+
+  // Enable CAN controller
   can4vscp_enable();
 
-  xTaskCreate(twai_receive_task, "can4vscp", 4096, &tr_twai_rx, 5, NULL);
+  // ============================================================================
+  //                    Task Creation
+  // ============================================================================
+
+  // Create CAN receive task that fills tr_twai_rx queue
+  xTaskCreate(twai_receive_task, "can4vscp", 4096, &tr_twai_rx, 10, NULL);
+
+  // Release control semaphore to allow task execution
   xSemaphoreGive(ctrl_task_sem);
 
-  // Start the tcp/ip link server
+  // Create TCP server task for VSCP link protocol (IPv4)
   xTaskCreate(tcpsrv_task, "tcpsrv", 4096, (void *) AF_INET, 5, NULL);
 
 #ifdef CONFIG_EXAMPLE_IPV6
+  // Create TCP server task for IPv6 if enabled
   xTaskCreate(tcpsrv_task, "tcpsrv", 4096, (void *) AF_INET6, 5, NULL);
 #endif
 
-  // If the TWDT was not initialized automatically on startup, manually intialize it now
-  esp_task_wdt_config_t wdconfig = {
-    .timeout_ms     = 2000,
-    .idle_core_mask = (1 << CONFIG_FREERTOS_NUMBER_OF_CORES) - 1, // Bitmask of all cores
-    .trigger_panic  = false,
+  // Start MQTT client task if enabled
+  mqtt_start();
+  xTaskCreate(mqtt_task, "mqtt", 8192, (void *) &tr_mqtt, 5, NULL);
 
-  };
-  // esp_task_wdt_init(&wdconfig);
 
-  /*
-    Start main application loop now
-  */
+  // multicast_start();   // Start UDP multicast task if enabled
+  // udp_start();         // Start UDP unicast/broadcast task if enabled
+  // ws_start();          // Start WebSocket server task if enabled
+
+  // ============================================================================
+  //                    Main Event Distribution Loop
+  // ============================================================================
+
+  /**
+   * Main application loop:
+   *
+   * 1. Wait for CAN messages on tr_twai_rx queue (from CAN receive task)
+   * 2. Distribute received messages to all active transport queues:
+   *    - TCP connections (VSCP link protocol clients)
+   *    - MQTT broker (if enabled)
+   *    - UDP multicast/unicast (if enabled)
+   *    - WebSocket clients (if enabled)
+   * 3. Transport-specific tasks handle queue-to-network transmission
+   *
+   * This implements the gateway's core functionality: bridging CAN bus
+   * to various network protocols for remote VSCP event access.
+   */
 
   while (1) {
 
-    // esp_task_wdt_reset();
-
     twai_message_t msg = {};
 
-    // Check if there is a TWAI message in the receive queue
+    // Block waiting for CAN message from receive task
     if (xQueueReceive(tr_twai_rx, &msg, portMAX_DELAY) == pdPASS) {
 
-      ESP_LOGI(TAG, "--> Event fetched %X", (unsigned int) msg.identifier);
-      UBaseType_t cnt = uxQueueMessagesWaiting(tr_twai_rx);
-      ESP_LOGE(TAG, "count=%u %d", cnt, rv);
+      ESP_LOGI(TAG, "--> CAN event received, ID: 0x%X", (unsigned int) msg.identifier);
 
-      // Now put the message in all open client queues
+      // Log queue depth for monitoring
+      UBaseType_t cnt = uxQueueMessagesWaiting(tr_twai_rx);
+      ESP_LOGD(TAG, "Queue depth: %u", cnt);
+
+      /**
+       * TODO: Distribute message to all active transport queues
+       *
+       * For each enabled transport:
+       * - Check if transport is enabled (from g_persistent config)
+       * - Check if queue has space (xQueueSendToBack with timeout)
+       * - Send message to queue for transmission
+       *
+       * Example:
+       * if (g_persistent.enableMqtt) {
+       *   xQueueSendToBack(tr_mqtt.msg_queue, &msg, 0);
+       * }
+       */
     }
 
+    // Synchronize with control task
     xSemaphoreTake(ctrl_task_sem, portMAX_DELAY);
-
-    // ESP_LOGI(TAG, "Loop");
     xSemaphoreGive(ctrl_task_sem);
+
+    // Yield to other tasks
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 
-  // Clean up
+  // ============================================================================
+  //                           Cleanup (unreachable)
+  // ============================================================================
 
-  // Close
+  // Close NVS handle (never reached due to infinite loop)
   nvs_close(g_nvsHandle);
 }

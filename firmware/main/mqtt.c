@@ -2,7 +2,7 @@
   VSCP Wireless CAN4VSCP Gateway (VSCP-WCANG)
 
   MQTT SSL/TLS Client Module
-  
+
   This module implements MQTT client functionality for the VSCP gateway,
   supporting both standard MQTT and secure MQTT over TLS/SSL. It handles:
   - MQTT broker connection with configurable credentials
@@ -58,6 +58,7 @@
 #include <vscp.h>
 #include <vscp-firmware-helper.h>
 
+#include "can4vscp.h"
 #include <main.h>
 #include "mqtt.h"
 
@@ -67,6 +68,8 @@
 
 // Persistent configuration from main module
 extern node_persistent_config_t g_persistent;
+
+extern transport_t tr_mqtt;
 
 // Logging tag for ESP-IDF logger
 static const char *TAG = "MQTT";
@@ -117,11 +120,11 @@ extern const uint8_t mqtt_eclipse_io_pem_end[] asm("_binary_mqtt_eclipse_io_pem_
 
 /**
  * @brief Perform mustache-style template substitution in MQTT topic strings
- * 
+ *
  * This function replaces template tags (e.g., {{guid}}, {{class}}) with actual
  * values from the node configuration and/or VSCP event. This enables dynamic
  * topic generation based on event content and node identity.
- * 
+ *
  * Supported substitution tags:
  * - {{node}}       : Node name from configuration
  * - {{guid}}       : Node GUID (16-byte hex string with colons)
@@ -131,30 +134,26 @@ extern const uint8_t mqtt_eclipse_io_pem_end[] asm("_binary_mqtt_eclipse_io_pem_
  * - {{nickname}}   : Node nickname (LSB 2 bytes of GUID as decimal)
  * - {{evnickname}} : Event source nickname (requires pev)
  * - {{sindex}}     : Sensor index for measurement events (requires pev)
- * 
+ *
  * Example:
  *   Input:  "vscp/{{guid}}/{{class}}/{{type}}"
  *   Output: "vscp/FF:FF:FF:FF:FF:FF:FF:F5:01:00:00:00:00:00:00:02/20/9"
- * 
+ *
  * @param newTopic  Buffer to store the substituted topic string
  * @param len       Size of newTopic buffer
  * @param pTopic    Template topic string with {{tags}} to substitute
  * @param pev       Pointer to VSCP event (can be NULL if event tags not needed)
- * 
+ *
  * @return VSCP_ERROR_SUCCESS on success, VSCP_ERROR_MEMORY if allocation fails
  */
 static int
 mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent *pev)
 {
-  // int rv;
   char workbuf[48];
-
-  // ESP_PARAM_CHECK(newTopic);
-  // ESP_PARAM_CHECK(pTopic);
 
   // Supported mustache template tags (currently implemented subset):
   // {{node}}      - Node name
-  // {{guid}}      - Node GUID  
+  // {{guid}}      - Node GUID
   // {{evguid}}    - Event GUID
   // {{class}}     - Event class
   // {{type}}      - Event type
@@ -179,6 +178,7 @@ mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent
 
   // Substitute {{node}} with configured node name
   vscp_fwhlp_strsubst(newTopic, len, pTopic, "{{node}}", g_persistent.nodeName);
+  ESP_LOGI(TAG, "Substituted {{node}}: %s", newTopic);
   strncpy(saveTopic, newTopic, MIN(strlen(newTopic), len));
 
   // Substitute {{guid}} with node GUID (format: XX:XX:XX:...)
@@ -222,7 +222,7 @@ mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent
       memset(workbuf, 0, sizeof(workbuf));
     }
     vscp_fwhlp_strsubst(newTopic, len, saveTopic, "{{sindex}}", workbuf);
-    // strcpy(saveTopic, newTopic);
+    strcpy(saveTopic, newTopic);
   }
 
   free(saveTopic);
@@ -239,23 +239,23 @@ mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent
 
 /**
  * @brief Publish a VSCP event to the MQTT broker as JSON
- * 
+ *
  * Converts the VSCP event to JSON format and publishes it to the specified
  * MQTT topic. If no topic is provided, uses the default publish topic from
  * configuration. Topic templates are expanded using mqtt_topic_subst().
- * 
+ *
  * The event is serialized to JSON using vscp_fwhlp_create_json() which creates
  * a standard VSCP JSON representation containing timestamp, class, type, GUID,
  * and data fields.
- * 
+ *
  * @param topic  MQTT topic string (may contain {{tags}}), or NULL for default
  * @param pev    Pointer to VSCP event to publish (must not be NULL)
- * 
+ *
  * @return VSCP_ERROR_SUCCESS on success
  *         VSCP_ERROR_INVALID_POINTER if pev is NULL
- *         VSCP_ERROR_MEMORY if buffer allocation fails  
+ *         VSCP_ERROR_MEMORY if buffer allocation fails
  *         Error code from vscp_fwhlp_create_json() on JSON conversion failure
- * 
+ *
  * @note If MQTT is not connected, increments failure counter and returns success
  * @note Updates s_mqtt_statistics.nPub on success or .nPubFailures on failure
  */
@@ -289,16 +289,16 @@ mqtt_send_vscp_event(const char *topic, const vscpEvent *pev)
   }
 
   // Convert VSCP event to JSON string
-  if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_create_json(pbuf, 2048, pev))) {
+  if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_create_json(pbuf, MQTT_SUBST_BUF_LEN, pev))) {
     free(pbuf);
     ESP_LOGE(TAG, "Failed to convert event to JSON rv = %d", rv);
     return rv;
   }
 
-  ESP_LOGV(TAG, "converted");
+  ESP_LOGV(TAG, "Event converted to JSON format");
 
   // Allocate buffer for topic template expansion
-  char *newTopic = calloc(MQTT_SUBST_BUF_LEN,1);
+  char *newTopic = calloc(MQTT_SUBST_BUF_LEN, 1);
   if (NULL == newTopic) {
     ESP_LOGE(TAG, "Unable to allocate memory.");
     free(pbuf);
@@ -307,16 +307,11 @@ mqtt_send_vscp_event(const char *topic, const vscpEvent *pev)
 
   // Expand topic template with event-specific values
   mqtt_topic_subst(newTopic, MQTT_SUBST_BUF_LEN, pTopic, pev);
-
-  printf("%s\n", newTopic);
+  ESP_LOGV(TAG, "Expanded MQTT topic: %s", newTopic);
 
   // Publish JSON payload to MQTT broker with configured QoS and retain flag
-  int msgid = esp_mqtt_client_publish(g_mqtt_client,
-                                      newTopic,
-                                      pbuf,
-                                      strlen(pbuf),
-                                      g_persistent.mqttQos,
-                                      g_persistent.mqttRetain);
+  int msgid =
+    esp_mqtt_client_publish(g_mqtt_client, newTopic, pbuf, strlen(pbuf), g_persistent.mqttQos, g_persistent.mqttRetain);
 
   // Update statistics based on publish result
   if (-1 != msgid) {
@@ -343,18 +338,18 @@ mqtt_send_vscp_event(const char *topic, const vscpEvent *pev)
 
 /**
  * @brief Publish a log message to the MQTT broker
- * 
+ *
  * Publishes plain text log messages to the configured log topic. This allows
  * remote monitoring of device logs via MQTT. The log topic is separate from
  * the event publish topic and can include template tags.
- * 
+ *
  * @param msg  Log message string to publish (plain text)
- * 
+ *
  * @return VSCP_ERROR_SUCCESS on success
  *         VSCP_ERROR_MEMORY if buffer allocation fails
- * 
+ *
  * @note If log topic is not configured (empty string), function returns immediately
- * @note Updates s_mqtt_statistics.nPubLog on success or .nPubLogFailures on failure  
+ * @note Updates s_mqtt_statistics.nPubLog on success or .nPubLogFailures on failure
  */
 int
 mqtt_log(char *msg)
@@ -369,7 +364,7 @@ mqtt_log(char *msg)
   // Only publish if log topic is configured
   if (strlen(g_persistent.mqttPubLog)) {
 
-    char *newTopic = calloc(MQTT_SUBST_BUF_LEN,1);
+    char *newTopic = calloc(MQTT_SUBST_BUF_LEN, 1);
     if (NULL == newTopic) {
       ESP_LOGE(TAG, "Unable to allocate memory.");
       free(pbuf);
@@ -381,8 +376,12 @@ mqtt_log(char *msg)
     mqtt_topic_subst(newTopic, MQTT_SUBST_BUF_LEN, pTopic, NULL);
 
     // Publish log message with configured QoS and retain flag
-    int msgid = esp_mqtt_client_publish(g_mqtt_client, newTopic, pbuf, strlen(pbuf), 
-                                        g_persistent.mqttQos, g_persistent.mqttRetain);
+    int msgid = esp_mqtt_client_publish(g_mqtt_client,
+                                        newTopic,
+                                        pbuf,
+                                        strlen(pbuf),
+                                        g_persistent.mqttQos,
+                                        g_persistent.mqttRetain);
     if (-1 != msgid) {
       s_mqtt_statistics.nPubLog++;
     }
@@ -407,17 +406,17 @@ mqtt_log(char *msg)
 
 /**
  * @brief Event handler callback for MQTT client events
- * 
+ *
  * This function is called by the ESP-IDF MQTT event loop for all MQTT-related
  * events including connection, disconnection, publish confirmation, incoming
  * data, subscriptions, and errors. It maintains connection state and statistics.
- * 
+ *
  * Key functionality:
  * - Sets s_mqtt_connected flag on CONNECT/DISCONNECT
  * - Subscribes to configured topics on connection
  * - Updates statistics counters for all events
  * - Logs detailed error information for troubleshooting
- * 
+ *
  * @param handler_args User data registered with the event (unused)
  * @param base         Event base identifier (ESP_EVENT_MQTT_BASE)
  * @param event_id     Specific MQTT event type (MQTT_EVENT_*)
@@ -440,12 +439,11 @@ mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, 
       s_mqtt_connected = true;
       s_mqtt_statistics.nConnect++;
       ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-      
+
       // Subscribe to configured topics (TODO: make this configurable)
-      msg_id =
-        esp_mqtt_client_subscribe(client,
-                                  "vscp/FF:FF:FF:FF:FF:FF:FF:FE:B8:27:EB:CF:3A:15:00:01/10/6/1/0",
-                                  0); // QoS 0
+      msg_id = esp_mqtt_client_subscribe(client,
+                                         "vscp/FF:FF:FF:FF:FF:FF:FF:FE:B8:27:EB:CF:3A:15:00:01/10/6/1/0",
+                                         0); // QoS 0
       ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
       break;
 
@@ -459,8 +457,8 @@ mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, 
     case MQTT_EVENT_SUBSCRIBED:
       ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
       // Acknowledge successful subscription with status message
-      msg_id = esp_mqtt_client_publish(client, "esp-now/status", "Successful subscribe", 0, 0, 0);
-      ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
+      // msg_id = esp_mqtt_client_publish(client, "esp-now/status", "Successful subscribe", 0, 0, 0);
+      // ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
       break;
 
     case MQTT_EVENT_UNSUBSCRIBED:
@@ -485,7 +483,7 @@ mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, 
     case MQTT_EVENT_ERROR:
       s_mqtt_statistics.nErrors++;
       ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
-      
+
       // Detailed error logging for troubleshooting
       if (event->error_handle->error_type == MQTT_ERROR_TYPE_TCP_TRANSPORT) {
         // TLS/TCP transport errors (including certificate validation failures)
@@ -517,23 +515,23 @@ mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, 
 
 /**
  * @brief Initialize and start the MQTT client
- * 
+ *
  * This function creates and starts the MQTT client using configuration from
  * g_persistent. It supports both plain MQTT and MQTT over TLS/SSL with
  * optional client certificate authentication.
- * 
+ *
  * Configuration sources:
  * - Broker: g_persistent.mqttUrl and mqttPort
  * - Credentials: mqttUser, mqttPw
  * - Client ID: mqttClientId (supports {{node}} and {{guid}} templates)
  * - TLS: enableMqttTls, mqttCaCert, mqttClientCert, mqttClientKey
- * 
+ *
  * TLS Features:
  * - Automatic scheme selection (mqtt:// vs mqtts://)
  * - Server certificate verification via CA certificate
  * - Optional mutual TLS with client certificate and private key
  * - Certificates stored in PEM format (up to 1024 bytes each)
- * 
+ *
  * @note Client ID templates are expanded before connection
  * @note Session is persistent (clean_session = false)
  * @note Keepalive interval is 60 seconds
@@ -548,6 +546,9 @@ mqtt_start(void)
   ESP_ERROR_CHECK(esp_base_mac_addr_get(mac));
 
   char clientid[128], save[128], workbuf[48];
+
+  memset(clientid, 0, sizeof(clientid));
+  strncpy(clientid, g_persistent.mqttClientId, sizeof(clientid) - 1);
 
   // Expand client ID template: {{node}} → node name
   vscp_fwhlp_strsubst(clientid, sizeof(clientid), g_persistent.mqttClientId, "{{node}}", g_persistent.nodeName);
@@ -565,8 +566,11 @@ mqtt_start(void)
     sprintf(uri, "mqtts://%s:%d", g_persistent.mqttUrl, g_persistent.mqttPort);
   }
   else {
-    sprintf(uri, "mqtt://%s:%d", g_persistent.mqttUrl, g_persistent.mqttPort);
+    sprintf(uri, "mqtt://%s", g_persistent.mqttUrl);
+    // sprintf(uri, "mqtt://%s:%d", g_persistent.mqttUrl, g_persistent.mqttPort);
   }
+
+  ESP_LOGI(TAG, "MQTT client id: %s", clientid);
 
   // Configure MQTT client based on ESP-IDF version
   // clang-format off
@@ -579,11 +583,15 @@ mqtt_start(void)
               },    
     .session.disable_clean_session = true,          // Persistent session
     .session.keepalive = 60,                        // 60 second keepalive
-    .credentials.client_id               = clientid,
     .credentials.username                = g_persistent.mqttUser,
     .credentials.authentication.password = g_persistent.mqttPw,
     .task.priority = 5,
   };
+
+  // Only set client_id if it's not empty (ESP-IDF v5 allows empty client_id for auto-generated ID)
+  if (strlen(clientid) > 0) {
+    mqtt_cfg.credentials.client_id               = clientid;
+  }
 
   // Configure TLS/SSL certificates if TLS is enabled
   // Certificates are in PEM format and stored in persistent config
@@ -631,7 +639,7 @@ mqtt_start(void)
 
 /**
  * @brief Stop the MQTT client and disconnect from broker
- * 
+ *
  * Cleanly shuts down the MQTT client connection. Should be called before
  * restarting WiFi or during device shutdown.
  */
@@ -639,4 +647,61 @@ void
 mqtt_stop(void)
 {
   esp_mqtt_client_stop(g_mqtt_client);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// mqtt_task
+//
+
+void
+mqtt_task(void *pvParameters)
+{
+  //int cnt = 0;
+  char buf_msg[MQTT_SUBST_BUF_LEN];
+  char buf_topic[MQTT_SUBST_BUF_LEN];
+  twai_message_t rxmsg = {};
+
+  ESP_LOGI(TAG, "MQTT task started");
+
+  while (1) {
+    //cnt++;
+    //sprintf(buf, "Hello MQTT %d", cnt);
+    long status = xQueueReceive(tr_mqtt.fromcan_queue, (void *) &rxmsg, 500);
+
+    if (status == pdPASS) {
+      ESP_LOGI(TAG, "Received message from CAN queue: ID=0x%X DLC=%d", rxmsg.identifier, rxmsg.data_length_code);
+    }
+
+    // Create a VSCP event from the received CAN message 
+    vscpEvent *pev;
+    if ( VSCP_ERROR_SUCCESS != can4vscp_msg_to_event(&pev, &rxmsg)) {
+      ESP_LOGE(TAG, "Failed to convert CAN message to VSCP event");
+      vscp_fwhlp_deleteEvent(&pev);
+      continue;
+    }
+
+    // Create JSON representaion of the VSCP event for MQTT payload
+    if ( VSCP_ERROR_SUCCESS != vscp_fwhlp_create_json(buf_msg, sizeof(buf_msg), pev)) {
+      ESP_LOGE(TAG, "Failed to convert VSCP event to JSON");
+      vscp_fwhlp_deleteEvent(&pev);
+      continue;
+    }
+
+    // Create the dynamic topic name by substituting template tags with event values
+    if ( VSCP_ERROR_SUCCESS != mqtt_topic_subst(buf_topic, sizeof(buf_topic), g_persistent.mqttPub, pev)) {
+      ESP_LOGE(TAG, "Failed to substitute MQTT topic");
+      continue;
+    }
+
+    // Event not needed anymore, free it before topic substitution
+    vscp_fwhlp_deleteEvent(&pev);
+
+    int msgid =
+    esp_mqtt_client_publish(g_mqtt_client, buf_topic, buf_msg, strlen(buf_msg), g_persistent.mqttQos, g_persistent.mqttRetain);
+
+    //vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+
+//CLEAN_UP:
+  vTaskDelete(NULL);
 }

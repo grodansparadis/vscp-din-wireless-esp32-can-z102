@@ -512,7 +512,7 @@ vscp_link_callback_retr(const void *pdata, vscpEvent **pev)
   ctx_t *pctx = (ctx_t *) pdata;
 
   // Check if there is a TWAI message in the receive queue
-  if (pdPASS != (rv = xQueueReceive(tr_tcpsrv[pctx->id].msg_queue, &msg, 100))) {
+  if (pdPASS != (rv = xQueueReceive(tr_tcpsrv[pctx->id].fromcan_queue, &msg, 100))) {
     return VSCP_ERROR_RCV_EMPTY;
   }
 
@@ -542,13 +542,13 @@ vscp_link_callback_retr(const void *pdata, vscpEvent **pev)
     memcpy((*pev)->pdata, msg.data, msg.data_length_code);
   }
 
-  ESP_LOGI(TAG, "--> Event fetched %X", (unsigned int) msg.identifier);
+  ESP_LOGV(TAG, "--> Event fetched %X", (unsigned int) msg.identifier);
 
-  UBaseType_t cnt = uxQueueMessagesWaiting(tr_tcpsrv[pctx->id].msg_queue);
-  ESP_LOGI(TAG, "count=%u %d", cnt, rv);
+  UBaseType_t cnt = uxQueueMessagesWaiting(tr_tcpsrv[pctx->id].fromcan_queue);
+  ESP_LOGV(TAG, "count=%u %d", cnt, rv);
 
   (*pev)->head       = (msg.identifier >> (26 - 5)) & 0x00e0;
-  (*pev)->timestamp  = esp_timer_get_time();
+  (*pev)->timestamp  = esp_timer_get_time();  // Microseconds since boot
   (*pev)->vscp_class = (msg.identifier >> 16) & 0x1ff;
   (*pev)->vscp_type  = (msg.identifier >> 8) & 0xff;
 
@@ -556,6 +556,7 @@ vscp_link_callback_retr(const void *pdata, vscpEvent **pev)
   memcpy((*pev)->GUID, g_persistent.guid, 16);
 
   // Set nickname
+  (*pev)->GUID[14] = 0x00; // MSB of Node ID is never used for CAN4VSCP
   (*pev)->GUID[15] = msg.identifier & 0xff;
   (*pev)->sizeData = msg.data_length_code;
   // Copy in data if any
@@ -567,6 +568,9 @@ vscp_link_callback_retr(const void *pdata, vscpEvent **pev)
   (*pev)->year = (*pev)->month = (*pev)->day = (*pev)->hour = (*pev)->minute = (*pev)->second = 0;
 
   if (!vscp_fwhlp_doLevel2Filter(*pev, &pctx->filter)) {
+    free((*pev)->pdata);
+    free(*pev);
+    *pev = NULL;
     return VSCP_ERROR_SUCCESS; // Filter out == OK
   }
 
@@ -635,7 +639,7 @@ vscp_link_callback_chkData(const void *pdata, uint16_t *pcount)
   ctx_t *pctx = (ctx_t *) pdata;
 
   //*pcount     = TRANSMIT_FIFO_SIZE - vscp_fifo_getFree(&pctx->fifoEventsOut);
-  *pcount = uxQueueMessagesWaiting(tr_tcpsrv[pctx->id].msg_queue);
+  *pcount = uxQueueMessagesWaiting(tr_tcpsrv[pctx->id].fromcan_queue);
 
   return VSCP_ERROR_SUCCESS;
 }
@@ -654,7 +658,7 @@ vscp_link_callback_clrAll(const void *pdata)
   // Get pointer to context
   ctx_t *pctx = (ctx_t *) pdata;
 
-  xQueueReset(tr_tcpsrv[pctx->id].msg_queue);
+  xQueueReset(tr_tcpsrv[pctx->id].fromcan_queue);
 
   return VSCP_ERROR_SUCCESS;
 }

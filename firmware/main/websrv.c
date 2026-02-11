@@ -2366,7 +2366,7 @@ config_mqtt_get_handler(httpd_req_t *req)
   sprintf(buf, "%s><label for=\"lr\"> Enable</label>", g_persistent.enableMqtt ? "checked" : "");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "<br><br>Host:<input type=\"text\" name=\"url\" value=\"%s\" >", g_persistent.mqttUrl);
+  sprintf(buf, "<br><br>Host: (without mqtt:// or other prefix)<input type=\"text\" name=\"url\" value=\"%s\" >", g_persistent.mqttUrl);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, "Port:<input type=\"text\" name=\"port\" value=\"%d\" >", g_persistent.mqttPort);

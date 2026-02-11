@@ -31,20 +31,23 @@
 #include "driver/gpio.h"
 #include "driver/twai.h"
 
-#include "esp_event.h"
-#include "esp_log.h"
-#include "esp_system.h"
-#include "esp_wifi.h"
+#include <esp_timer.h>
+#include <esp_event.h>
+#include <esp_log.h>
+#include <esp_system.h>
+#include <esp_wifi.h>
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/event_groups.h"
-#include "freertos/queue.h"
-#include "freertos/task.h"
-#include "freertos/semphr.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/event_groups.h>
+#include <freertos/queue.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
 
-#include "nvs_flash.h"
+#include <nvs_flash.h>
+#include <lwip/sockets.h>
 
-#include "lwip/sockets.h"
+#include <vscp-firmware-helper.h>
+
 #include "main.h"
 #include "can4vscp.h"
 
@@ -55,8 +58,6 @@ static EventGroupHandle_t s_can4vscp_event_group;
 
 extern SemaphoreHandle_t ctrl_task_sem;
 // extern QueueHandle_t xmsg_Rx_Queue;
-
-
 
 // Global stuff
 extern node_persistent_config_t g_persistent;
@@ -111,6 +112,57 @@ static const twai_general_config_t g_config_silent =
   TWAI_GENERAL_CONFIG_DEFAULT(TWAI_TX_GPIO_NUM, TWAI_RX_GPIO_NUM, TWAI_MODE_LISTEN_ONLY);
 
 static twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+
+///////////////////////////////////////////////////////////////////////////////
+// can4vscp_msg_to_ev
+//
+// time data and obid is zeroed by calloc
+//
+
+int
+can4vscp_msg_to_event(vscpEvent **pev, const twai_message_t *msg)
+{   
+  if ((NULL == pev) || (NULL == msg)) {
+    return VSCP_ERROR_INVALID_POINTER;
+  }
+
+  // Allocate a new event
+  *pev = (vscpEvent *) calloc(1, sizeof(vscpEvent));
+  if (NULL == *pev) {
+    return VSCP_ERROR_MEMORY;
+  }
+
+  // Allocate data if the message has data
+  if (msg->data_length_code) {
+    (*pev)->pdata = (uint8_t *) calloc(1,msg->data_length_code);
+    if (NULL == (*pev)->pdata) {
+      vscp_fwhlp_deleteEvent(pev);
+      return VSCP_ERROR_MEMORY;
+    }
+    // Copy in data
+    (*pev)->sizeData = msg->data_length_code;
+    memcpy((*pev)->pdata, msg->data, msg->data_length_code);
+  }
+
+  (*pev)->head       = (msg->identifier >> (26 - 5)) & 0x00e0;
+  (*pev)->timestamp  = esp_timer_get_time(); // Microseconds since boot
+  (*pev)->vscp_class = (msg->identifier >> 16) & 0x1ff;
+  (*pev)->vscp_type  = (msg->identifier >> 8) & 0xff;
+
+  // GUID
+  memcpy((*pev)->GUID, g_persistent.guid, 16);
+
+  // Set nickname
+  (*pev)->GUID[14] = 0x00; // MSB of Node ID is never used for CAN4VSCP
+  (*pev)->GUID[15] = msg->identifier & 0xff;
+  (*pev)->sizeData = msg->data_length_code;
+  // Copy in data if any
+  if (msg->data_length_code) {
+    memcpy((*pev)->pdata, msg->data, msg->data_length_code);
+  }
+
+  return VSCP_ERROR_SUCCESS;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // can4vscp_block
@@ -417,10 +469,12 @@ twai_receive_task(void *arg)
           // Send to all open tcp/ip link clients
           for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
             // If not open take next
-            if (!tr_tcpsrv[i].open)
+            if (!tr_tcpsrv[i].open) {
               continue;
+            }
+            ESP_LOGV(TAG, "Add incoming CAN message to VSCP link out queue %d", i);
             // Put message in queue for task to handle
-            if (pdPASS != (rv = xQueueSendToBack(tr_tcpsrv[i].msg_queue, (void *) &rxmsg, (TickType_t) 10))) {
+            if (pdPASS != (rv = xQueueSendToBack(tr_tcpsrv[i].fromcan_queue, (void *) &rxmsg, (TickType_t) 10))) {
               tr_tcpsrv[i].overruns++;
               ESP_LOGD(TAG, "VSCP link protocol buffer full: Failed to save message to queue");
             }
@@ -429,7 +483,8 @@ twai_receive_task(void *arg)
 
         // MQTT
         if (g_persistent.enableMqtt) {
-          if (pdPASS != (rv = xQueueSendToBack(tr_mqtt.msg_queue, (void *) &rxmsg, (TickType_t) 10))) {
+          ESP_LOGV(TAG, "Add incoming CAN message to MQTT out queue");
+          if (pdPASS != (rv = xQueueSendToBack(tr_mqtt.fromcan_queue, (void *) &rxmsg, (TickType_t) 10))) {
             tr_mqtt.overruns++;
             ESP_LOGD(TAG, "MQTT buffer full: Failed to save message to queue");
           }
@@ -437,7 +492,8 @@ twai_receive_task(void *arg)
 
         // Multicast
         if (g_persistent.enableMulticast) {
-          if (pdPASS != (rv = xQueueSendToBack(tr_multicast.msg_queue, (void *) &rxmsg, (TickType_t) 10))) {
+          ESP_LOGV(TAG, "Add incoming CAN message to Multicast out queue");
+          if (pdPASS != (rv = xQueueSendToBack(tr_multicast.fromcan_queue, (void *) &rxmsg, (TickType_t) 10))) {
             tr_multicast.overruns++;
             ESP_LOGD(TAG, "Multicast buffer full: Failed to save message to queue");
           }
@@ -445,7 +501,8 @@ twai_receive_task(void *arg)
 
         // UDP
         if (g_persistent.enableUdpTx) {
-          if (pdPASS != (rv = xQueueSendToBack(tr_udp.msg_queue, (void *) &rxmsg, (TickType_t) 10))) {
+          ESP_LOGV(TAG, "Add incoming CAN message to UDP out queue");
+          if (pdPASS != (rv = xQueueSendToBack(tr_udp.fromcan_queue, (void *) &rxmsg, (TickType_t) 10))) {
             tr_udp.overruns++;
             ESP_LOGD(TAG, "UDP buffer full: Failed to save message to queue");
           }
@@ -453,7 +510,8 @@ twai_receive_task(void *arg)
 
         // Websockets
         if (g_persistent.enableWebsock) {
-          if (pdPASS != (rv = xQueueSendToBack(tr_websockets.msg_queue, (void *) &rxmsg, (TickType_t) 10))) {
+          ESP_LOGV(TAG, "Add incoming CAN message to Websocket out queue");
+          if (pdPASS != (rv = xQueueSendToBack(tr_websockets.fromcan_queue, (void *) &rxmsg, (TickType_t) 10))) {
             tr_websockets.overruns++;
             ESP_LOGD(TAG, "Websocket buffer full: Failed to save message to queue");
           }
@@ -479,8 +537,9 @@ twai_recover_stopped_check(void)
 {
   while (true) {
     twai_status_info_t info;
-    if (twai_get_status_info(&info) != ESP_OK)
+    if (twai_get_status_info(&info) != ESP_OK) {
       return;
+    }
     if (info.state == TWAI_STATE_STOPPED) {
       ESP_LOGW(TAG, "TWAI in stopped state, attempting recovery...");
       twai_stop();

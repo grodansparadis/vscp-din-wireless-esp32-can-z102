@@ -266,7 +266,8 @@ client_task(void *pvParameters)
   tr_tcpsrv[ctx.id].open = false;
 
   // Empty the queue
-  xQueueReset(tr_tcpsrv[ctx.id].msg_queue);
+  xQueueReset(tr_tcpsrv[ctx.id].tocan_queue);
+  xQueueReset(tr_tcpsrv[ctx.id].fromcan_queue);
 
   ESP_LOGI(TAG, "Closing down tcp/ip client");
 

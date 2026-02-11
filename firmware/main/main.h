@@ -119,8 +119,9 @@ typedef struct {
     };
     uint32_t flags; /**< Don't use */
   };
-  QueueHandle_t msg_queue; /**< Message queue for transport */
-  uint32_t overruns;       /**< Queue overrun counter */
+  QueueHandle_t tocan_queue;   /**< RX message queue for transport --> To CAN bus */
+  QueueHandle_t fromcan_queue; /**< TX message queue for transport --> From CAN bus */
+  uint32_t overruns;           /**< Queue overrun counter */
 
 } transport_t;
 
@@ -245,7 +246,7 @@ typedef struct {
   uint32_t nRecv;     // Number of received messages (not editable)
   uint32_t nErr;      // Number of errors (not editable)
   uint32_t lastError; // Last error code (not editable)
-  uint32_t canFilter;    // CAN filter for incoming data
+  uint32_t canFilter; // CAN filter for incoming data
 
   // Log
   uint8_t logType;         // Log type
@@ -253,13 +254,13 @@ typedef struct {
   uint8_t logRetries;      // Number of retries for log message send
   uint16_t logPort;        // Log server port
   char logUrl[80];         // Log server address
-  char logMqttTopic[80];   // MQTT topic for log messages
+  char logMqttTopic[128];  // MQTT topic for log messages
   uint8_t logwrite2Stdout; // Write log to stdout
 
   // WiFi configuration
-  char wifiPrimarySsid[33];     // Primary WiFi SSID
-  char wifiPrimaryPassword[65]; // Primary WiFi Password
-  char wifiSecondarySsid[33];   // Secondary WiFi SSID (fallback)
+  char wifiPrimarySsid[33];       // Primary WiFi SSID
+  char wifiPrimaryPassword[65];   // Primary WiFi Password
+  char wifiSecondarySsid[33];     // Secondary WiFi SSID (fallback)
   char wifiSecondaryPassword[65]; // Secondary WiFi Password (fallback)
 
   // web server
@@ -274,17 +275,17 @@ typedef struct {
   char vscplinkPw[32];    // VSCP link protocol password
 
   // MQTT
-  uint8_t enableMqtt;    // Enable MQTT
-  uint8_t enableMqttTls; // Enable MQTT TLS
-  char mqttUrl[80];      // MQTT URL
-  uint16_t mqttPort;     // MQTT port
-  char mqttUser[32];     // MQTT username
-  char mqttPw[32];       // MQTT password
-  char mqttPub[80];      // MQTT publish topic
-  char mqttSub[80];      // MQTT subscribe topic
-  char mqttPubLog[80];   // MQTT topic for log messages
-  char mqttClientId[32]; // MQTT client ID
-  char mqttCaCert[1024]; // MQTT CA Certificate (PEM format)
+  uint8_t enableMqtt;        // Enable MQTT
+  uint8_t enableMqttTls;     // Enable MQTT TLS
+  char mqttUrl[80];          // MQTT URL
+  uint16_t mqttPort;         // MQTT port
+  char mqttUser[32];         // MQTT username
+  char mqttPw[32];           // MQTT password
+  char mqttPub[128];         // MQTT publish topic
+  char mqttSub[128];         // MQTT subscribe topic
+  char mqttPubLog[128];      // MQTT topic for log messages
+  char mqttClientId[32];     // MQTT client ID
+  char mqttCaCert[1024];     // MQTT CA Certificate (PEM format)
   char mqttClientCert[1024]; // MQTT Client Certificate (PEM format)
   char mqttClientKey[1024];  // MQTT Client Private Key (PEM format)
   uint8_t mqttQos;           // MQTT Quality of Service (0, 1, or 2)

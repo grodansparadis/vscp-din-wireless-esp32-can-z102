@@ -55,6 +55,22 @@ typedef struct {
 
 
 /*!
+  * @brief Translate CAN4VSCP messge to VSCP event
+  * @param pev Pointer to pointer to event that will be allocated and filled with data from message
+  * @param msg Pointer to CAN message to translate
+  * @return VSCP_ERROR_SUCCESS if all is OK else error code.
+  * 
+  * The calling function is responsible for freeing the allocated event and its data. 
+  * free(*pev->pdata); free(*pev);
+  * Data is allocated and filled if the message has data.
+  * The event is then filtered using the level 2 filter, and if it passes, it is returned to the caller.
+  * If the message is filtered out, the allocated event is freed and VSCP_ERROR_SUCCESS is returned.
+*/
+int
+can4vscp_msg_to_event(vscpEvent **pev, const twai_message_t *msg);
+
+
+/*!
   @fn can4vscp_block
   @brief Block transmission/reception
 */
@@ -201,8 +217,9 @@ uint32_t can4vscp_getRxMsgCount(void);
 
 /*!
   Task that handle receive of messages and fills the 
-  rx buffer. The message broker task is informed about
-  the received message so it is sent to all other tasks
+  rx buffers for different transports. The message broker 
+  task is informed about the received message so it is sent 
+  to all other tasks
   @param arg CAN4VSCP context
 */
 void twai_receive_task(void *arg);
