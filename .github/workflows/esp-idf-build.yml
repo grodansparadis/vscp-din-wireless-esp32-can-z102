@@ -1,0 +1,127 @@
+name: ESP-IDF Build
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-firmware:
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:release-v5.5
+    defaults:
+      run:
+        shell: bash
+        working-directory: firmware
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build firmware (ESP32-C3)
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py set-target esp32c3
+          idf.py build
+
+      - name: Upload firmware build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-build-artifacts
+          path: |
+            firmware/build/*.bin
+            firmware/build/*.elf
+            firmware/build/*.map
+            firmware/build/bootloader/*.bin
+            firmware/build/partition_table/*.bin
+          if-no-files-found: warn
+
+  build-twai-network-master:
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:release-v5.5
+    defaults:
+      run:
+        shell: bash
+        working-directory: firmware/twai_network_master
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build twai_network_master (ESP32-C3)
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py set-target esp32c3
+          idf.py build
+
+      - name: Upload twai_network_master artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: twai-network-master-build-artifacts
+          path: |
+            firmware/twai_network_master/build/*.bin
+            firmware/twai_network_master/build/*.elf
+            firmware/twai_network_master/build/*.map
+          if-no-files-found: warn
+
+  build-twai-network-slave:
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:release-v5.5
+    defaults:
+      run:
+        shell: bash
+        working-directory: firmware/twai_network_slave
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build twai_network_slave (ESP32-C3)
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py set-target esp32c3
+          idf.py build
+
+      - name: Upload twai_network_slave artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: twai-network-slave-build-artifacts
+          path: |
+            firmware/twai_network_slave/build/*.bin
+            firmware/twai_network_slave/build/*.elf
+            firmware/twai_network_slave/build/*.map
+          if-no-files-found: warn
+
+  build-twai-network-listen-only:
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:release-v5.5
+    defaults:
+      run:
+        shell: bash
+        working-directory: firmware/twai_network_listen_only
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build twai_network_listen_only (ESP32-C3)
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py set-target esp32c3
+          idf.py build
+
+      - name: Upload twai_network_listen_only artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: twai-network-listen-only-build-artifacts
+          path: |
+            firmware/twai_network_listen_only/build/*.bin
+            firmware/twai_network_listen_only/build/*.elf
+            firmware/twai_network_listen_only/build/*.map
+          if-no-files-found: warn
