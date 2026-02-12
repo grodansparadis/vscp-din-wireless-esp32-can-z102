@@ -281,9 +281,9 @@ typedef struct {
   uint16_t mqttPort;         // MQTT port
   char mqttUser[32];         // MQTT username
   char mqttPw[32];           // MQTT password
-  char mqttPub[128];         // MQTT publish topic
-  char mqttSub[128];         // MQTT subscribe topic
-  char mqttPubLog[128];      // MQTT topic for log messages
+  char mqttPubTopic[128];    // MQTT publish topic
+  char mqttSubTopic[128];    // MQTT subscribe topic
+  char mqttPubLogTopic[128]; // MQTT topic for log messages
   char mqttClientId[32];     // MQTT client ID
   char mqttCaCert[1024];     // MQTT CA Certificate (PEM format)
   char mqttClientCert[1024]; // MQTT Client Certificate (PEM format)

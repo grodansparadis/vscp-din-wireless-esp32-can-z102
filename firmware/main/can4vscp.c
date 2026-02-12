@@ -29,7 +29,8 @@
 #include "vscp-projdefs.h"
 
 #include "driver/gpio.h"
-#include "driver/twai.h"
+#include "esp_twai.h"
+#include "esp_twai_onchip.h"
 
 #include <esp_timer.h>
 #include <esp_event.h>
@@ -71,19 +72,10 @@ extern transport_t tr_websockets;
 
 #define TAG __func__
 enum bus_state { OFF_BUS, ON_BUS };
-static const twai_timing_config_t can4vscp_timing_config[] = {
-  { .brp = 800, .tseg_1 = 15, .tseg_2 = 4, .sjw = 3, .triple_sampling = false },
-  { .brp = 400, .tseg_1 = 15, .tseg_2 = 4, .sjw = 3, .triple_sampling = false },
-  { .brp = 200, .tseg_1 = 15, .tseg_2 = 4, .sjw = 3, .triple_sampling = false },
-  { .brp = 128, .tseg_1 = 16, .tseg_2 = 8, .sjw = 3, .triple_sampling = false },
-  { .brp = 80, .tseg_1 = 15, .tseg_2 = 4, .sjw = 3, .triple_sampling = false },
-  { .brp = 40, .tseg_1 = 15, .tseg_2 = 4, .sjw = 3, .triple_sampling = false },
-  { .brp = 32, .tseg_1 = 15, .tseg_2 = 4, .sjw = 3, .triple_sampling = false },
-  { .brp = 16, .tseg_1 = 15, .tseg_2 = 4, .sjw = 3, .triple_sampling = false },
-  { .brp = 8, .tseg_1 = 15, .tseg_2 = 4, .sjw = 3, .triple_sampling = false },
-  { .brp = 4, .tseg_1 = 16, .tseg_2 = 8, .sjw = 3, .triple_sampling = false },
-  { .brp = 4, .tseg_1 = 15, .tseg_2 = 4, .sjw = 3, .triple_sampling = false }
-};
+
+static twai_node_handle_t s_twai_node  = NULL;
+static QueueHandle_t s_twai_rx_queue   = NULL;
+static volatile uint32_t s_rx_overruns = 0;
 
 // temperature_sensor_handle_t temp_handle = NULL;
 
@@ -93,25 +85,75 @@ static TimerHandle_t xCAN4VSCP_EN_Timer;
 static uint8_t datarate = CAN4VSCP_125K;
 static can4vscp_cfg_t can4vscp_cfg;
 
-#define TWAI_CONFIG(tx_io_num, rx_io_num, op_mode)                                                                     \
-  { .mode           = op_mode,                                                                                         \
-    .tx_io          = tx_io_num,                                                                                       \
-    .rx_io          = rx_io_num,                                                                                       \
-    .clkout_io      = TWAI_IO_UNUSED,                                                                                  \
-    .bus_off_io     = TWAI_IO_UNUSED,                                                                                  \
-    .tx_queue_len   = 100,                                                                                             \
-    .rx_queue_len   = 100,                                                                                             \
-    .alerts_enabled = TWAI_ALERT_NONE,                                                                                 \
-    .clkout_divider = 0,                                                                                               \
-    .intr_flags     = ESP_INTR_FLAG_LEVEL1 }
+#define CAN4VSCP_TWAI_TX_QUEUE_DEPTH 100
+#define CAN4VSCP_TWAI_RX_QUEUE_DEPTH 100
 
-static const twai_general_config_t g_config_normal =
-  TWAI_GENERAL_CONFIG_DEFAULT(TWAI_TX_GPIO_NUM, TWAI_RX_GPIO_NUM, TWAI_MODE_NORMAL);
+static uint32_t
+can4vscp_bitrate_from_code(uint8_t rate)
+{
+  switch (rate) {
+    case CAN4VSCP_5K:
+      return 5000;
+    case CAN4VSCP_10K:
+      return 10000;
+    case CAN4VSCP_20K:
+      return 20000;
+    case CAN4VSCP_25K:
+      return 25000;
+    case CAN4VSCP_50K:
+      return 50000;
+    case CAN4VSCP_100K:
+      return 100000;
+    case CAN4VSCP_125K:
+      return 125000;
+    case CAN4VSCP_250K:
+      return 250000;
+    case CAN4VSCP_500K:
+      return 500000;
+    case CAN4VSCP_800K:
+      return 800000;
+    case CAN4VSCP_1000K:
+      return 1000000;
+    default:
+      return 125000;
+  }
+}
 
-static const twai_general_config_t g_config_silent =
-  TWAI_GENERAL_CONFIG_DEFAULT(TWAI_TX_GPIO_NUM, TWAI_RX_GPIO_NUM, TWAI_MODE_LISTEN_ONLY);
+static bool IRAM_ATTR
+can4vscp_rx_done_cb(twai_node_handle_t handle, const twai_rx_done_event_data_t *edata, void *user_ctx)
+{
+  (void) edata;
+  (void) user_ctx;
 
-static twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+  uint8_t data[TWAI_FRAME_MAX_LEN] = { 0 };
+  twai_frame_t rx_frame            = {
+               .buffer     = data,
+               .buffer_len = sizeof(data),
+  };
+
+  if (ESP_OK != twai_node_receive_from_isr(handle, &rx_frame)) {
+    return false;
+  }
+
+  can4vscp_frame_t frame = { 0 };
+  frame.identifier       = rx_frame.header.id;
+  frame.extd             = rx_frame.header.ide;
+  frame.rtr              = rx_frame.header.rtr;
+
+  size_t len             = MIN((size_t) twaifd_dlc2len(rx_frame.header.dlc), sizeof(frame.data));
+  frame.data_length_code = len;
+  if (len) {
+    memcpy(frame.data, data, len);
+  }
+
+  BaseType_t task_woken = pdFALSE;
+  if ((NULL == s_twai_rx_queue) ||
+      (pdPASS != xQueueSendToBackFromISR(s_twai_rx_queue, &frame, &task_woken))) {
+    s_rx_overruns++;
+  }
+
+  return (task_woken == pdTRUE);
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // can4vscp_msg_to_ev
@@ -120,7 +162,7 @@ static twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
 //
 
 int
-can4vscp_msg_to_event(vscpEvent **pev, const twai_message_t *msg)
+can4vscp_msg_to_event(vscpEvent **pev, const can4vscp_frame_t *msg)
 {   
   if ((NULL == pev) || (NULL == msg)) {
     return VSCP_ERROR_INVALID_POINTER;
@@ -217,27 +259,66 @@ can4vscp_enable(void)
     return;
   }
 
-  twai_timing_config_t *t_config;
-  t_config                 = (twai_timing_config_t *) &can4vscp_timing_config[datarate];
-  f_config.acceptance_code = 0;
-  f_config.acceptance_mask = 0xFFFFFFFF;
+  twai_onchip_node_config_t node_config = {
+    .io_cfg = {
+               .tx                = TWAI_TX_GPIO_NUM,
+               .rx                = TWAI_RX_GPIO_NUM,
+               .quanta_clk_out    = GPIO_NUM_NC,
+               .bus_off_indicator = GPIO_NUM_NC,
+    },
+    .bit_timing = {
+                   .bitrate = can4vscp_bitrate_from_code(datarate),
+    },
+    .tx_queue_depth = CAN4VSCP_TWAI_TX_QUEUE_DEPTH,
+    .fail_retry_cnt = -1,
+  };
 
-  //	f_config.acceptance_code = can4vscp_cfg.filter;
-  //	f_config.acceptance_mask = can4vscp_cfg.mask;
-  f_config.single_filter = 1;
+  node_config.flags.enable_listen_only = can4vscp_cfg.silent ? 1 : 0;
+  node_config.flags.enable_loopback    = can4vscp_cfg.loopback ? 1 : 0;
 
-  if (can4vscp_cfg.silent) {
-    ESP_ERROR_CHECK(twai_driver_install(&g_config_silent, (const twai_timing_config_t *) t_config, &f_config));
+  if (ESP_OK != twai_new_node_onchip(&node_config, &s_twai_node)) {
+    ESP_LOGE(TAG, "Failed to create TWAI node");
+    return;
   }
-  else {
-    ESP_ERROR_CHECK(twai_driver_install(&g_config_normal, (const twai_timing_config_t *) t_config, &f_config));
+
+  twai_event_callbacks_t cbs = {
+    .on_rx_done = can4vscp_rx_done_cb,
+  };
+
+  if (ESP_OK != twai_node_register_event_callbacks(s_twai_node, &cbs, NULL)) {
+    ESP_LOGE(TAG, "Failed to register TWAI callbacks");
+    twai_node_delete(s_twai_node);
+    s_twai_node = NULL;
+    return;
   }
 
-  ESP_ERROR_CHECK(twai_start());
-  twai_clear_receive_queue();
+  // Accept all classic extended frames by default
+  twai_mask_filter_config_t filter_cfg = {
+    .id         = 0,
+    .mask       = 0,
+    .is_ext     = true,
+    .no_classic = false,
+    .no_fd      = true,
+    .dual_filter = false,
+  };
+  if (ESP_OK != twai_node_config_mask_filter(s_twai_node, 0, &filter_cfg)) {
+    ESP_LOGW(TAG, "Failed to apply TWAI filter config, continuing with defaults");
+  }
+
+  if (ESP_OK != twai_node_enable(s_twai_node)) {
+    ESP_LOGE(TAG, "Failed to enable TWAI node");
+    twai_node_delete(s_twai_node);
+    s_twai_node = NULL;
+    return;
+  }
+
+  if (NULL != s_twai_rx_queue) {
+    xQueueReset(s_twai_rx_queue);
+  }
+
   can4vscp_unblock();
   can4vscp_cfg.bus_state = ON_BUS;
-  ESP_LOGI(TAG, "TWAI driver installed");
+  ESP_LOGI(TAG, "TWAI node enabled");
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -253,8 +334,14 @@ can4vscp_disable(void)
   }
 
   can4vscp_block();
-  ESP_ERROR_CHECK(twai_stop());
-  ESP_ERROR_CHECK(twai_driver_uninstall());
+  if (NULL != s_twai_node) {
+    twai_node_disable(s_twai_node);
+    twai_node_delete(s_twai_node);
+    s_twai_node = NULL;
+  }
+  if (NULL != s_twai_rx_queue) {
+    xQueueReset(s_twai_rx_queue);
+  }
   can4vscp_cfg.bus_state = OFF_BUS;
 }
 
@@ -390,6 +477,12 @@ can4vscp_init(uint8_t bitrate)
 
   // ESP_ERROR_CHECK(temperature_sensor_enable(temp_handle));
 
+  datarate = bitrate;
+
+  if (NULL == s_twai_rx_queue) {
+    s_twai_rx_queue = xQueueCreate(CAN4VSCP_TWAI_RX_QUEUE_DEPTH, sizeof(can4vscp_frame_t));
+  }
+
   s_can4vscp_event_group = xEventGroupCreate();
   xCAN4VSCP_EN_Timer     = xTimerCreate(
     // Just a text name, not used by the RTOS kernel.
@@ -431,9 +524,61 @@ can4vscp_isEnabled(void)
 uint32_t
 can4vscp_getRxMsgCount(void)
 {
-  twai_status_info_t status_info;
-  twai_get_status_info(&status_info);
-  return status_info.msgs_to_rx;
+  if (NULL == s_twai_rx_queue) {
+    return 0;
+  }
+
+  return (uint32_t) uxQueueMessagesWaiting(s_twai_rx_queue);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// can4vscp_receive
+//
+
+esp_err_t
+can4vscp_receive(can4vscp_frame_t *message, TickType_t ticks_to_wait)
+{
+  if ((NULL == message) || (NULL == s_twai_rx_queue)) {
+    return ESP_ERR_INVALID_ARG;
+  }
+
+  if (pdPASS == xQueueReceive(s_twai_rx_queue, message, ticks_to_wait)) {
+    return ESP_OK;
+  }
+
+  return ESP_ERR_TIMEOUT;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// can4vscp_send
+//
+
+esp_err_t
+can4vscp_send(can4vscp_frame_t *message, TickType_t ticks_to_wait)
+{
+  if ((NULL == message) || (NULL == s_twai_node)) {
+    return ESP_ERR_INVALID_ARG;
+  }
+
+  uint8_t tx_data[TWAI_FRAME_MAX_LEN] = { 0 };
+  size_t len                          = MIN((size_t) message->data_length_code, sizeof(tx_data));
+  if (len > 0) {
+    memcpy(tx_data, message->data, len);
+  }
+
+  twai_frame_t tx_frame = {
+    .header = {
+               .id  = message->identifier,
+               .ide = message->extd,
+               .rtr = message->rtr,
+               .dlc = len,
+    },
+    .buffer = tx_data,
+    .buffer_len = len,
+  };
+
+  int timeout_ms = (ticks_to_wait == portMAX_DELAY) ? -1 : (int) (ticks_to_wait * portTICK_PERIOD_MS);
+  return twai_node_transmit(s_twai_node, &tx_frame, timeout_ms);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -453,9 +598,9 @@ twai_receive_task(void *arg)
 
   while (1) {
 
-    twai_message_t rxmsg = {};
+    can4vscp_frame_t rxmsg = {};
 
-    if (ESP_OK == (rv = twai_receive(&rxmsg, portMAX_DELAY))) {
+    if (ESP_OK == (rv = can4vscp_receive(&rxmsg, portMAX_DELAY))) {
 
       ESP_LOGI(TAG, "TWAI msg received id= %X", (unsigned int) rxmsg.identifier);
 
@@ -536,14 +681,20 @@ void
 twai_recover_stopped_check(void)
 {
   while (true) {
-    twai_status_info_t info;
-    if (twai_get_status_info(&info) != ESP_OK) {
-      return;
+    if (NULL == s_twai_node) {
+      vTaskDelay(200);
+      continue;
     }
-    if (info.state == TWAI_STATE_STOPPED) {
-      ESP_LOGW(TAG, "TWAI in stopped state, attempting recovery...");
-      twai_stop();
-      twai_start();
+
+    twai_node_status_t info = { 0 };
+    if (ESP_OK != twai_node_get_info(s_twai_node, &info, NULL)) {
+      vTaskDelay(200);
+      continue;
+    }
+
+    if (info.state == TWAI_ERROR_BUS_OFF) {
+      ESP_LOGW(TAG, "TWAI in bus-off state, attempting recovery...");
+      twai_node_recover(s_twai_node);
     }
     vTaskDelay(200);
   }

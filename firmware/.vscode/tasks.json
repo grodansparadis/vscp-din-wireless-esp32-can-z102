@@ -121,6 +121,39 @@
       },
       "command": "idf.py menuconfig",
       "problemMatcher": []
+    },
+    {
+      "label": "ESP32: Build twai_network_master",
+      "type": "shell",
+      "options": {
+        "cwd": "${workspaceRoot}"
+      },
+      "command": "export IDF_PATH=/home/akhe/development/esp/esp-idf && cd twai_network_master && /home/akhe/.espressif/python_env/idf5.5_py3.13_env/bin/python3 /home/akhe/development/esp/esp-idf/tools/idf.py --target esp32c3 build",
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "ESP32: Build twai_network_slave",
+      "type": "shell",
+      "options": {
+        "cwd": "${workspaceRoot}"
+      },
+      "command": "export IDF_PATH=/home/akhe/development/esp/esp-idf && cd twai_network_slave && /home/akhe/.espressif/python_env/idf5.5_py3.13_env/bin/python3 /home/akhe/development/esp/esp-idf/tools/idf.py --target esp32c3 build",
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "ESP32: Build twai_network_listen_only",
+      "type": "shell",
+      "options": {
+        "cwd": "${workspaceRoot}"
+      },
+      "command": "export IDF_PATH=/home/akhe/development/esp/esp-idf && cd twai_network_listen_only && /home/akhe/.espressif/python_env/idf5.5_py3.13_env/bin/python3 /home/akhe/development/esp/esp-idf/tools/idf.py --target esp32c3 build",
+      "problemMatcher": [
+        "$gcc"
+      ]
     }
   ],
   "version": "2.0.0"

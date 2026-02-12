@@ -8,9 +8,10 @@ TODO
 - Multicast support
 - UDP support
 - TLS support
+- Websocket support
 - Send heartbeat on all interfaces. (Multicast 9598)
 - VSCP Node scan on VSCP2CAN interface.
 - Buttons.  
 - LED functionality.
 
-
+Output pins - BUS_OFF (optional): Outputs a low logic level (0 V) when the TWAI controller enters the bus-off state. Otherwise, it remains at a high logic level (3.3 V).

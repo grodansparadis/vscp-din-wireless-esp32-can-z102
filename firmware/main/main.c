@@ -140,21 +140,21 @@ node_persistent_config_t g_persistent = {
   .vscplinkUser   = DEFAULT_VSCP_LINK_USER,
   .vscplinkPw     = DEFAULT_VSCP_LINK_PASSWORD,
 
-  .enableMqtt     = DEFAULT_MQTT_ENABLE,
-  .enableMqttTls  = DEFAULT_MQTT_TLS_ENABLE,
-  .mqttUrl        = DEFAULT_MQTT_URL,
-  .mqttPort       = DEFAULT_MQTT_PORT,
-  .mqttUser       = DEFAULT_MQTT_USER,
-  .mqttPw         = DEFAULT_MQTT_PASSWORD,
-  .mqttPub        = DEFAULT_MQTT_PUBLISH,
-  .mqttSub        = DEFAULT_MQTT_SUBSCRIBE,
-  .mqttPubLog     = DEFAULT_MQTT_LOG_PUBLISH_TOPIC, // Set in logging configuration
-  .mqttClientId   = DEFAULT_MQTT_CLIENT_ID,
-  .mqttCaCert     = DEFAULT_MQTT_CA_CERT,
-  .mqttClientCert = DEFAULT_MQTT_CLIENT_CERT,
-  .mqttClientKey  = DEFAULT_MQTT_CLIENT_KEY,
-  .mqttQos        = DEFAULT_MQTT_QOS,
-  .mqttRetain     = DEFAULT_MQTT_RETAIN,
+  .enableMqtt      = DEFAULT_MQTT_ENABLE,
+  .enableMqttTls   = DEFAULT_MQTT_TLS_ENABLE,
+  .mqttUrl         = DEFAULT_MQTT_URL,
+  .mqttPort        = DEFAULT_MQTT_PORT,
+  .mqttUser        = DEFAULT_MQTT_USER,
+  .mqttPw          = DEFAULT_MQTT_PASSWORD,
+  .mqttPubTopic    = DEFAULT_MQTT_PUBLISH,
+  .mqttSubTopic    = DEFAULT_MQTT_SUBSCRIBE,
+  .mqttPubLogTopic = DEFAULT_MQTT_LOG_PUBLISH_TOPIC, // Set in logging configuration
+  .mqttClientId    = DEFAULT_MQTT_CLIENT_ID,
+  .mqttCaCert      = DEFAULT_MQTT_CA_CERT,
+  .mqttClientCert  = DEFAULT_MQTT_CLIENT_CERT,
+  .mqttClientKey   = DEFAULT_MQTT_CLIENT_KEY,
+  .mqttQos         = DEFAULT_MQTT_QOS,
+  .mqttRetain      = DEFAULT_MQTT_RETAIN,
 
   // Multicast
   .enableMulticast = DEFAULT_MULTICAST_ENABLE,
@@ -627,9 +627,9 @@ initPersistentStorage(void)
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttUser", g_persistent.mqttUser, DEFAULT_MQTT_USER, TAG);
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttPw", g_persistent.mqttPw, DEFAULT_MQTT_PASSWORD, TAG);
 
-  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttPub", g_persistent.mqttPub, DEFAULT_MQTT_PUBLISH, TAG);
-  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttSub", g_persistent.mqttSub, DEFAULT_MQTT_SUBSCRIBE, TAG);
-  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttPubLog", g_persistent.mqttPubLog, DEFAULT_MQTT_LOG_PUBLISH_TOPIC, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttPubTopic", g_persistent.mqttPubTopic, DEFAULT_MQTT_PUBLISH, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttSubTopic", g_persistent.mqttSubTopic, DEFAULT_MQTT_SUBSCRIBE, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttPubLogTopic", g_persistent.mqttPubLogTopic, DEFAULT_MQTT_LOG_PUBLISH_TOPIC, TAG);
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttClientId", g_persistent.mqttClientId, DEFAULT_MQTT_CLIENT_ID, TAG);
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttCaCert", g_persistent.mqttCaCert, DEFAULT_MQTT_CA_CERT, TAG);
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttClientCert", g_persistent.mqttClientCert, DEFAULT_MQTT_CLIENT_CERT, TAG);
@@ -1321,24 +1321,24 @@ app_main(void)
    * - tr_udp: UDP unicast/broadcast transport queue
    * - tr_websockets: WebSocket transport queue
    */
-  tr_twai_rx = xQueueCreate(10, sizeof(twai_message_t)); // Incoming CAN messages  <-- from bus
-  tr_twai_tx = xQueueCreate(40, sizeof(twai_message_t)); // Outgoing CAN messages  --> to bus
+  tr_twai_rx = xQueueCreate(10, sizeof(can4vscp_frame_t)); // Incoming CAN messages  <-- from bus
+  tr_twai_tx = xQueueCreate(40, sizeof(can4vscp_frame_t)); // Outgoing CAN messages  --> to bus
 
   // Create message queues for each TCP connection
   for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
-    tr_tcpsrv[i].tocan_queue   = xQueueCreate(10, sizeof(twai_message_t));
-    tr_tcpsrv[i].fromcan_queue = xQueueCreate(10, sizeof(twai_message_t));
+    tr_tcpsrv[i].tocan_queue   = xQueueCreate(10, sizeof(can4vscp_frame_t));
+    tr_tcpsrv[i].fromcan_queue = xQueueCreate(10, sizeof(can4vscp_frame_t));
   }
 
   // Create message queues for network transports
-  tr_mqtt.tocan_queue         = xQueueCreate(10, sizeof(twai_message_t));
-  tr_mqtt.fromcan_queue       = xQueueCreate(10, sizeof(twai_message_t));
-  tr_multicast.tocan_queue    = xQueueCreate(10, sizeof(twai_message_t));
-  tr_multicast.fromcan_queue  = xQueueCreate(10, sizeof(twai_message_t));
-  tr_udp.tocan_queue          = xQueueCreate(10, sizeof(twai_message_t));
-  tr_udp.fromcan_queue        = xQueueCreate(10, sizeof(twai_message_t));
-  tr_websockets.tocan_queue   = xQueueCreate(10, sizeof(twai_message_t));
-  tr_websockets.fromcan_queue = xQueueCreate(10, sizeof(twai_message_t));
+  tr_mqtt.tocan_queue         = xQueueCreate(10, sizeof(can4vscp_frame_t));
+  tr_mqtt.fromcan_queue       = xQueueCreate(10, sizeof(can4vscp_frame_t));
+  tr_multicast.tocan_queue    = xQueueCreate(10, sizeof(can4vscp_frame_t));
+  tr_multicast.fromcan_queue  = xQueueCreate(10, sizeof(can4vscp_frame_t));
+  tr_udp.tocan_queue          = xQueueCreate(10, sizeof(can4vscp_frame_t));
+  tr_udp.fromcan_queue        = xQueueCreate(10, sizeof(can4vscp_frame_t));
+  tr_websockets.tocan_queue   = xQueueCreate(10, sizeof(can4vscp_frame_t));
+  tr_websockets.fromcan_queue = xQueueCreate(10, sizeof(can4vscp_frame_t));
 
   // Create control semaphore for main task synchronization
   ctrl_task_sem = xSemaphoreCreateBinary();
@@ -1628,8 +1628,8 @@ app_main(void)
 
   // Start MQTT client task if enabled
   mqtt_start();
-  xTaskCreate(mqtt_task, "mqtt", 8192, (void *) &tr_mqtt, 5, NULL);
-
+  xTaskCreate(mqtt_task_tx, "mqtt", 8192, (void *) &tr_mqtt, 5, NULL);
+  xTaskCreate(mqtt_task_rx, "mqtt", 8192, (void *) &tr_mqtt, 5, NULL);
 
   // multicast_start();   // Start UDP multicast task if enabled
   // udp_start();         // Start UDP unicast/broadcast task if enabled
@@ -1656,7 +1656,7 @@ app_main(void)
 
   while (1) {
 
-    twai_message_t msg = {};
+    can4vscp_frame_t msg = {};
 
     // Block waiting for CAN message from receive task
     if (xQueueReceive(tr_twai_rx, &msg, portMAX_DELAY) == pdPASS) {

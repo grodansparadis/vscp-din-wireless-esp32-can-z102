@@ -2381,10 +2381,10 @@ config_mqtt_get_handler(httpd_req_t *req)
   sprintf(buf, "Password:<input type=\"password\" name=\"password\" value=\"%s\" >", g_persistent.mqttPw);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "Subscribe:<input type=\"text\" name=\"sub\" value=\"%s\" >", g_persistent.mqttSub);
+  sprintf(buf, "Subscribe:<input type=\"text\" name=\"sub\" value=\"%s\" >", g_persistent.mqttSubTopic);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "Publish:<input type=\"text\" name=\"pub\" value=\"%s\" >", g_persistent.mqttPub);
+  sprintf(buf, "Publish:<input type=\"text\" name=\"pub\" value=\"%s\" >", g_persistent.mqttPubTopic);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   // QoS selection
@@ -2587,10 +2587,10 @@ do_config_mqtt_get_handler(httpd_req_t *req)
           return ESP_ERR_NO_MEM;
         }
         ESP_LOGD(TAG, "Found query parameter => sub=%s", pdecoded);
-        strncpy(g_persistent.mqttSub, pdecoded, sizeof(g_persistent.mqttSub) - 1);
+        strncpy(g_persistent.mqttSubTopic, pdecoded, sizeof(g_persistent.mqttSubTopic) - 1);
         free(pdecoded);
         // Write changed value to persistent storage
-        rv = nvs_set_str(g_nvsHandle, "mqttSub", g_persistent.mqttSub);
+        rv = nvs_set_str(g_nvsHandle, "mqttSubTopic", g_persistent.mqttSubTopic);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update MQTT sub [%s]", esp_err_to_name(rv));
         }
@@ -2608,10 +2608,10 @@ do_config_mqtt_get_handler(httpd_req_t *req)
           return ESP_ERR_NO_MEM;
         }
         ESP_LOGD(TAG, "Found query parameter => pub=%s", pdecoded);
-        strncpy(g_persistent.mqttPub, pdecoded, sizeof(g_persistent.mqttPub) - 1);
+        strncpy(g_persistent.mqttPubTopic, pdecoded, sizeof(g_persistent.mqttPubTopic) - 1);
         free(pdecoded);
         // Write changed value to persistent storage
-        rv = nvs_set_str(g_nvsHandle, "mqttPub", g_persistent.mqttPub);
+        rv = nvs_set_str(g_nvsHandle, "mqttPubTopic", g_persistent.mqttPubTopic);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update MQTT pub [%s]", esp_err_to_name(rv));
         }

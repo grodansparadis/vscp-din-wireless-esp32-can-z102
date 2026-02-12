@@ -99,12 +99,27 @@ int
 mqtt_log(char *msg);
 
 /*!
- * @fn mqtt_task
+ * @fn mqtt_task_tx
  * @brief MQTT task
+ * Sends VSCP events received from CAN bus to MQTT broker as JSON. Also handles
+ * publishing log messages to MQTT. This task runs in a loop, waiting for events 
+ * from the CAN queue
+ *
+ * @param pvParameters Task parameters
+*/ 
+void mqtt_task_tx(void *pvParameters); 
+
+/*!
+ * @fn mqtt_task_rx
+ * @brief MQTT task
+ * Receives MQTT messages from the broker and converts them to VSCP events, 
+ * which are then sent to the CAN queue. This task runs in a loop, waiting 
+ * for MQTT messages and processing them
  *
  * @param pvParameters Task parameters
  */
 void
-mqtt_task(void *pvParameters);
+mqtt_task_rx(void *pvParameters);
+
 
 #endif

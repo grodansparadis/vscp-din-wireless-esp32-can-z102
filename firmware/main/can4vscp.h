@@ -17,13 +17,35 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ 
+ https://docs.espressif.com/projects/esp-idf/en/v5.5.2/esp32/api-reference/peripherals/twai.html
+ 
+ 
  */
 
 
 #ifndef __CAN4VSCP_H__
 #define __CAN4VSCP_H__
 
-#include "driver/twai.h"
+#include <stdbool.h>
+#include <stdint.h>
+
+#include <esp_err.h>
+
+#include <freertos/FreeRTOS.h>
+
+// Project-owned CAN frame abstraction.
+// Keep field names aligned with legacy TWAI usage to minimize call-site changes.
+typedef struct {
+  uint32_t identifier;
+  uint8_t data_length_code;
+  uint8_t data[8];
+  uint8_t extd;
+  uint8_t rtr;
+  uint8_t ss;
+  uint8_t self;
+  uint8_t dlc_non_comp;
+} can4vscp_frame_t;
 
 #define CAN4VSCP_5K				        0   /**< TWAI bus-speed 5K */
 #define CAN4VSCP_10K				      1   /**< TWAI bus-speed 10K */
@@ -67,7 +89,7 @@ typedef struct {
   * If the message is filtered out, the allocated event is freed and VSCP_ERROR_SUCCESS is returned.
 */
 int
-can4vscp_msg_to_event(vscpEvent **pev, const twai_message_t *msg);
+can4vscp_msg_to_event(vscpEvent **pev, const can4vscp_frame_t *msg);
 
 
 /*!
@@ -173,7 +195,7 @@ void can4vscp_init(uint8_t bitrate);
   @param ticks_to_wait Timeout 
   @return ESP_OK if all is OK else error code.
 */
-esp_err_t can4vscp_receive(twai_message_t *message, TickType_t ticks_to_wait);
+esp_err_t can4vscp_receive(can4vscp_frame_t *message, TickType_t ticks_to_wait);
 
 /*!
   @fn can4vscp_send
@@ -183,7 +205,7 @@ esp_err_t can4vscp_receive(twai_message_t *message, TickType_t ticks_to_wait);
   @param ticks_to_wait Timeout 
   @return ESP_OK if all is OK else error code.
 */
-esp_err_t can4vscp_send(twai_message_t *message, TickType_t ticks_to_wait);
+esp_err_t can4vscp_send(can4vscp_frame_t *message, TickType_t ticks_to_wait);
 
 /*!
   @fn can4vscp_isEnabled

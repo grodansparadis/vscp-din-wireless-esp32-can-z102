@@ -439,12 +439,12 @@ vscp_link_callback_send(const void *pdata, vscpEvent *pev)
   else {
     if ((VSCP_CLASS1_PROTOCOL == pev->vscp_class) && (0 == pev->GUID[15])) {}
     else {
-      twai_message_t tx_msg;
+      can4vscp_frame_t tx_msg;
       tx_msg.data_length_code = pev->sizeData;
       tx_msg.extd             = 1;
       tx_msg.identifier =
         pev->GUID[0] + (pev->vscp_type << 8) + (pev->vscp_class << 16) + (((pev->head >> 5) & 7) << 26);
-      twai_transmit(&tx_msg, portMAX_DELAY);
+      can4vscp_send(&tx_msg, portMAX_DELAY);
       ESP_LOGI(TAG, "Transmitted start command");
     }
   }
@@ -502,7 +502,7 @@ int
 vscp_link_callback_retr(const void *pdata, vscpEvent **pev)
 {
   BaseType_t rv;
-  twai_message_t msg = {};
+  can4vscp_frame_t msg = {};
 
   if ((NULL == pdata) || (NULL == pev)) {
     return VSCP_ERROR_INVALID_POINTER;
