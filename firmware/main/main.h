@@ -213,6 +213,7 @@ typedef struct {
 #define DEFAULT_MQTT_CLIENT_KEY        ""
 #define DEFAULT_MQTT_QOS               0
 #define DEFAULT_MQTT_RETAIN            false
+#define DEFAULT_MQTT_FORMAT            MQTT_FORMAT_JSON
 
 #define DEFAULT_MULTICAST_ENABLE false
 #define DEFAULT_MULTICAST_URL    "224.0.23.158"
@@ -290,6 +291,7 @@ typedef struct {
   char mqttClientKey[1024];  // MQTT Client Private Key (PEM format)
   uint8_t mqttQos;           // MQTT Quality of Service (0, 1, or 2)
   uint8_t mqttRetain;        // MQTT retain flag for published messages
+  uint8_t mqttFormat;        // MQTT message format: JSON (default), XML, string, or binary
 
   // Multicast interface
   uint8_t enableMulticast; // Enable multicast
@@ -311,19 +313,6 @@ typedef struct {
   char websockPw[32];    // Websocket server protocol password
 
 } node_persistent_config_t;
-
-/*!
- * @brief Initialize persistent storage (NVS)
- */
-void
-initPersistentStorage(void);
-
-/**
- * @brief Read processor on chip temperature
- * @return Temperature as floating point value
- */
-float
-read_onboard_temperature(void);
 
 /**
  * @fn getMilliSeconds

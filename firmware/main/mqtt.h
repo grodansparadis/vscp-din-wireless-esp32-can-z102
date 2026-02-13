@@ -36,6 +36,12 @@
 #define DROPLET_MQTT_TOPIC_STATS_RECV_CNT "droplet/alpha/statistics/rcvcnt"
 #define DROPLET_MQTT_TOPIC_STATS_TX_CNT   "droplet/alpha/statistics/txcnt"
 
+// Send and receive message formats
+#define MQTT_FORMAT_JSON   0
+#define MQTT_FORMAT_XML    1
+#define MQTT_FORMAT_STRING 2
+#define MQTT_FORMAT_BINARY 3
+
 /**
  * @brief Send and receive statistics
  *
@@ -97,29 +103,6 @@ mqtt_send_vscp_event(const char *topic, const vscpEvent *pev);
 
 int
 mqtt_log(char *msg);
-
-/*!
- * @fn mqtt_task_tx
- * @brief MQTT task
- * Sends VSCP events received from CAN bus to MQTT broker as JSON. Also handles
- * publishing log messages to MQTT. This task runs in a loop, waiting for events 
- * from the CAN queue
- *
- * @param pvParameters Task parameters
-*/ 
-void mqtt_task_tx(void *pvParameters); 
-
-/*!
- * @fn mqtt_task_rx
- * @brief MQTT task
- * Receives MQTT messages from the broker and converts them to VSCP events, 
- * which are then sent to the CAN queue. This task runs in a loop, waiting 
- * for MQTT messages and processing them
- *
- * @param pvParameters Task parameters
- */
-void
-mqtt_task_rx(void *pvParameters);
 
 
 #endif

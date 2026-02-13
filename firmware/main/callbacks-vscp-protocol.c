@@ -174,12 +174,12 @@ vscp_frmw2_callback_read_user_reg(void* const puserdata, uint32_t reg, uint8_t *
     *pval = 0; // TODO  eeprom_read(&eeprom, REG_TEMP_CTRL);
   }
   else if (REG_TEMP_RAW_MSB == reg) {
-    float temp = read_onboard_temperature();
-    *pval      = (((uint16_t) (100 * temp)) >> 8) & 0xff;
+    //float temp = read_onboard_temperature();
+    //*pval      = (((uint16_t) (100 * temp)) >> 8) & 0xff;
   }
   else if (REG_TEMP_RAW_LSB == reg) {
-    float temp = read_onboard_temperature();
-    *pval      = ((uint16_t) (100 * temp)) & 0xff;
+    //float temp = read_onboard_temperature();
+    //*pval      = ((uint16_t) (100 * temp)) & 0xff;
   }
   else if (REG_TEMP_CORR_MSB == reg) {
     *pval = 0; // TODO  eeprom_read(&eeprom, REG_TEMP_CORR_MSB);

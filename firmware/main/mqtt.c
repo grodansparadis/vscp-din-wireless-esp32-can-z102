@@ -50,6 +50,7 @@
 #include <esp_netif.h>
 #include <esp_log.h>
 #include <mqtt_client.h>
+#include "esp_task_wdt.h"
 #include <esp_tls.h>
 #include <esp_ota_ops.h>
 #include <esp_mac.h> // esp_base_mac_addr_get
@@ -84,9 +85,9 @@ static bool s_mqtt_connected = false;
 static mqtt_stats_t s_mqtt_statistics = { 0 };
 
 // MQTT callback handoff queue (keep callback work minimal)
-#define MQTT_RX_QUEUE_LEN         10
-#define MQTT_RX_TOPIC_MAX_LEN     128
-#define MQTT_RX_PAYLOAD_MAX_LEN   2048
+#define MQTT_RX_QUEUE_LEN       10
+#define MQTT_RX_TOPIC_MAX_LEN   128
+#define MQTT_RX_PAYLOAD_MAX_LEN 2048
 
 typedef struct {
   size_t topic_len;
@@ -192,7 +193,7 @@ mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent
 
   // Substitute {{node}} with configured node name
   vscp_fwhlp_strsubst(newTopic, len, pTopic, "{{node}}", g_persistent.nodeName);
-  ESP_LOGI(TAG, "Substituted {{node}}: %s", newTopic);
+  ESP_LOGV(TAG, "Substituted {{node}}: %s", newTopic);
   strncpy(saveTopic, newTopic, MIN(strlen(newTopic), len));
 
   // Substitute {{guid}} with node GUID (format: XX:XX:XX:...)
@@ -276,7 +277,7 @@ mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent
 int
 mqtt_send_vscp_event(const char *topic, const vscpEvent *pev)
 {
-  int rv;
+  int rv             = VSCP_ERROR_SUCCESS;
   const char *pTopic = topic;
 
   // Check event pointer
@@ -302,10 +303,33 @@ mqtt_send_vscp_event(const char *topic, const vscpEvent *pev)
     return VSCP_ERROR_MEMORY;
   }
 
-  // Convert VSCP event to JSON string
-  if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_create_json(pbuf, MQTT_SUBST_BUF_LEN, pev))) {
+  // Determine the format to use for the MQTT message
+  switch (g_persistent.mqttFormat) {
+    case MQTT_FORMAT_JSON:
+      rv = vscp_fwhlp_create_json(pbuf, MQTT_SUBST_BUF_LEN, pev);
+      break;
+
+    case MQTT_FORMAT_XML:
+      // rv = vscp_fwhlp_create_xml(pbuf, MQTT_SUBST_BUF_LEN, pev);
+      break;
+
+    case MQTT_FORMAT_STRING:
+      rv = vscp_fwhlp_eventToString(pbuf, MQTT_SUBST_BUF_LEN, pev);
+      break;
+
+    case MQTT_FORMAT_BINARY:
+      // rv = vscp_fwhlp_create_binary(pbuf, MQTT_SUBST_BUF_LEN, pev);
+      break;
+
+    default:
+      ESP_LOGE(TAG, "Unsupported MQTT format");
+      free(pbuf);
+      return VSCP_ERROR_INVALID_SYNTAX;
+  }
+
+  if (VSCP_ERROR_SUCCESS != rv) {
     free(pbuf);
-    ESP_LOGE(TAG, "Failed to convert event to JSON rv = %d", rv);
+    ESP_LOGE(TAG, "Failed to convert event to selected format rv = %d", rv);
     return rv;
   }
 
@@ -414,6 +438,192 @@ mqtt_log(char *msg)
   return VSCP_ERROR_SUCCESS;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// mqtt_task_tx
+//
+// This task receives VSCP events from the CAN queue, converts them to JSON,
+// performs topic substitution, and publishes them to the MQTT broker. It runs
+// continuously and handles all outgoing MQTT messages based on CAN events.
+
+static void
+mqtt_task_tx(void *pvParameters)
+{
+  // int cnt = 0;
+  char buf_msg[MQTT_SUBST_BUF_LEN];
+  char buf_topic[MQTT_SUBST_BUF_LEN];
+  can4vscp_frame_t rxmsg = {};
+
+  ESP_LOGI(TAG, "MQTT rx task started");
+
+  // Add the task to the watchdog timer
+  // esp_task_wdt_add(NULL);
+
+  while (1) {
+
+    // esp_task_wdt_reset(); // Reset the watchdog timer
+
+    long status = xQueueReceive(tr_mqtt.fromcan_queue, (void *) &rxmsg, 500);
+
+    if (status == pdPASS) {
+      ESP_LOGI(TAG, "Received message from CAN queue: ID=0x%X DLC=%d", rxmsg.identifier, rxmsg.data_length_code);
+    }
+
+    // Create a VSCP event from the received CAN message
+    vscpEvent *pev;
+    if (VSCP_ERROR_SUCCESS != can4vscp_msg_to_event(&pev, &rxmsg)) {
+      ESP_LOGE(TAG, "Failed to convert CAN message to VSCP event");
+      vscp_fwhlp_deleteEvent(&pev);
+      continue;
+    }
+
+    switch (g_persistent.mqttFormat) {
+      case MQTT_FORMAT_JSON:
+        // Create JSON representaion of the VSCP event for MQTT payload
+        if (VSCP_ERROR_SUCCESS != vscp_fwhlp_create_json(buf_msg, sizeof(buf_msg), pev)) {
+          ESP_LOGE(TAG, "Failed to convert VSCP event to JSON");
+          vscp_fwhlp_deleteEvent(&pev);
+          continue;
+        }
+        break;
+
+      case MQTT_FORMAT_XML:
+        // rv = vscp_fwhlp_create_xml(buf_msg, sizeof(buf_msg), pev);
+        ESP_LOGE(TAG, "XML format not implemented yet");
+        vscp_fwhlp_deleteEvent(&pev);
+        continue;
+
+      case MQTT_FORMAT_STRING:
+        // Create string representaion of the VSCP event for MQTT payload
+        if (VSCP_ERROR_SUCCESS != vscp_fwhlp_eventToString(buf_msg, sizeof(buf_msg), pev)) {
+          ESP_LOGE(TAG, "Failed to convert VSCP event to JSON");
+          vscp_fwhlp_deleteEvent(&pev);
+          continue;
+        }
+        break;
+
+      case MQTT_FORMAT_BINARY:
+        // rv = vscp_fwhlp_create_binary(buf_msg, sizeof(buf_msg), pev);
+        ESP_LOGE(TAG, "Binary format not implemented yet");
+        vscp_fwhlp_deleteEvent(&pev);
+        continue;
+
+      default:
+        ESP_LOGE(TAG, "Unsupported MQTT format");
+        vscp_fwhlp_deleteEvent(&pev);
+        continue;
+    }
+
+    // Create the dynamic topic name by substituting template tags with event values
+    if (VSCP_ERROR_SUCCESS != mqtt_topic_subst(buf_topic, sizeof(buf_topic), g_persistent.mqttPubTopic, pev)) {
+      ESP_LOGE(TAG, "Failed to substitute MQTT topic");
+      continue;
+    }
+
+    // Event not needed anymore, free it before topic substitution
+    vscp_fwhlp_deleteEvent(&pev);
+
+    int msgid = esp_mqtt_client_publish(g_mqtt_client,
+                                        buf_topic,
+                                        buf_msg,
+                                        strlen(buf_msg),
+                                        g_persistent.mqttQos,
+                                        g_persistent.mqttRetain);
+
+    // vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+
+  vTaskDelete(NULL);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// mqtt_task_rx
+//
+// This task receives MQTT messages from the mqtt_event_handler via a queue,
+// converts them to VSCP events, and forwards them to the CAN interface. It runs
+// continuously and handles all incoming MQTT messages that are relevant to the gateway.
+
+static void
+mqtt_task_rx(void *pvParameters)
+{
+  ESP_LOGI(TAG, "MQTT rx task started");
+
+  // Add the task to the watchdog timer
+  // esp_task_wdt_add(NULL);
+
+  while (1) {
+
+    // esp_task_wdt_reset(); // Reset the watchdog timer
+
+    mqtt_rx_msg_t rx = { 0 };
+    long status      = xQueueReceive(s_mqtt_rx_queue, (void *) &rx, 500);
+    if (status == pdPASS) {
+      vscpEvent ev = { 0 };
+      ESP_LOGV(TAG, "Received MQTT message: topic='%s' \npayload='%s'", rx.topic, rx.payload);
+
+      switch (rx.payload[0]) {
+
+        case '{': // Assume JSON payload
+          if (VSCP_ERROR_SUCCESS != vscp_fwhlp_parse_json(&ev, rx.payload)) {
+            ESP_LOGE(TAG, "Failed to parse MQTT payload as VSCP event");
+            continue;
+          }
+          break;
+
+        case '<': // Assume XML payload (not implemented)
+          ESP_LOGI(TAG, "XML payload format not supported yet");
+          continue;
+
+        case 0x00: // Assume binary payload (not implemented)
+          ESP_LOGI(TAG, "Binary payload format not supported yet");
+          continue;
+
+        default: // Assume string payload
+          if (VSCP_ERROR_SUCCESS != vscp_fwhlp_parseEvent(&ev, rx.payload)) {
+            ESP_LOGE(TAG, "Failed to parse MQTT payload as VSCP event");
+            continue;
+          }
+          break;
+      }
+
+      can4vscp_frame_t txmsg = { 0 };
+      txmsg.extd             = 1;
+      txmsg.identifier       = ev.GUID[0] + (ev.vscp_type << 8) + (ev.vscp_class << 16) + (((ev.head >> 5) & 7) << 26);
+
+      if (ev.sizeData > sizeof(txmsg.data)) {
+        ESP_LOGW(TAG,
+                 "VSCP event payload too large for CAN frame (%d), truncating to %d",
+                 (int) ev.sizeData,
+                 (int) sizeof(txmsg.data));
+      }
+
+      txmsg.data_length_code = MIN((size_t) ev.sizeData, sizeof(txmsg.data));
+      if (txmsg.data_length_code > 0 && NULL != ev.pdata) {
+        memcpy(txmsg.data, ev.pdata, txmsg.data_length_code);
+      }
+
+      if (ESP_OK != can4vscp_send(&txmsg, pdMS_TO_TICKS(100))) {
+        ESP_LOGW(TAG, "Failed to transmit CAN frame from MQTT payload");
+      }
+      else {
+        s_mqtt_statistics.nSub++;
+        ESP_LOGI(TAG,
+                 "MQTT->CAN forwarded topic=%s id=0x%X dlc=%d",
+                 rx.topic,
+                 txmsg.identifier,
+                 txmsg.data_length_code);
+      }
+
+      if (NULL != ev.pdata) {
+        free(ev.pdata);
+        ev.pdata = NULL;
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+
+  vTaskDelete(NULL);
+}
+
 // ============================================================================
 //                          MQTT Event Handler
 // ============================================================================
@@ -502,11 +712,14 @@ mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, 
       }
 
       mqtt_rx_msg_t rx = { 0 };
-      rx.topic_len      = MIN((size_t) event->topic_len, (size_t) (MQTT_RX_TOPIC_MAX_LEN - 1));
-      rx.payload_len    = MIN((size_t) event->data_len, (size_t) (MQTT_RX_PAYLOAD_MAX_LEN - 1));
+      rx.topic_len     = MIN((size_t) event->topic_len, (size_t) (MQTT_RX_TOPIC_MAX_LEN - 1));
+      rx.payload_len   = MIN((size_t) event->data_len, (size_t) (MQTT_RX_PAYLOAD_MAX_LEN - 1));
 
       if ((size_t) event->data_len >= MQTT_RX_PAYLOAD_MAX_LEN) {
-        ESP_LOGW(TAG, "Incoming MQTT payload truncated from %d to %d bytes", event->data_len, MQTT_RX_PAYLOAD_MAX_LEN - 1);
+        ESP_LOGW(TAG,
+                 "Incoming MQTT payload truncated from %d to %d bytes",
+                 event->data_len,
+                 MQTT_RX_PAYLOAD_MAX_LEN - 1);
       }
 
       memcpy(rx.topic, event->topic, rx.topic_len);
@@ -683,6 +896,12 @@ mqtt_start(void)
     ESP_LOGE(TAG, "Failed to start MQTT client");
   }
 
+  // Create separate tasks for MQTT TX and RX processing
+  // mqtt_task_tx handles outgoing messages based on CAN events
+  // mqtt_task_rx handles incoming MQTT messages and converts them to CAN events
+  xTaskCreate(mqtt_task_tx, "mqtt_tx", 8192, (void *) &tr_mqtt, 5, NULL);
+  xTaskCreate(mqtt_task_rx, "mqtt_rx", 8192, (void *) &tr_mqtt, 5, NULL);
+
   ESP_LOGI(TAG, "Outbox-size = %d", esp_mqtt_client_get_outbox_size(g_mqtt_client));
 }
 
@@ -696,119 +915,4 @@ void
 mqtt_stop(void)
 {
   esp_mqtt_client_stop(g_mqtt_client);
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// mqtt_task_tx
-//
-
-void
-mqtt_task_tx(void *pvParameters)
-{
-  // int cnt = 0;
-  char buf_msg[MQTT_SUBST_BUF_LEN];
-  char buf_topic[MQTT_SUBST_BUF_LEN];
-  can4vscp_frame_t rxmsg = {};
-
-  ESP_LOGI(TAG, "MQTT rx task started");
-
-  while (1) {
-    // cnt++;
-    // sprintf(buf, "Hello MQTT %d", cnt);
-    long status = xQueueReceive(tr_mqtt.fromcan_queue, (void *) &rxmsg, 500);
-
-    if (status == pdPASS) {
-      ESP_LOGI(TAG, "Received message from CAN queue: ID=0x%X DLC=%d", rxmsg.identifier, rxmsg.data_length_code);
-    }
-
-    // Create a VSCP event from the received CAN message
-    vscpEvent *pev;
-    if (VSCP_ERROR_SUCCESS != can4vscp_msg_to_event(&pev, &rxmsg)) {
-      ESP_LOGE(TAG, "Failed to convert CAN message to VSCP event");
-      vscp_fwhlp_deleteEvent(&pev);
-      continue;
-    }
-
-    // Create JSON representaion of the VSCP event for MQTT payload
-    if (VSCP_ERROR_SUCCESS != vscp_fwhlp_create_json(buf_msg, sizeof(buf_msg), pev)) {
-      ESP_LOGE(TAG, "Failed to convert VSCP event to JSON");
-      vscp_fwhlp_deleteEvent(&pev);
-      continue;
-    }
-
-    // Create the dynamic topic name by substituting template tags with event values
-    if (VSCP_ERROR_SUCCESS != mqtt_topic_subst(buf_topic, sizeof(buf_topic), g_persistent.mqttPubTopic, pev)) {
-      ESP_LOGE(TAG, "Failed to substitute MQTT topic");
-      continue;
-    }
-
-    // Event not needed anymore, free it before topic substitution
-    vscp_fwhlp_deleteEvent(&pev);
-
-    int msgid = esp_mqtt_client_publish(g_mqtt_client,
-                                        buf_topic,
-                                        buf_msg,
-                                        strlen(buf_msg),
-                                        g_persistent.mqttQos,
-                                        g_persistent.mqttRetain);
-
-    // vTaskDelay(pdMS_TO_TICKS(1000));
-  }
-
-  vTaskDelete(NULL);
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// mqtt_task_rx
-//
-
-void
-mqtt_task_rx(void *pvParameters)
-{
-  ESP_LOGI(TAG, "MQTT tx task started");
-
-  while (1) {
-    mqtt_rx_msg_t rx = { 0 };
-    long status      = xQueueReceive(s_mqtt_rx_queue, (void *) &rx, 500);
-    if (status == pdPASS) {
-      vscpEvent ev = {0};
-      ESP_LOGV(TAG, "Received MQTT message: topic='%s' \npayload='%s'", rx.topic, rx.payload);
-      if (VSCP_ERROR_SUCCESS != vscp_fwhlp_parse_json(&ev, rx.payload)) {
-        ESP_LOGE(TAG, "Failed to parse MQTT payload as VSCP event");
-        continue;
-      }
-
-      can4vscp_frame_t txmsg = { 0 };
-      txmsg.extd           = 1;
-      txmsg.identifier = pev->GUID[0] + (pev->vscp_type << 8) + (pev->vscp_class << 16) + (((pev->head >> 5) & 7) << 26);
-
-      if (pev->sizeData > sizeof(txmsg.data)) {
-        ESP_LOGW(TAG,
-                 "VSCP event payload too large for CAN frame (%d), truncating to %d",
-                 (int) pev->sizeData,
-                 (int) sizeof(txmsg.data));
-      }
-
-      txmsg.data_length_code = MIN((size_t) pev->sizeData, sizeof(txmsg.data));
-      if (txmsg.data_length_code > 0 && NULL != pev->pdata) {
-        memcpy(txmsg.data, pev->pdata, txmsg.data_length_code);
-      }
-
-      if (ESP_OK != can4vscp_send(&txmsg, pdMS_TO_TICKS(100))) {
-        ESP_LOGW(TAG, "Failed to transmit CAN frame from MQTT payload");
-      }
-      else {
-        s_mqtt_statistics.nSub++;
-        ESP_LOGI(TAG, "MQTT->CAN forwarded topic=%s id=0x%X dlc=%d", rx.topic, txmsg.identifier, txmsg.data_length_code);
-      }
-
-      if (NULL != ev.pdata) {
-        free(ev.pdata);
-        ev.pdata = NULL;
-      }
-    }
-    vTaskDelay(pdMS_TO_TICKS(1000));
-  }
-
-  vTaskDelete(NULL);
 }

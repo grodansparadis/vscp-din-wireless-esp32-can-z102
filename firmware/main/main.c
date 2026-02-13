@@ -155,6 +155,7 @@ node_persistent_config_t g_persistent = {
   .mqttClientKey   = DEFAULT_MQTT_CLIENT_KEY,
   .mqttQos         = DEFAULT_MQTT_QOS,
   .mqttRetain      = DEFAULT_MQTT_RETAIN,
+  .mqttFormat      = DEFAULT_MQTT_FORMAT,
 
   // Multicast
   .enableMulticast = DEFAULT_MULTICAST_ENABLE,
@@ -317,6 +318,24 @@ wcang_get_sec2_verifier(const char **verifier, uint16_t *verifier_len)
 }
 #endif
 
+static void
+init_watchdog_timer(void)
+{
+  esp_task_wdt_config_t wdt_config = {
+    .timeout_ms     = 10000, // 10-second timeout
+    .idle_core_mask = 0,     // Monitor all cores
+    .trigger_panic  = true   // Trigger panic on timeout
+  };
+
+  esp_err_t err = esp_task_wdt_init(&wdt_config);
+  if (err == ESP_OK) {
+    printf("Task Watchdog Timer initialized successfully.\n");
+  }
+  else {
+    printf("Failed to initialize Task Watchdog Timer: %s\n", esp_err_to_name(err));
+  }
+}
+
 // ============================================================================
 //                    NVS Configuration Management
 // ============================================================================
@@ -340,7 +359,7 @@ wcang_get_sec2_verifier(const char **verifier, uint16_t *verifier_len)
  * @note This function should be called once during system initialization
  * @note GUID is constructed from MAC address if not previously set
  */
-void
+static void
 initPersistentStorage(void)
 {
   esp_err_t rv;
@@ -629,13 +648,15 @@ initPersistentStorage(void)
 
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttPubTopic", g_persistent.mqttPubTopic, DEFAULT_MQTT_PUBLISH, TAG);
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttSubTopic", g_persistent.mqttSubTopic, DEFAULT_MQTT_SUBSCRIBE, TAG);
-  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttPubLogTopic", g_persistent.mqttPubLogTopic, DEFAULT_MQTT_LOG_PUBLISH_TOPIC, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle,
+                             "mqttPubLogTopic",
+                             g_persistent.mqttPubLogTopic,
+                             DEFAULT_MQTT_LOG_PUBLISH_TOPIC,
+                             TAG);
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttClientId", g_persistent.mqttClientId, DEFAULT_MQTT_CLIENT_ID, TAG);
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttCaCert", g_persistent.mqttCaCert, DEFAULT_MQTT_CA_CERT, TAG);
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttClientCert", g_persistent.mqttClientCert, DEFAULT_MQTT_CLIENT_CERT, TAG);
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "mqttClientKey", g_persistent.mqttClientKey, DEFAULT_MQTT_CLIENT_KEY, TAG);
-  // NVS_GET_OR_SET_DEFAULT(u8,g_nvsHandle, "mqttQos", g_persistent.mqttQos, DEFAULT_MQTT_QOS, TAG);
-  // NVS_GET_OR_SET_DEFAULT(g_nvsHandle, "mqttRetain", g_persistent.mqttRetain, DEFAULT_MQTT_RETAIN, TAG);
   NVS_GET_OR_SET_DEFAULT(u8,
                          nvs_get_u8,
                          nvs_set_u8,
@@ -654,6 +675,15 @@ initPersistentStorage(void)
                          DEFAULT_MQTT_RETAIN,
                          TAG,
                          "%d");
+NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "mqttFormat",
+                         g_persistent.mqttFormat,
+                         DEFAULT_MQTT_FORMAT,
+                         TAG,
+                         "%d");                         
 
   // * * * Multicast persistent configuration * * *
   NVS_GET_OR_SET_DEFAULT(u8,
@@ -1261,16 +1291,30 @@ wifi_prov_print_qr(const char *name, const char *username, const char *pop, cons
 void
 app_main(void)
 {
-  vscpEvent ev = {0};;
-  char *jsonobj = "{\"vscpHead\":321,\"vscpObid\":12345,\"vscpTimeStamp\":67890,\"vscpClass\":10,\"vscpType\":6,\"vscpGuid\":\"FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF\",\"vscpData\":[1,2,3,4,5,6,7,8]}";
+  // Initialize the Task Watchdog Timer
+  init_watchdog_timer();
+
+  vscpEvent ev = { 0 };
+  ;
+  char *jsonobj = "{\"vscpHead\":321,\"vscpObid\":12345,\"vscpTimeStamp\":67890,\"vscpClass\":10,\"vscpType\":6,"
+                  "\"vscpGuid\":\"FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF\",\"vscpData\":[1,2,3,4,5,6,7,8]}";
 
   int result = vscp_fwhlp_parse_json(&ev, jsonobj);
-  ESP_LOGE(TAG, "Parsed event: status=%d class=%d, type=%d, data_len=%d", result, ev.vscp_class, ev.vscp_type, ev.sizeData);
+  ESP_LOGE(TAG,
+           "Parsed event: status=%d class=%d, type=%d, data_len=%d",
+           result,
+           ev.vscp_class,
+           ev.vscp_type,
+           ev.sizeData);
 
-  vscpEventEx pex = {0};
+  vscpEventEx pex = { 0 };
   vscp_fwhlp_parse_json_ex(&pex, jsonobj);
-  ESP_LOGE(TAG, "Parsed event: status=%d class=%d, type=%d, data_len=%d", result, pex.vscp_class, pex.vscp_type, pex.sizeData);
-
+  ESP_LOGE(TAG,
+           "Parsed event: status=%d class=%d, type=%d, data_len=%d",
+           result,
+           pex.vscp_class,
+           pex.vscp_type,
+           pex.sizeData);
 
   // ============================================================================
   //                      NVS (Non-Volatile Storage) Init
@@ -1638,9 +1682,7 @@ app_main(void)
 
   // Start MQTT client task if enabled
   mqtt_start();
-  xTaskCreate(mqtt_task_tx, "mqtt", 8192, (void *) &tr_mqtt, 5, NULL);
-  xTaskCreate(mqtt_task_rx, "mqtt", 8192, (void *) &tr_mqtt, 5, NULL);
-
+  
   // multicast_start();   // Start UDP multicast task if enabled
   // udp_start();         // Start UDP unicast/broadcast task if enabled
   // ws_start();          // Start WebSocket server task if enabled
@@ -1665,6 +1707,8 @@ app_main(void)
    */
 
   while (1) {
+
+    //esp_task_wdt_reset(); // Reset the watchdog timer
 
     can4vscp_frame_t msg = {};
 

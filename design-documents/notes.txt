@@ -19,3 +19,22 @@ Output pins -
 WIFI
 STATUS
 BUS_OFF (optional): Outputs a low logic level (0 V) when the TWAI controller enters the bus-off state. Otherwise, it remains at a high logic level (3.3 V).
+
+
+
+{
+	"vscpHead":	96,
+	"vscpClass":	10,
+	"vscpType":	1,
+	"vscpObid":	0,
+	"vscpTimeStamp":	697851933,
+	"vscpGUID":	"FF:FF:FF:FF:FF:FF:FF:FE:A0:76:4E:45:9E:7C:00:02",
+	"vscpDateTime":	"0000-00-00T00:00:00",
+	"vscpData":	[96, 0, 0, 0, 0]
+}
+
+send 0,20,3,,,,0:1:2:3:4:5:6:7:8:9:10:11:12:13:14:15,0,1,35
+
+send 0,20,3,,2001-11-02T18:00:01,,-,0,1,35
+
+send 0,20,3,,,,-,0,1,35
