@@ -205,4 +205,6 @@
 // Firmware helper functionality switches
 #define VSCP_FWHLP_JSON_SUPPORT
 
+#define VSCP_FWHLP_UDP_FRAME_SUPPORT
+
 #endif // _VSCP_PROJDEFS_H_

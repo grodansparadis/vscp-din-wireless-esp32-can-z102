@@ -502,9 +502,11 @@ mqtt_task_tx(void *pvParameters)
         break;
 
       case MQTT_FORMAT_BINARY:
-        // rv = vscp_fwhlp_create_binary(buf_msg, sizeof(buf_msg), pev);
-        ESP_LOGE(TAG, "Binary format not implemented yet");
-        vscp_fwhlp_deleteEvent(&pev);
+        if (VSCP_ERROR_SUCCESS != vscp_fwhlp_writeEventToFrame((uint8_t *)buf_msg, sizeof(buf_msg), 0, pev)) {
+          ESP_LOGE(TAG, "Failed to convert VSCP event to binary format");
+          vscp_fwhlp_deleteEvent(&pev);
+          continue;
+        }
         continue;
 
       default:
