@@ -771,15 +771,10 @@ mqtt_task_rx(void *pvParameters)
     mqtt_rx_msg_t rx = { 0 };
     long status      = xQueueReceive(s_mqtt_rx_queue, (void *) &rx, 500);
     if (status == pdPASS) {
-      vscpEvent *pev = calloc(1, sizeof(vscpEvent));
-      if (NULL == pev) {
-        ESP_LOGE(TAG, "Unable to allocate memory for incoming VSCP event");
-        continue;
-      }
-
-      if (VSCP_ERROR_SUCCESS != vscp_fwhlp_parse_json(pev, rx.payload)) {
+      vscpEvent ev = {0};
+      ESP_LOGV(TAG, "Received MQTT message: topic='%s' \npayload='%s'", rx.topic, rx.payload);
+      if (VSCP_ERROR_SUCCESS != vscp_fwhlp_parse_json(&ev, rx.payload)) {
         ESP_LOGE(TAG, "Failed to parse MQTT payload as VSCP event");
-        vscp_fwhlp_deleteEvent(&pev);
         continue;
       }
 
@@ -807,7 +802,10 @@ mqtt_task_rx(void *pvParameters)
         ESP_LOGI(TAG, "MQTT->CAN forwarded topic=%s id=0x%X dlc=%d", rx.topic, txmsg.identifier, txmsg.data_length_code);
       }
 
-      vscp_fwhlp_deleteEvent(&pev);
+      if (NULL != ev.pdata) {
+        free(ev.pdata);
+        ev.pdata = NULL;
+      }
     }
     vTaskDelay(pdMS_TO_TICKS(1000));
   }

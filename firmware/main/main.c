@@ -1261,6 +1261,16 @@ wifi_prov_print_qr(const char *name, const char *username, const char *pop, cons
 void
 app_main(void)
 {
+  vscpEvent ev = {0};;
+  char *jsonobj = "{\"vscpHead\":321,\"vscpObid\":12345,\"vscpTimeStamp\":67890,\"vscpClass\":10,\"vscpType\":6,\"vscpGuid\":\"FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF\",\"vscpData\":[1,2,3,4,5,6,7,8]}";
+
+  int result = vscp_fwhlp_parse_json(&ev, jsonobj);
+  ESP_LOGE(TAG, "Parsed event: status=%d class=%d, type=%d, data_len=%d", result, ev.vscp_class, ev.vscp_type, ev.sizeData);
+
+  vscpEventEx pex = {0};
+  vscp_fwhlp_parse_json_ex(&pex, jsonobj);
+  ESP_LOGE(TAG, "Parsed event: status=%d class=%d, type=%d, data_len=%d", result, pex.vscp_class, pex.vscp_type, pex.sizeData);
+
 
   // ============================================================================
   //                      NVS (Non-Volatile Storage) Init
