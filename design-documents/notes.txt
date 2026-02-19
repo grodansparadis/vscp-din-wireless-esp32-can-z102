@@ -3,8 +3,9 @@ Internal product page: http://192.168.1.7/wiki/doku.php?id=vscp-din-esp32-can-z1
  
 openocd -f board/esp32c3-builtin.cfg
 
+------------------------------------------------------
 TODO
-----
+------------------------------------------------------
 - Multicast support
 - UDP support
 - TLS support
@@ -19,7 +20,6 @@ Output pins -
 WIFI
 STATUS
 BUS_OFF (optional): Outputs a low logic level (0 V) when the TWAI controller enters the bus-off state. Otherwise, it remains at a high logic level (3.3 V).
-
 
 
 {

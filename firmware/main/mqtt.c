@@ -441,6 +441,8 @@ mqtt_log(char *msg)
 ///////////////////////////////////////////////////////////////////////////////
 // mqtt_task_tx
 //
+// From CAN
+//
 // This task receives VSCP events from the CAN queue, converts them to JSON,
 // performs topic substitution, and publishes them to the MQTT broker. It runs
 // continuously and handles all outgoing MQTT messages based on CAN events.
@@ -448,12 +450,12 @@ mqtt_log(char *msg)
 static void
 mqtt_task_tx(void *pvParameters)
 {
-  // int cnt = 0;
+  int rv;
   char buf_msg[MQTT_SUBST_BUF_LEN];
   char buf_topic[MQTT_SUBST_BUF_LEN];
   can4vscp_frame_t rxmsg = {};
 
-  ESP_LOGI(TAG, "MQTT rx task started");
+  ESP_LOGI(TAG, "MQTT rx (from CAN) task started");
 
   // Add the task to the watchdog timer
   // esp_task_wdt_add(NULL);
@@ -470,8 +472,8 @@ mqtt_task_tx(void *pvParameters)
 
     // Create a VSCP event from the received CAN message
     vscpEvent *pev;
-    if (VSCP_ERROR_SUCCESS != can4vscp_msg_to_event(&pev, &rxmsg)) {
-      ESP_LOGE(TAG, "Failed to convert CAN message to VSCP event");
+    if (VSCP_ERROR_SUCCESS != (rv = can4vscp_msg_to_event(&pev, &rxmsg))) {
+      ESP_LOGE(TAG, "Failed to convert CAN message to VSCP event rv=%d", rv);
       vscp_fwhlp_deleteEvent(&pev);
       continue;
     }
@@ -479,31 +481,33 @@ mqtt_task_tx(void *pvParameters)
     switch (g_persistent.mqttFormat) {
       case MQTT_FORMAT_JSON:
         // Create JSON representaion of the VSCP event for MQTT payload
-        if (VSCP_ERROR_SUCCESS != vscp_fwhlp_create_json(buf_msg, sizeof(buf_msg), pev)) {
-          ESP_LOGE(TAG, "Failed to convert VSCP event to JSON");
+        if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_create_json(buf_msg, sizeof(buf_msg), pev))) {
+          ESP_LOGE(TAG, "Failed to convert VSCP event to JSON rv=%d", rv);
           vscp_fwhlp_deleteEvent(&pev);
           continue;
         }
         break;
 
       case MQTT_FORMAT_XML:
-        // rv = vscp_fwhlp_create_xml(buf_msg, sizeof(buf_msg), pev);
-        ESP_LOGE(TAG, "XML format not implemented yet");
-        vscp_fwhlp_deleteEvent(&pev);
-        continue;
+        if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_event_to_xml(buf_msg, sizeof(buf_msg), pev))) {
+          ESP_LOGE(TAG, "Failed to convert VSCP event to XML rv=%d", rv);
+          vscp_fwhlp_deleteEvent(&pev);
+          continue;
+        }
+        break;
 
       case MQTT_FORMAT_STRING:
         // Create string representaion of the VSCP event for MQTT payload
-        if (VSCP_ERROR_SUCCESS != vscp_fwhlp_eventToString(buf_msg, sizeof(buf_msg), pev)) {
-          ESP_LOGE(TAG, "Failed to convert VSCP event to JSON");
+        if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_eventToString(buf_msg, sizeof(buf_msg), pev))) {
+          ESP_LOGE(TAG, "Failed to convert VSCP event to string rv=%d", rv);
           vscp_fwhlp_deleteEvent(&pev);
           continue;
         }
         break;
 
       case MQTT_FORMAT_BINARY:
-        if (VSCP_ERROR_SUCCESS != vscp_fwhlp_writeEventToFrame((uint8_t *)buf_msg, sizeof(buf_msg), 0, pev)) {
-          ESP_LOGE(TAG, "Failed to convert VSCP event to binary format");
+        if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_writeEventToFrame((uint8_t *)buf_msg, sizeof(buf_msg), 0, pev))) {
+          ESP_LOGE(TAG, "Failed to convert VSCP event to binary format rv=%d", rv);
           vscp_fwhlp_deleteEvent(&pev);
           continue;
         }
@@ -540,6 +544,8 @@ mqtt_task_tx(void *pvParameters)
 ///////////////////////////////////////////////////////////////////////////////
 // mqtt_task_rx
 //
+// To CAN
+//
 // This task receives MQTT messages from the mqtt_event_handler via a queue,
 // converts them to VSCP events, and forwards them to the CAN interface. It runs
 // continuously and handles all incoming MQTT messages that are relevant to the gateway.
@@ -547,7 +553,8 @@ mqtt_task_tx(void *pvParameters)
 static void
 mqtt_task_rx(void *pvParameters)
 {
-  ESP_LOGI(TAG, "MQTT rx task started");
+  int rv;
+  ESP_LOGI(TAG, "MQTT rx (to CAN) task started");
 
   // Add the task to the watchdog timer
   // esp_task_wdt_add(NULL);
@@ -565,23 +572,30 @@ mqtt_task_rx(void *pvParameters)
       switch (rx.payload[0]) {
 
         case '{': // Assume JSON payload
-          if (VSCP_ERROR_SUCCESS != vscp_fwhlp_parse_json(&ev, rx.payload)) {
-            ESP_LOGE(TAG, "Failed to parse MQTT payload as VSCP event");
+          if (VSCP_ERROR_SUCCESS != (rv=vscp_fwhlp_parse_json(&ev, rx.payload))) {
+            ESP_LOGE(TAG, "Failed to parse MQTT JSON payload as VSCP event rv=%d", rv);
             continue;
           }
           break;
 
         case '<': // Assume XML payload (not implemented)
-          ESP_LOGI(TAG, "XML payload format not supported yet");
-          continue;
+          if (VSCP_ERROR_SUCCESS != (rv=vscp_fwhlp_parse_xml_event(&ev, rx.payload))) {
+            ESP_LOGE(TAG, "Failed to parse MQTT XML payload as VSCP event rv=%d", rv);
+            continue;
+          }
+          break;
 
         case 0x00: // Assume binary payload (not implemented)
           ESP_LOGI(TAG, "Binary payload format not supported yet");
+          // if (VSCP_ERROR_SUCCESS != vscp_fwhlp_parse_binary_event(&ev, rx.payload)) {
+          //   ESP_LOGE(TAG, "Failed to parse MQTT binary payload as VSCP event");
+          //   continue;
+          // }
           continue;
 
         default: // Assume string payload
-          if (VSCP_ERROR_SUCCESS != vscp_fwhlp_parseEvent(&ev, rx.payload)) {
-            ESP_LOGE(TAG, "Failed to parse MQTT payload as VSCP event");
+          if (VSCP_ERROR_SUCCESS != (rv=vscp_fwhlp_parseEvent(&ev, rx.payload))) {
+            ESP_LOGE(TAG, "Failed to parse MQTT string payload as VSCP event rv=%d", rv);
             continue;
           }
           break;

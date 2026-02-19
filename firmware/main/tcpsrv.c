@@ -220,19 +220,57 @@ client_task(void *pvParameters)
     }
     else {
 
-      // Check that the buffer can hold the new data
-      if (ctx.size + len > sizeof(ctx.buf)) {
-        len = sizeof(ctx.buf) - ctx.size;
+      // Append to command buffer with strict bounds
+      size_t used      = strnlen(ctx.buf, sizeof(ctx.buf));
+      size_t remaining = sizeof(ctx.buf) - used - 1; // keep room for terminator
+      size_t copy_len  = MIN((size_t) len, remaining);
+
+      if (copy_len < (size_t) len) {
+        ESP_LOGW(TAG,
+                 "Input command buffer full, truncating incoming data (%u -> %u)",
+                 (unsigned) len,
+                 (unsigned) copy_len);
       }
 
-      rxbuf[len] = 0; // Null-terminate whatever is received and treat it like a string
-      strncat(ctx.buf, rxbuf, len);
+      if (copy_len > 0) {
+        memcpy(ctx.buf + used, rxbuf, copy_len);
+        ctx.buf[used + copy_len] = '\0';
+      }
+      ctx.size = used + copy_len;
 
       ESP_LOGI(TAG, "Received %d bytes: %s", len, rxbuf);
 
-      // Parse VSCP command
-      char *p = NULL;
-      vscp_link_parser(&ctx, rxbuf, &p);
+      // Parse all complete VSCP commands currently available in the context buffer
+      while (ctx.size > 0) {
+
+        char *p = NULL;
+        int parser_rv = vscp_link_parser(&ctx, ctx.buf, &p);
+
+        if (VSCP_ERROR_MISSING == parser_rv) {
+          break; // incomplete command, wait for more data
+        }
+
+        if (VSCP_ERROR_SUCCESS != parser_rv) {
+          ESP_LOGW(TAG, "VSCP parser returned error=%d", parser_rv);
+        }
+
+        if (!ctx.sock) {
+          break;
+        }
+
+        if ((NULL == p) || (p < ctx.buf) || (p > (ctx.buf + ctx.size))) {
+          ESP_LOGW(TAG, "Invalid parser next pointer, resetting command buffer");
+          ctx.buf[0] = '\0';
+          ctx.size   = 0;
+          break;
+        }
+
+        size_t consumed = (size_t) (p - ctx.buf);
+        size_t left     = ctx.size - consumed;
+        memmove(ctx.buf, p, left);
+        ctx.buf[left] = '\0';
+        ctx.size      = left;
+      }
 
       // If socket gets closed ("quit" command)
       // pctx->sock is zero

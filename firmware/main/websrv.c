@@ -1127,7 +1127,10 @@ hello_get_handler(httpd_req_t *req)
 
   buf_len = httpd_req_get_hdr_value_len(req, "Test-Header-2") + 1;
   if (buf_len > 1) {
-    buf = (char *) (buf_len);
+    buf = (char *) malloc(buf_len);
+    if (NULL == buf) {
+      return ESP_ERR_NO_MEM;
+    }
     if (httpd_req_get_hdr_value_str(req, "Test-Header-2", buf, buf_len) == ESP_OK) {
       ESP_LOGD(TAG, "Found header => Test-Header-2: %s", buf);
     }
@@ -1147,7 +1150,10 @@ hello_get_handler(httpd_req_t *req)
   // extra byte for null termination
   buf_len = httpd_req_get_url_query_len(req) + 1;
   if (buf_len > 1) {
-    buf = (char *) (buf_len);
+    buf = (char *) malloc(buf_len);
+    if (NULL == buf) {
+      return ESP_ERR_NO_MEM;
+    }
     if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
       ESP_LOGD(TAG, "Found URL query => %s", buf);
       char param[32];
@@ -2372,9 +2378,7 @@ do_config_vscplink_get_handler(httpd_req_t *req)
 static esp_err_t
 config_mqtt_get_handler(httpd_req_t *req)
 {
-  // esp_err_t rv;
   char *buf;
-  // char *temp;
 
   char *req_buf;
   size_t req_buf_len;

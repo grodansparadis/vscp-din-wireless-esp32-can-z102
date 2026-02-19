@@ -324,19 +324,34 @@ vscp_link_callback_challenge(const void *pdata, const char *arg)
     p++;
   }
 
-  strcpy(buf, "+OK - ");
-  p = buf + strlen(buf);
+  static const char challenge_prefix[] = "+OK - ";
+  size_t pos                           = (size_t) snprintf(buf, sizeof(buf), "%s", challenge_prefix);
+  if (pos >= sizeof(buf)) {
+    return VSCP_ERROR_MEMORY;
+  }
 
   for (int i = 0; i < 32; i++) {
     random_data[i] = rand() >> 16;
-    if (i < sizeof(p)) {
-      random_data[i] += (uint8_t) p[i];
+    if (i < (int) (sizeof(challenge_prefix) - 1)) {
+      random_data[i] += (uint8_t) challenge_prefix[i];
     }
-    vscp_fwhlp_dec2hex(random_data[i], (char *) p, 2);
-    p++;
+
+    if ((pos + 2) >= sizeof(buf)) {
+      return VSCP_ERROR_MEMORY;
+    }
+
+    vscp_fwhlp_dec2hex(random_data[i], &buf[pos], 2);
+    pos += 2;
   }
 
-  strcat(buf, "\r\n");
+  if ((pos + 2) >= sizeof(buf)) {
+    return VSCP_ERROR_MEMORY;
+  }
+
+  buf[pos++] = '\r';
+  buf[pos++] = '\n';
+  buf[pos]   = '\0';
+
   send(pctx->sock, buf, strlen(buf), 0);
   return VSCP_ERROR_SUCCESS;
 }
