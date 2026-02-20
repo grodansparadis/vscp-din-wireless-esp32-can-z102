@@ -64,6 +64,14 @@
 
 static const char *TAG = "udpsrv";
 
+////////////////////////////////////////////////////////////////////////////
+// udpsrv_task
+//
+// This task listens for incoming UDP packets on the configured port. When a
+// packet is received, it parse the data and if a valid VSCP frame send it
+// on the CAN interface. The task runs indefinitely and handles errors gracefully, 
+// logging any issues with socket creation, binding, or receiving data.
+
 void
 udpsrv_task(void *pvParameters)
 {
@@ -151,7 +159,14 @@ udpsrv_task(void *pvParameters)
 #endif
       // Error occurred during receiving
       if (len < 0) {
-        ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
+        if (errno == EWOULDBLOCK || errno == EAGAIN) {
+          ESP_LOGI(TAG, "Receive timeout, no data received");
+          continue;
+        }
+        else {
+          ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
+          
+        }
         break;
       }
       // Data received
@@ -192,4 +207,18 @@ udpsrv_task(void *pvParameters)
     }
   }
   vTaskDelete(NULL);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// udp_start
+// This function creates the UDP server task for both IPv4 and IPv6 (if enabled).
+// The task will listen for incoming UDP packets and process them as defined in udpsrv_task.
+//
+
+void udp_start(void)
+{
+  xTaskCreate(udpsrv_task, "udpsrv", 4096, (void *) AF_INET, 5, NULL);
+#ifdef CONFIG_EXAMPLE_IPV6
+  xTaskCreate(udpsrv_task, "udpsrv", 4096, (void *) AF_INET6, 5, NULL);
+#endif
 }

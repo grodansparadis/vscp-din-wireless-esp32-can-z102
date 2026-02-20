@@ -246,7 +246,7 @@ mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent
 }
 
 // Buffer size for topic substitution and JSON conversion
-#define MQTT_SUBST_BUF_LEN 2048
+#define MQTT_SUBST_BUF_LEN 3000
 
 // ============================================================================
 //                          VSCP Event Publishing
@@ -274,101 +274,101 @@ mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent
  * @note If MQTT is not connected, increments failure counter and returns success
  * @note Updates s_mqtt_statistics.nPub on success or .nPubFailures on failure
  */
-int
-mqtt_send_vscp_event(const char *topic, const vscpEvent *pev)
-{
-  int rv             = VSCP_ERROR_SUCCESS;
-  const char *pTopic = topic;
+// int
+// mqtt_send_vscp_event(const char *topic, const vscpEvent *pev)
+// {
+//   int rv             = VSCP_ERROR_SUCCESS;
+//   const char *pTopic = topic;
 
-  // Check event pointer
-  if (NULL == pev) {
-    return VSCP_ERROR_INVALID_POINTER;
-  }
+//   // Check event pointer
+//   if (NULL == pev) {
+//     return VSCP_ERROR_INVALID_POINTER;
+//   }
 
-  // Use default publish topic from config if none specified
-  if (NULL == topic) {
-    pTopic = g_persistent.mqttPubTopic;
-  }
+//   // Use default publish topic from config if none specified
+//   if (NULL == topic) {
+//     pTopic = g_persistent.mqttPubTopic;
+//   }
 
-  // Silently fail if not connected (count as failure but return success)
-  if (!s_mqtt_connected) {
-    s_mqtt_statistics.nPubFailures++;
-    return VSCP_ERROR_SUCCESS;
-  }
+//   // Silently fail if not connected (count as failure but return success)
+//   if (!s_mqtt_connected) {
+//     s_mqtt_statistics.nPubFailures++;
+//     return VSCP_ERROR_SUCCESS;
+//   }
 
-  // Allocate buffer for JSON conversion of VSCP event
-  char *pbuf = malloc(MQTT_SUBST_BUF_LEN);
-  if (NULL == pbuf) {
-    ESP_LOGE(TAG, "Unable to allocate JSON buffer for conversion");
-    return VSCP_ERROR_MEMORY;
-  }
+//   // Allocate buffer for JSON conversion of VSCP event
+//   char *pbuf = malloc(MQTT_SUBST_BUF_LEN);
+//   if (NULL == pbuf) {
+//     ESP_LOGE(TAG, "Unable to allocate JSON buffer for conversion");
+//     return VSCP_ERROR_MEMORY;
+//   }
 
-  // Determine the format to use for the MQTT message
-  switch (g_persistent.mqttFormat) {
-    case MQTT_FORMAT_JSON:
-      rv = vscp_fwhlp_create_json(pbuf, MQTT_SUBST_BUF_LEN, pev);
-      break;
+//   // Determine the format to use for the MQTT message
+//   switch (g_persistent.mqttFormat) {
+//     case MQTT_FORMAT_JSON:
+//       rv = vscp_fwhlp_create_json(pbuf, MQTT_SUBST_BUF_LEN, pev);
+//       break;
 
-    case MQTT_FORMAT_XML:
-      // rv = vscp_fwhlp_create_xml(pbuf, MQTT_SUBST_BUF_LEN, pev);
-      break;
+//     case MQTT_FORMAT_XML:
+//       //rv = vscp_fwhlp_create_xml(pbuf, MQTT_SUBST_BUF_LEN, pev);
+//       break;
 
-    case MQTT_FORMAT_STRING:
-      rv = vscp_fwhlp_eventToString(pbuf, MQTT_SUBST_BUF_LEN, pev);
-      break;
+//     case MQTT_FORMAT_STRING:
+//       rv = vscp_fwhlp_eventToString(pbuf, MQTT_SUBST_BUF_LEN, pev);
+//       break;
 
-    case MQTT_FORMAT_BINARY:
-      // rv = vscp_fwhlp_create_binary(pbuf, MQTT_SUBST_BUF_LEN, pev);
-      break;
+//     case MQTT_FORMAT_BINARY:
+//       //rv = vscp_fwhlp_create_binary(pbuf, MQTT_SUBST_BUF_LEN, pev);
+//       break;
 
-    default:
-      ESP_LOGE(TAG, "Unsupported MQTT format");
-      free(pbuf);
-      return VSCP_ERROR_INVALID_SYNTAX;
-  }
+//     default:
+//       ESP_LOGE(TAG, "Unsupported MQTT format");
+//       free(pbuf);
+//       return VSCP_ERROR_INVALID_SYNTAX;
+//   }
 
-  if (VSCP_ERROR_SUCCESS != rv) {
-    free(pbuf);
-    ESP_LOGE(TAG, "Failed to convert event to selected format rv = %d", rv);
-    return rv;
-  }
+//   if (VSCP_ERROR_SUCCESS != rv) {
+//     free(pbuf);
+//     ESP_LOGE(TAG, "Failed to convert event to selected format rv = %d", rv);
+//     return rv;
+//   }
 
-  ESP_LOGV(TAG, "Event converted to JSON format");
+//   ESP_LOGV(TAG, "Event converted to JSON format");
 
-  // Allocate buffer for topic template expansion
-  char *newTopic = calloc(MQTT_SUBST_BUF_LEN, 1);
-  if (NULL == newTopic) {
-    ESP_LOGE(TAG, "Unable to allocate memory.");
-    free(pbuf);
-    return VSCP_ERROR_MEMORY;
-  }
+//   // Allocate buffer for topic template expansion
+//   char *newTopic = calloc(MQTT_SUBST_BUF_LEN, 1);
+//   if (NULL == newTopic) {
+//     ESP_LOGE(TAG, "Unable to allocate memory.");
+//     free(pbuf);
+//     return VSCP_ERROR_MEMORY;
+//   }
 
-  // Expand topic template with event-specific values
-  mqtt_topic_subst(newTopic, MQTT_SUBST_BUF_LEN, pTopic, pev);
-  ESP_LOGV(TAG, "Expanded MQTT topic: %s", newTopic);
+//   // Expand topic template with event-specific values
+//   mqtt_topic_subst(newTopic, MQTT_SUBST_BUF_LEN, pTopic, pev);
+//   ESP_LOGV(TAG, "Expanded MQTT topic: %s", newTopic);
 
-  // Publish JSON payload to MQTT broker with configured QoS and retain flag
-  int msgid =
-    esp_mqtt_client_publish(g_mqtt_client, newTopic, pbuf, strlen(pbuf), g_persistent.mqttQos, g_persistent.mqttRetain);
+//   // Publish JSON payload to MQTT broker with configured QoS and retain flag
+//   int msgid =
+//     esp_mqtt_client_publish(g_mqtt_client, newTopic, pbuf, strlen(pbuf), g_persistent.mqttQos, g_persistent.mqttRetain);
 
-  // Update statistics based on publish result
-  if (-1 != msgid) {
-    s_mqtt_statistics.nPub++;
-  }
-  else {
-    s_mqtt_statistics.nPubFailures++;
-    ESP_LOGE(TAG,
-             "Failed to publish MQTT message. id=%d Topic=%s outbox-size = %d",
-             msgid,
-             newTopic,
-             esp_mqtt_client_get_outbox_size(g_mqtt_client));
-  }
+//   // Update statistics based on publish result
+//   if (-1 != msgid) {
+//     s_mqtt_statistics.nPub++;
+//   }
+//   else {
+//     s_mqtt_statistics.nPubFailures++;
+//     ESP_LOGE(TAG,
+//              "Failed to publish MQTT message. id=%d Topic=%s outbox-size = %d",
+//              msgid,
+//              newTopic,
+//              esp_mqtt_client_get_outbox_size(g_mqtt_client));
+//   }
 
-  free(newTopic);
-  free(pbuf);
+//   free(newTopic);
+//   free(pbuf);
 
-  return VSCP_ERROR_SUCCESS;
-}
+//   return VSCP_ERROR_SUCCESS;
+// }
 
 // ============================================================================
 //                              Logging
@@ -451,8 +451,6 @@ static void
 mqtt_task_tx(void *pvParameters)
 {
   int rv;
-  char buf_msg[MQTT_SUBST_BUF_LEN];
-  char buf_topic[MQTT_SUBST_BUF_LEN];
   can4vscp_frame_t rxmsg = {};
 
   ESP_LOGI(TAG, "MQTT rx (from CAN) task started");
@@ -478,7 +476,11 @@ mqtt_task_tx(void *pvParameters)
       continue;
     }
 
+    char buf_msg[MQTT_SUBST_BUF_LEN]   = { 0 };
+    char buf_topic[MQTT_SUBST_BUF_LEN] = { 0 };
+
     switch (g_persistent.mqttFormat) {
+
       case MQTT_FORMAT_JSON:
         // Create JSON representaion of the VSCP event for MQTT payload
         if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_create_json(buf_msg, sizeof(buf_msg), pev))) {
@@ -489,11 +491,13 @@ mqtt_task_tx(void *pvParameters)
         break;
 
       case MQTT_FORMAT_XML:
+        ESP_LOGV(TAG, "XML format %s", buf_msg);
         if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_event_to_xml(buf_msg, sizeof(buf_msg), pev))) {
           ESP_LOGE(TAG, "Failed to convert VSCP event to XML rv=%d", rv);
           vscp_fwhlp_deleteEvent(&pev);
           continue;
         }
+
         break;
 
       case MQTT_FORMAT_STRING:
@@ -506,12 +510,12 @@ mqtt_task_tx(void *pvParameters)
         break;
 
       case MQTT_FORMAT_BINARY:
-        if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_writeEventToFrame((uint8_t *)buf_msg, sizeof(buf_msg), 0, pev))) {
+        if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_writeEventToFrame((uint8_t *) buf_msg, sizeof(buf_msg), 0, pev))) {
           ESP_LOGE(TAG, "Failed to convert VSCP event to binary format rv=%d", rv);
           vscp_fwhlp_deleteEvent(&pev);
           continue;
         }
-        continue;
+        break;
 
       default:
         ESP_LOGE(TAG, "Unsupported MQTT format");
@@ -572,14 +576,14 @@ mqtt_task_rx(void *pvParameters)
       switch (rx.payload[0]) {
 
         case '{': // Assume JSON payload
-          if (VSCP_ERROR_SUCCESS != (rv=vscp_fwhlp_parse_json(&ev, rx.payload))) {
+          if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_parse_json(&ev, rx.payload))) {
             ESP_LOGE(TAG, "Failed to parse MQTT JSON payload as VSCP event rv=%d", rv);
             continue;
           }
           break;
 
         case '<': // Assume XML payload (not implemented)
-          if (VSCP_ERROR_SUCCESS != (rv=vscp_fwhlp_parse_xml_event(&ev, rx.payload))) {
+          if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_parse_xml_event(&ev, rx.payload))) {
             ESP_LOGE(TAG, "Failed to parse MQTT XML payload as VSCP event rv=%d", rv);
             continue;
           }
@@ -594,7 +598,7 @@ mqtt_task_rx(void *pvParameters)
           continue;
 
         default: // Assume string payload
-          if (VSCP_ERROR_SUCCESS != (rv=vscp_fwhlp_parseEvent(&ev, rx.payload))) {
+          if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_parseEvent(&ev, rx.payload))) {
             ESP_LOGE(TAG, "Failed to parse MQTT string payload as VSCP event rv=%d", rv);
             continue;
           }
@@ -915,7 +919,7 @@ mqtt_start(void)
   // Create separate tasks for MQTT TX and RX processing
   // mqtt_task_tx handles outgoing messages based on CAN events
   // mqtt_task_rx handles incoming MQTT messages and converts them to CAN events
-  xTaskCreate(mqtt_task_tx, "mqtt_tx", 8192, (void *) &tr_mqtt, 5, NULL);
+  xTaskCreate(mqtt_task_tx, "mqtt_tx", 1024 * 12, (void *) &tr_mqtt, 5, NULL);
   xTaskCreate(mqtt_task_rx, "mqtt_rx", 8192, (void *) &tr_mqtt, 5, NULL);
 
   ESP_LOGI(TAG, "Outbox-size = %d", esp_mqtt_client_get_outbox_size(g_mqtt_client));

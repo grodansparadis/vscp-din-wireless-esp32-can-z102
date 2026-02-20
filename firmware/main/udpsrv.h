@@ -34,3 +34,8 @@
 */
 void
 udpsrv_task(void *pvParameters);
+
+/*!
+  Start UDP server task
+*/
+void udp_start(void);

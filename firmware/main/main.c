@@ -77,7 +77,6 @@
 
 #include "can4vscp.h"
 #include "tcpsrv.h"
-#include "udpclient.h"
 #include "udpsrv.h"
 #include "websrv.h"
 #include "mqtt.h"
@@ -1684,7 +1683,7 @@ app_main(void)
   mqtt_start();
   
   // multicast_start();   // Start UDP multicast task if enabled
-  // udp_start();         // Start UDP unicast/broadcast task if enabled
+  udp_start();         // Start UDP unicast/broadcast task if enabled
   // ws_start();          // Start WebSocket server task if enabled
 
   // ============================================================================
