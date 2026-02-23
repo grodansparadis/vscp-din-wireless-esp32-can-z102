@@ -72,8 +72,9 @@
 #endif /* CONFIG_WCANG_PROV_TRANSPORT_SOFTAP */
 #include "qrcode.h"
 
-#include "vscp.h"
-#include "vscp-firmware-helper.h"
+#include <vscp.h>
+#include <vscp-firmware-helper.h>
+#include <crc.h>
 
 #include "can4vscp.h"
 #include "tcpsrv.h"
@@ -163,11 +164,11 @@ node_persistent_config_t g_persistent = {
   .multicastTtl    = DEFAULT_MULTICAST_TTL,
 
   // UDP
-  .enableUdp   = DEFAULT_UDP_ENABLE,
   .enableUdpRx = DEFAULT_UDP_RX_ENABLE,
   .enableUdpTx = DEFAULT_UDP_TX_ENABLE,
   .udpUrl      = DEFAULT_UDP_URL,
   .udpPort     = DEFAULT_UDP_PORT,
+  .bUdpEncrypt = DEFAULT_UDP_ENCRYPTION,
 
   // Websocket server protocol
   .enableWebsock = DEFAULT_WEBSOCKETS_ENABLE,
@@ -719,15 +720,6 @@ NVS_GET_OR_SET_DEFAULT(u8,
 
   // * * * UDP persistent configuration * * *
 
-  NVS_GET_OR_SET_DEFAULT(u8,
-                         nvs_get_u8,
-                         nvs_set_u8,
-                         g_nvsHandle,
-                         "enableUdp",
-                         g_persistent.enableUdp,
-                         DEFAULT_UDP_ENABLE,
-                         TAG,
-                         "%d");
 
   NVS_GET_OR_SET_DEFAULT(u8,
                          nvs_get_u8,
@@ -760,6 +752,16 @@ NVS_GET_OR_SET_DEFAULT(u8,
                          "%d");
 
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "udpUrl", g_persistent.udpUrl, "255.255.255.255", TAG);
+
+NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "bUdpEncrypt",
+                         g_persistent.bUdpEncrypt,
+                         DEFAULT_UDP_ENCRYPTION,
+                         TAG,
+                         "%d");    
 
   // * * * Websockets server configuration * * *
 
@@ -1292,6 +1294,8 @@ app_main(void)
 {
   // Initialize the Task Watchdog Timer
   init_watchdog_timer();
+
+  crcInit(); // For calculating CRC of VSCP events
 
   vscpEvent ev = { 0 };
   ;

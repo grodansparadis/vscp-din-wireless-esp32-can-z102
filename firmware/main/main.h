@@ -220,11 +220,11 @@ typedef struct {
 #define DEFAULT_MULTICAST_PORT   9598
 #define DEFAULT_MULTICAST_TTL    10
 
-#define DEFAULT_UDP_ENABLE    false
 #define DEFAULT_UDP_RX_ENABLE false
 #define DEFAULT_UDP_TX_ENABLE false
 #define DEFAULT_UDP_URL       "255.255.255.255" // Broadcast
-#define DEFAULT_UDP_PORT      9598
+#define DEFAULT_UDP_PORT      33333
+#define DEFAULT_UDP_ENCRYPTION   false
 
 #define DEFAULT_WEBSOCKETS_ENABLE   false
 #define DEFAULT_WEBSOCKETS_PORT     8080
@@ -300,11 +300,11 @@ typedef struct {
   uint8_t multicastTtl;    // Multicast TTL
 
   // UDP interface
-  uint8_t enableUdp;   // Enable UDP interface
   uint8_t enableUdpRx; // Enable UDP receive
   uint8_t enableUdpTx; // Enable UDP transmit
   char udpUrl[32];     // UDP IP address
   uint16_t udpPort;    // UDP port
+  uint8_t bUdpEncrypt; // Enable encryption for UDP messages
 
   // Websocket server protocol
   uint8_t enableWebsock; // Enable Websocket server protocol

@@ -598,7 +598,7 @@ mqtt_task_rx(void *pvParameters)
           continue;
 
         default: // Assume string payload
-          if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_parseEvent(&ev, rx.payload))) {
+          if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_parseStringToEvent(&ev, rx.payload))) {
             ESP_LOGE(TAG, "Failed to parse MQTT string payload as VSCP event rv=%d", rv);
             continue;
           }

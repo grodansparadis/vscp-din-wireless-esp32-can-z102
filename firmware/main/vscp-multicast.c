@@ -102,7 +102,7 @@ multicast_sendEvent(int sock, const char *pstrev, bool bEncrypt, uint8_t nAlgori
   multicast_addr.sin_port        = htons(g_persistent.multicastPort);
 
   vscpEventEx ex;
-  if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_parseEventEx(&ex, pstrev))) {
+  if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_parseStringToEventEx(&ex, pstrev))) {
     fprintf(stderr, "Error parsing event string\n");
     return VSCP_ERROR_SUCCESS;
   }

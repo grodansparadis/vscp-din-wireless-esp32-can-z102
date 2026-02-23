@@ -2448,16 +2448,18 @@ config_mqtt_get_handler(httpd_req_t *req)
   sprintf(buf, "<option value=\"1\" %s>XML</option>", (g_persistent.mqttFormat == MQTT_FORMAT_XML) ? "selected" : "");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "<option value=\"2\" %s>String</option>", (g_persistent.mqttFormat == MQTT_FORMAT_STRING) ? "selected" : "");
+  sprintf(buf,
+          "<option value=\"2\" %s>String</option>",
+          (g_persistent.mqttFormat == MQTT_FORMAT_STRING) ? "selected" : "");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "<option value=\"3\" %s>Binary</option>", (g_persistent.mqttFormat == MQTT_FORMAT_BINARY) ? "selected" : "");
+  sprintf(buf,
+          "<option value=\"3\" %s>Binary</option>",
+          (g_persistent.mqttFormat == MQTT_FORMAT_BINARY) ? "selected" : "");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, "</select>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-
-  
 
   // QoS selection
   sprintf(buf, "<br>QoS:<select name=\"qos\">");
@@ -3070,12 +3072,6 @@ config_udp_get_handler(httpd_req_t *req)
   sprintf(buf, "<div><form id=but3 class=\"button\" action='/docfgudp' method='get'><fieldset>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  // Enable
-  sprintf(buf, "<input type=\"checkbox\" name=\"enable\" value=\"true\" ");
-  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-  sprintf(buf, "%s><label for=\"lr\"> Enable</label>", g_persistent.enableUdp ? "checked" : "");
-  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-
   // EnableUdpRx
   sprintf(buf, "<input type=\"checkbox\" name=\"enablerx\" value=\"true\" ");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
@@ -3088,10 +3084,19 @@ config_udp_get_handler(httpd_req_t *req)
   sprintf(buf, "%s><label for=\"lr\"> Enable TX</label>", g_persistent.enableUdpTx ? "checked" : "");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "<br><br>Host:<input type=\"text\" name=\"url\" value=\"%s\" >", g_persistent.udpUrl);
+  sprintf(
+    buf,
+    "<br><br>Host <small> (IPv4, hostname or udp://host)</small>:<input type=\"text\" name=\"url\" value=\"%s\" >",
+    g_persistent.udpUrl);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "Port:<input type=\"text\" name=\"port\" value=\"%d\" >", g_persistent.udpPort);
+  sprintf(buf, "Port <small> (default:33333)</small>:<input type=\"text\" name=\"port\" value=\"%d\" >", g_persistent.udpPort);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  // bUdpEncrypt
+  sprintf(buf, "<input type=\"checkbox\" name=\"enableencryption\" value=\"true\" ");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  sprintf(buf, "%s><label for=\"lr\"> Enable Encryption</label>", g_persistent.bUdpEncrypt ? "checked" : "");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
@@ -3130,23 +3135,6 @@ do_config_udp_get_handler(httpd_req_t *req)
       if (NULL == param) {
         return ESP_ERR_NO_MEM;
         free(param);
-      }
-
-      // Enable
-      if (ESP_OK == (rv = httpd_query_key_value(buf, "enable", param, WEBPAGE_PARAM_SIZE))) {
-        ESP_LOGD(TAG, "Found query parameter => enable=%s", param);
-        if (NULL != strstr(param, "true")) {
-          g_persistent.enableUdp = true;
-        }
-      }
-      else {
-        g_persistent.enableUdp = false;
-      }
-
-      // Write changed value to persistent storage
-      nvs_set_u8(g_nvsHandle, "enableUdp", g_persistent.enableUdp);
-      if (rv != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to update UDP enable [%s]", esp_err_to_name(rv));
       }
 
       // EnableRx
@@ -3216,6 +3204,22 @@ do_config_udp_get_handler(httpd_req_t *req)
       }
       else {
         ESP_LOGE(TAG, "Error getting MQTT port => rv=%d", rv);
+      }
+
+      // EnableEncryption
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "enableencryption", param, WEBPAGE_PARAM_SIZE))) {
+        ESP_LOGD(TAG, "Found query parameter => enableencryption=%s", param);
+        if (NULL != strstr(param, "true")) {
+          g_persistent.bUdpEncrypt = true;
+        }
+      }
+      else {
+        g_persistent.bUdpEncrypt = false;
+      }
+      // Write changed value to persistent storage
+      nvs_set_u8(g_nvsHandle, "bUdpEncrypt", g_persistent.bUdpEncrypt);
+      if (rv != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to update UDP encryption enable [%s]", esp_err_to_name(rv));
       }
 
       rv = nvs_commit(g_nvsHandle);

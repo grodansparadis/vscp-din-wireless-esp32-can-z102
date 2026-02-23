@@ -28,12 +28,36 @@
 */
 
 
+#include <stddef.h>
+#include <stdint.h>
+#include <esp_err.h>
+
 /*!
   UDP server task
   @param pvParameters Server parameters
 */
 void
 udpsrv_task(void *pvParameters);
+
+/*!
+  Send a raw payload over UDP as unicast or broadcast.
+
+  @param payload Pointer to payload buffer
+  @param payload_len Number of payload bytes to send
+  @param destination_ip Destination string (example "192.168.1.10",
+                        "255.255.255.255", "myhost.local" or
+                        "udp://myhost.local"). If NULL or invalid, current
+                        configuration value is used and fallback is broadcast.
+  @param destination_port Destination UDP port. If zero, configured UDP port
+                          is used (or default VSCP UDP port if configured
+                          value is also zero).
+  @return ESP_OK on success, otherwise ESP_FAIL or ESP_ERR_INVALID_ARG
+*/
+esp_err_t
+udpsrv_broadcast_message(const uint8_t *payload,
+                         size_t payload_len,
+                         const char *destination_ip,
+                         uint16_t destination_port);
 
 /*!
   Start UDP server task
