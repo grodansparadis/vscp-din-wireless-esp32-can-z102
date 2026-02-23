@@ -111,6 +111,7 @@ node_persistent_config_t g_persistent = {
   .bootCnt  = 0,
   .pmkLen   = 16,    // AES128 (for future use)
   .pmk      = { 0 }, // Default key is all nills
+  .encryptLvl = DEFAULT_ENCRYPTION_LEVEL, // 0 = none, 1 = AES128, 2 = AES192, 3 = AES256
 
   // CAN/TWAI
   .canSpeed  = DEFAULT_CAN_SPEED,
@@ -485,6 +486,16 @@ initPersistentStorage(void)
       ESP_LOGI(TAG, "Error (%s) reading Primary key from nvs!\n", esp_err_to_name(rv));
       break;
   }
+
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "encryptLvl",
+                         g_persistent.encryptLvl,
+                         DEFAULT_ENCRYPTION_LEVEL,
+                         TAG,
+                         "%d");
 
   // * * * Log persistent configuration * * *
 

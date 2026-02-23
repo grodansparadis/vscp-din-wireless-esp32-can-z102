@@ -176,9 +176,11 @@ typedef struct {
 
 // System defaults
 
-#define DEFAULT_NODE_NAME "VSCP CAN4VSCP Gateway"
-#define DEFAULT_LOG_URL   " "
-#define DEFAULT_LOG_PORT  514
+#define DEFAULT_NODE_NAME        "VSCP CAN4VSCP Gateway"
+#define DEFAULT_ENCRYPTION_LEVEL VSCP_ENCRYPTION_NONE // 0 = none, 1 = AES128, 2 = AES192, 3 = AES256
+
+#define DEFAULT_LOG_URL  " "
+#define DEFAULT_LOG_PORT 514
 
 #define DEFAULT_CAN_MODE   0          // CAN4VSCP_NORMAL
 #define DEFAULT_CAN_SPEED  6          // CAN4VSCP_125K
@@ -220,11 +222,11 @@ typedef struct {
 #define DEFAULT_MULTICAST_PORT   9598
 #define DEFAULT_MULTICAST_TTL    10
 
-#define DEFAULT_UDP_RX_ENABLE false
-#define DEFAULT_UDP_TX_ENABLE false
-#define DEFAULT_UDP_URL       "255.255.255.255" // Broadcast
-#define DEFAULT_UDP_PORT      33333
-#define DEFAULT_UDP_ENCRYPTION   false
+#define DEFAULT_UDP_RX_ENABLE  false
+#define DEFAULT_UDP_TX_ENABLE  false
+#define DEFAULT_UDP_URL        "255.255.255.255" // Broadcast
+#define DEFAULT_UDP_PORT       33333
+#define DEFAULT_UDP_ENCRYPTION false
 
 #define DEFAULT_WEBSOCKETS_ENABLE   false
 #define DEFAULT_WEBSOCKETS_PORT     8080
@@ -234,11 +236,12 @@ typedef struct {
 typedef struct {
 
   // Module
-  char nodeName[32]; // User name for node
-  uint8_t guid[16];  // GUID for node (default: Constructed from MAC address)
-  uint8_t pmk[16];   // System security key for encryption (AES128)
-  uint8_t pmkLen;    // For future use, Now always 16 (AES128)
-  uint32_t bootCnt;  // Number of restarts (not editable)
+  char nodeName[32];  // User name for node
+  uint8_t guid[16];   // GUID for node (default: Constructed from MAC address)
+  uint8_t encryptLvl; // Encryption level for UDP messages (0 = none, 1 = AES128, 2 = AES192, 3 = AES256)
+  uint8_t pmk[16];    // System security key for encryption (AES128)
+  uint8_t pmkLen;     // For future use, Now always 16 (AES128)
+  uint32_t bootCnt;   // Number of restarts (not editable)
 
   // CAN
   uint8_t canMode;    // CAN mode (normal, listen only, etc)

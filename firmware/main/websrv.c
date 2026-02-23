@@ -1558,12 +1558,37 @@ config_module_get_handler(httpd_req_t *req)
   //         g_persistent.startDelay);
   // httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
+  // Encryption level
+  sprintf(buf, "<br>Encryption level:<select name=\"encryptlvl\">");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<option value=\"0\" %s>None</option>",
+          (g_persistent.encryptLvl == VSCP_ENCRYPTION_NONE) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<option value=\"1\" %s>AES-128</option>",
+          (g_persistent.encryptLvl == VSCP_ENCRYPTION_AES128) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "<option value=\"2\" %s>AES-192</option>", (g_persistent.encryptLvl == 2) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<option value=\"3\" %s>AES-256</option>",
+          (g_persistent.encryptLvl == VSCP_ENCRYPTION_AES256) ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, "</select>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
   char *pmkstr = (char *) calloc(sizeof(g_persistent.pmk) * 2 + 1, 1);
   for (int i = 0; i < sizeof(g_persistent.pmk); i++) {
     sprintf(pmkstr + 2 * i, "%02X", g_persistent.pmk[i]);
   }
   sprintf(buf,
-          "Primary security key (32 hex bytes):<input type=\"password\" name=\"key\" maxlength=\"32\" value=\"%s\" >",
+          "Primary security key (16/24/32 hex bytes):<input type=\"password\" name=\"key\" maxlength=\"32\" value=\"%s\" >",
           pmkstr);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
   free(pmkstr);
@@ -1663,6 +1688,42 @@ do_config_module_get_handler(httpd_req_t *req)
       else {
         ESP_LOGE(TAG, "Error getting node_name => rv=%d", rv);
       }
+
+      // Encryption level
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "encryptlvl", param, WEBPAGE_PARAM_SIZE))) {
+        ESP_LOGD(TAG, "Found query parameter => encryptlvl=%s", param);
+        g_persistent.encryptLvl = (uint8_t) atoi(param);
+      }
+      else {
+        ESP_LOGE(TAG, "Error getting encryption level => rv=%d", rv);
+      }
+      // const char *encryptLvlStr;
+      // switch (g_persistent.encryptLvl) {
+      //   case 0:
+      //     encryptLvlStr = "None";
+      //     break;
+      //   case 1:
+      //     encryptLvlStr = "AES128";
+      //     break;
+      //     break;
+      //   case 2:
+      //     encryptLvlStr = "AES192";
+      //     break;
+      //   case 3:
+      //     encryptLvlStr = "AES256";
+      //     break;
+      //   default:
+      //     encryptLvlStr = "Unknown";
+      //     break;
+      // }
+      // sprintf(buf, "<tr><td class=\"name\">Encryption Level:</td><td class=\"prop\">%s</td></tr>", encryptLvlStr);
+      // httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+      // Write changed value to persistent storage
+        rv = nvs_set_u8(g_nvsHandle, "encryptLvl", g_persistent.encryptLvl);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to update encryption level [%s]", esp_err_to_name(rv));
+        }
 
       rv = nvs_commit(g_nvsHandle);
       if (rv != ESP_OK) {
@@ -3090,7 +3151,9 @@ config_udp_get_handler(httpd_req_t *req)
     g_persistent.udpUrl);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "Port <small> (default:33333)</small>:<input type=\"text\" name=\"port\" value=\"%d\" >", g_persistent.udpPort);
+  sprintf(buf,
+          "Port <small> (default:33333)</small>:<input type=\"text\" name=\"port\" value=\"%d\" >",
+          g_persistent.udpPort);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   // bUdpEncrypt
