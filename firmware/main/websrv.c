@@ -1336,7 +1336,7 @@ config_get_handler(httpd_req_t *req)
   sprintf(buf, "<p><form id=but3 class=\"button\" action='cfglog' method='get'><button>Logging</button></form></p>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "<p><form id=but2 class=\"button\" action='cfgwifi' method='get'><button>WiFi scan</button></form></p>");
+  sprintf(buf, "<p><form id=but2 class=\"button\" action='cfgwifi' method='get'><button>WiFi</button></form></p>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(
@@ -1587,11 +1587,22 @@ config_module_get_handler(httpd_req_t *req)
   for (int i = 0; i < sizeof(g_persistent.pmk); i++) {
     sprintf(pmkstr + 2 * i, "%02X", g_persistent.pmk[i]);
   }
-  sprintf(buf,
-          "Primary security key (16/24/32 hex bytes):<input type=\"password\" name=\"key\" maxlength=\"32\" value=\"%s\" >",
-          pmkstr);
+  sprintf(
+    buf,
+    "Primary security key (16/24/32 hex bytes):<input type=\"password\" name=\"key\" maxlength=\"32\" value=\"%s\" >",
+    pmkstr);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
   free(pmkstr);
+
+  sprintf(buf,
+          "Module name:<input type=\"text\" name=\"zone\" maxlength=\"32\" size=\"20\" value=\"%d\" >",
+          g_persistent.nodeZone);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "Module sub-zone:<input type=\"text\" name=\"subzone\" maxlength=\"32\" size=\"20\" value=\"%d\" >",
+          g_persistent.nodeSubzone);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
@@ -1720,14 +1731,47 @@ do_config_module_get_handler(httpd_req_t *req)
       // httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
       // Write changed value to persistent storage
-        rv = nvs_set_u8(g_nvsHandle, "encryptLvl", g_persistent.encryptLvl);
+      rv = nvs_set_u8(g_nvsHandle, "encryptLvl", g_persistent.encryptLvl);
+      if (rv != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to update encryption level [%s]", esp_err_to_name(rv));
+      }
+
+      // zone
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "zone", param, WEBPAGE_PARAM_SIZE))) {
+        g_persistent.nodeZone = (uint8_t) vscp_fwhlp_readStringValue(param);
+
+        // Write changed value to persistent storage
+        rv = nvs_set_u8(g_nvsHandle, "nodeZone", g_persistent.nodeZone);
         if (rv != ESP_OK) {
-          ESP_LOGE(TAG, "Failed to update encryption level [%s]", esp_err_to_name(rv));
+          ESP_LOGE(TAG, "Failed to update node zone [%s]", esp_err_to_name(rv));
         }
+      }
+      else {
+        ESP_LOGE(TAG, "Error getting node zone => rv=%d", rv);
+      }
+
+      // subzone
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "subzone", param, WEBPAGE_PARAM_SIZE))) {
+        g_persistent.nodeSubzone = (uint8_t) vscp_fwhlp_readStringValue(param);
+
+        // Write changed value to persistent storage
+        rv = nvs_set_u8(g_nvsHandle, "nodeSubZone", g_persistent.nodeSubzone);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to update node subzone [%s]", esp_err_to_name(rv));
+        }
+      }
+      else {
+        ESP_LOGE(TAG, "Error getting node subzone => rv=%d", rv);
+      }
 
       rv = nvs_commit(g_nvsHandle);
       if (rv != ESP_OK) {
         ESP_LOGE(TAG, "Failed to commit updates to nvs\n");
+      }
+
+      rv = wcang_reconfigure_wifi_sta();
+      if (rv != ESP_OK) {
+        ESP_LOGW(TAG, "WiFi runtime reconfiguration failed: %s", esp_err_to_name(rv));
       }
 
       free(param);
@@ -1994,6 +2038,34 @@ config_wifi_get_handler(httpd_req_t *req)
           g_persistent.wifiSecondaryPassword);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
+  sprintf(buf,
+          "<br><br>IP Assignment:<select name=\"static_ip_enable\">"
+          "<option value=\"0\" %s>DHCP</option>"
+          "<option value=\"1\" %s>Static</option></select>",
+          g_persistent.wifiStaticEnable ? "" : "selected",
+          g_persistent.wifiStaticEnable ? "selected" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<br>Static IP:<input type=\"text\" name=\"static_ip\" value=\"%s\" maxlength=\"15\" size=\"25\">",
+          g_persistent.wifiStaticIp);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<br>Netmask:<input type=\"text\" name=\"static_netmask\" value=\"%s\" maxlength=\"15\" size=\"25\">",
+          g_persistent.wifiStaticNetmask);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<br>Gateway:<input type=\"text\" name=\"static_gateway\" value=\"%s\" maxlength=\"15\" size=\"25\">",
+          g_persistent.wifiStaticGateway);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<br>DNS:<input type=\"text\" name=\"static_dns\" value=\"%s\" maxlength=\"15\" size=\"25\">",
+          g_persistent.wifiStaticDns);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
   sprintf(buf, "</fieldset><br>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
@@ -2211,6 +2283,83 @@ do_config_wifi_get_handler(httpd_req_t *req)
         }
       }
 
+      // IP assignment mode (0 = DHCP, 1 = static)
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "static_ip_enable", param, WEBPAGE_PARAM_SIZE))) {
+        g_persistent.wifiStaticEnable = (0 == strcmp(param, "1")) ? 1 : 0;
+        rv                            = nvs_set_u8(g_nvsHandle, "wifiStaIpEn", g_persistent.wifiStaticEnable);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to update static IP enable [%s]", esp_err_to_name(rv));
+        }
+      }
+
+      // Static IP address
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "static_ip", param, WEBPAGE_PARAM_SIZE))) {
+        char *pdecoded = urlDecode(param);
+        if (NULL == pdecoded) {
+          free(param);
+          free(buf);
+          return ESP_ERR_NO_MEM;
+        }
+        strncpy(g_persistent.wifiStaticIp, pdecoded, sizeof(g_persistent.wifiStaticIp) - 1);
+        g_persistent.wifiStaticIp[sizeof(g_persistent.wifiStaticIp) - 1] = '\0';
+        free(pdecoded);
+        rv = nvs_set_str(g_nvsHandle, "wifiStaIp", g_persistent.wifiStaticIp);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to update static IP [%s]", esp_err_to_name(rv));
+        }
+      }
+
+      // Static netmask
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "static_netmask", param, WEBPAGE_PARAM_SIZE))) {
+        char *pdecoded = urlDecode(param);
+        if (NULL == pdecoded) {
+          free(param);
+          free(buf);
+          return ESP_ERR_NO_MEM;
+        }
+        strncpy(g_persistent.wifiStaticNetmask, pdecoded, sizeof(g_persistent.wifiStaticNetmask) - 1);
+        g_persistent.wifiStaticNetmask[sizeof(g_persistent.wifiStaticNetmask) - 1] = '\0';
+        free(pdecoded);
+        rv = nvs_set_str(g_nvsHandle, "wifiStaMask", g_persistent.wifiStaticNetmask);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to update static netmask [%s]", esp_err_to_name(rv));
+        }
+      }
+
+      // Static gateway
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "static_gateway", param, WEBPAGE_PARAM_SIZE))) {
+        char *pdecoded = urlDecode(param);
+        if (NULL == pdecoded) {
+          free(param);
+          free(buf);
+          return ESP_ERR_NO_MEM;
+        }
+        strncpy(g_persistent.wifiStaticGateway, pdecoded, sizeof(g_persistent.wifiStaticGateway) - 1);
+        g_persistent.wifiStaticGateway[sizeof(g_persistent.wifiStaticGateway) - 1] = '\0';
+        free(pdecoded);
+        rv = nvs_set_str(g_nvsHandle, "wifiStaGw", g_persistent.wifiStaticGateway);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to update static gateway [%s]", esp_err_to_name(rv));
+        }
+      }
+
+      // Static DNS server
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "static_dns", param, WEBPAGE_PARAM_SIZE))) {
+        char *pdecoded = urlDecode(param);
+        if (NULL == pdecoded) {
+          free(param);
+          free(buf);
+          return ESP_ERR_NO_MEM;
+        }
+        strncpy(g_persistent.wifiStaticDns, pdecoded, sizeof(g_persistent.wifiStaticDns) - 1);
+        g_persistent.wifiStaticDns[sizeof(g_persistent.wifiStaticDns) - 1] = '\0';
+        free(pdecoded);
+        rv = nvs_set_str(g_nvsHandle, "wifiStaDns", g_persistent.wifiStaticDns);
+        if (rv != ESP_OK) {
+          ESP_LOGE(TAG, "Failed to update static DNS [%s]", esp_err_to_name(rv));
+        }
+      }
+
       rv = nvs_commit(g_nvsHandle);
       if (rv != ESP_OK) {
         ESP_LOGE(TAG, "Failed to commit updates to nvs\n");
@@ -2224,7 +2373,7 @@ do_config_wifi_get_handler(httpd_req_t *req)
   const char *resp_str =
     "<html><head><meta charset='utf-8'><meta http-equiv=\"refresh\" content=\"2;url=cfgwifi\" "
     "/><style>" WEBPAGE_STYLE_CSS "</style></head><body><h2 class=\"name\">Saving WiFi configuration...<br>"
-    "Device will attempt to connect to the configured networks.</h2></body></html>";
+    "Device will apply network settings and reconnect.</h2></body></html>";
   httpd_resp_send(req, resp_str, HTTPD_RESP_USE_STRLEN);
 
   return ESP_OK;
@@ -2959,14 +3108,28 @@ config_multicast_get_handler(httpd_req_t *req)
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf,
-          "<br><br>Multicast IP address:<input type=\"text\" name=\"url\" value=\"%s\" >",
+          "<br><br>Multicast IP address (224.0.23.158):<input type=\"text\" name=\"url\" value=\"%s\" >",
           g_persistent.multicastUrl);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "Port:<input type=\"text\" name=\"port\" value=\"%d\" >", g_persistent.multicastPort);
+  sprintf(buf, "Port (9598):<input type=\"text\" name=\"port\" value=\"%d\" >", g_persistent.multicastPort);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, "TTL:<input type=\"text\" name=\"ttl\" value=\"%d\" >", g_persistent.multicastTtl);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  // bMcastEncrypt
+  sprintf(buf, "<input type=\"checkbox\" name=\"bMcastEncrypt\" value=\"true\" ");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  sprintf(buf, "%s><label for=\"lr\"> Enable Encryption</label>", g_persistent.bMcastEncrypt ? "checked" : "");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  // bMcastHbeat
+  sprintf(buf, "<br><input type=\"checkbox\" name=\"bMcastHbeat\" value=\"true\" ");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  sprintf(buf,
+          "%s><label for=\"lr\"> Enable VSCP heartbeat on port 9598</label>",
+          g_persistent.bHeartbeat ? "checked" : "");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
@@ -3071,6 +3234,38 @@ do_config_multicast_get_handler(httpd_req_t *req)
       }
       else {
         ESP_LOGE(TAG, "Error getting multicast ttl => rv=%d", rv);
+      }
+
+      // EnableEncryption
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "bMcastEncrypt", param, WEBPAGE_PARAM_SIZE))) {
+        ESP_LOGD(TAG, "Found query parameter => bMcastEncrypt=%s", param);
+        if (NULL != strstr(param, "true")) {
+          g_persistent.bMcastEncrypt = true;
+        }
+      }
+      else {
+        g_persistent.bMcastEncrypt = false;
+      }
+      // Write changed value to persistent storage
+      nvs_set_u8(g_nvsHandle, "bMcastEncrypt", g_persistent.bMcastEncrypt);
+      if (rv != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to update multicast encryption enable [%s]", esp_err_to_name(rv));
+      }
+
+      // bMcastHbeat
+      if (ESP_OK == (rv = httpd_query_key_value(buf, "bMcastHbeat", param, WEBPAGE_PARAM_SIZE))) {
+        ESP_LOGD(TAG, "Found query parameter => bMcastHbeat=%s", param);
+        if (NULL != strstr(param, "true")) {
+          g_persistent.bHeartbeat = true;
+        }
+      }
+      else {
+        g_persistent.bHeartbeat = false;
+      }
+      // Write changed value to persistent storage
+      nvs_set_u8(g_nvsHandle, "bMcastHbeat", g_persistent.bHeartbeat);
+      if (rv != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to update multicast heartbeat enable [%s]", esp_err_to_name(rv));
       }
 
       rv = nvs_commit(g_nvsHandle);

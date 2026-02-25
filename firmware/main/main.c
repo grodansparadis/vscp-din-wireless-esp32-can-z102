@@ -1,7 +1,7 @@
 /*
   File: main.c
 
-  VSCP Wireless CAN4VSCP Gateway (VSCP-WCANG, Frankfurt-WiFi)
+  VSCP Wireless CAN4VSCP Gateway 
 
   Main application entry point and system initialization for ESP32-C3 based
   VSCP CAN gateway with WiFi connectivity. This module handles:
@@ -58,7 +58,9 @@
 #include <esp_timer.h>
 #include <esp_tls_crypto.h>
 #include <esp_wifi.h>
+#include <esp_netif.h>
 #include <lwip/sockets.h>
+#include <lwip/ip4_addr.h>
 #include <nvs_flash.h>
 
 #include <wifi_provisioning/manager.h>
@@ -79,6 +81,7 @@
 #include "can4vscp.h"
 #include "tcpsrv.h"
 #include "udpsrv.h"
+#include "multicastsrv.h"
 #include "websrv.h"
 #include "mqtt.h"
 
@@ -87,7 +90,8 @@
 #include "vscp-compiler.h"
 #include "vscp-projdefs.h"
 
-static const char *TAG = "main";
+static const char *TAG          = "main";
+static esp_netif_t *s_sta_netif = NULL;
 
 // ============================================================================
 //                           Global Variables
@@ -106,11 +110,13 @@ nvs_handle_t g_nvsHandle;
  * Modified via web interface and saved to NVS for persistence across reboots.
  */
 node_persistent_config_t g_persistent = {
-  .nodeName = DEFAULT_NODE_NAME,
-  .guid     = { 0 }, // Default GUID is constructed from MAC address
-  .bootCnt  = 0,
-  .pmkLen   = 16,    // AES128 (for future use)
-  .pmk      = { 0 }, // Default key is all nills
+  .nodeName   = DEFAULT_NODE_NAME,
+  .nodeZone   = DEFAULT_MODULE_ZONE,
+  .nodeSubzone = DEFAULT_MODULE_SUBZONE,
+  .guid       = { 0 }, // Default GUID is constructed from MAC address
+  .bootCnt    = 0,
+  .pmkLen     = 16,                       // AES128 (for future use)
+  .pmk        = { 0 },                    // Default key is all nills
   .encryptLvl = DEFAULT_ENCRYPTION_LEVEL, // 0 = none, 1 = AES128, 2 = AES192, 3 = AES256
 
   // CAN/TWAI
@@ -135,6 +141,11 @@ node_persistent_config_t g_persistent = {
   .wifiPrimaryPassword   = "",
   .wifiSecondarySsid     = "",
   .wifiSecondaryPassword = "",
+  .wifiStaticEnable      = DEFAULT_WIFI_STATIC_ENABLE,
+  .wifiStaticIp          = DEFAULT_WIFI_STATIC_IP,
+  .wifiStaticNetmask     = DEFAULT_WIFI_STATIC_NETMASK,
+  .wifiStaticGateway     = DEFAULT_WIFI_STATIC_GATEWAY,
+  .wifiStaticDns         = DEFAULT_WIFI_STATIC_DNS,
 
   .enableVscpLink = DEFAULT_VSCP_LINK_ENABLE,
   .vscplinkPort   = DEFAULT_VSCP_LINK_PORT,
@@ -163,6 +174,8 @@ node_persistent_config_t g_persistent = {
   .multicastUrl    = DEFAULT_MULTICAST_URL,
   .multicastPort   = DEFAULT_MULTICAST_PORT,
   .multicastTtl    = DEFAULT_MULTICAST_TTL,
+  .bMcastEncrypt   = DEFAULT_MULTICAST_ENCRYPTION,
+  .bHeartbeat      = DEFAULT_MULTICAST_HEARTBEAT,
 
   // UDP
   .enableUdpRx = DEFAULT_UDP_RX_ENABLE,
@@ -497,6 +510,26 @@ initPersistentStorage(void)
                          TAG,
                          "%d");
 
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "zone",
+                         g_persistent.nodeZone,
+                         DEFAULT_MODULE_ZONE,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "subzone",
+                         g_persistent.nodeSubzone,
+                         DEFAULT_MODULE_SUBZONE,
+                         TAG,
+                         "%d");
+
   // * * * Log persistent configuration * * *
 
   NVS_GET_OR_SET_DEFAULT(u8,
@@ -596,6 +629,27 @@ initPersistentStorage(void)
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "wifiPriPass", g_persistent.wifiPrimaryPassword, "", TAG);
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "wifiSecSsid", g_persistent.wifiSecondarySsid, "", TAG);
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "wifiSecPass", g_persistent.wifiSecondaryPassword, "", TAG);
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "wifiStaIpEn",
+                         g_persistent.wifiStaticEnable,
+                         DEFAULT_WIFI_STATIC_ENABLE,
+                         TAG,
+                         "%d");
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "wifiStaIp", g_persistent.wifiStaticIp, DEFAULT_WIFI_STATIC_IP, TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle,
+                             "wifiStaMask",
+                             g_persistent.wifiStaticNetmask,
+                             DEFAULT_WIFI_STATIC_NETMASK,
+                             TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle,
+                             "wifiStaGw",
+                             g_persistent.wifiStaticGateway,
+                             DEFAULT_WIFI_STATIC_GATEWAY,
+                             TAG);
+  NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "wifiStaDns", g_persistent.wifiStaticDns, DEFAULT_WIFI_STATIC_DNS, TAG);
 
   // * * * VSCP link persistent configuration * * *
   NVS_GET_OR_SET_DEFAULT(u8,
@@ -686,7 +740,7 @@ initPersistentStorage(void)
                          DEFAULT_MQTT_RETAIN,
                          TAG,
                          "%d");
-NVS_GET_OR_SET_DEFAULT(u8,
+  NVS_GET_OR_SET_DEFAULT(u8,
                          nvs_get_u8,
                          nvs_set_u8,
                          g_nvsHandle,
@@ -694,7 +748,7 @@ NVS_GET_OR_SET_DEFAULT(u8,
                          g_persistent.mqttFormat,
                          DEFAULT_MQTT_FORMAT,
                          TAG,
-                         "%d");                         
+                         "%d");
 
   // * * * Multicast persistent configuration * * *
   NVS_GET_OR_SET_DEFAULT(u8,
@@ -729,8 +783,37 @@ NVS_GET_OR_SET_DEFAULT(u8,
 
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "multicastUrl", g_persistent.multicastUrl, DEFAULT_MULTICAST_URL, TAG);
 
-  // * * * UDP persistent configuration * * *
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "bMcastEncrypt",
+                         g_persistent.bMcastEncrypt,
+                         DEFAULT_MULTICAST_ENCRYPTION,
+                         TAG,
+                         "%d");
 
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "bMcastEncrypt",
+                         g_persistent.bMcastEncrypt,
+                         DEFAULT_MULTICAST_ENCRYPTION,
+                         TAG,
+                         "%d");
+
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "bMcastHbeat",
+                         g_persistent.bHeartbeat,
+                         DEFAULT_MULTICAST_HEARTBEAT,
+                         TAG,
+                         "%d");
+
+  // * * * UDP persistent configuration * * *
 
   NVS_GET_OR_SET_DEFAULT(u8,
                          nvs_get_u8,
@@ -764,7 +847,7 @@ NVS_GET_OR_SET_DEFAULT(u8,
 
   NVS_GET_OR_SET_DEFAULT_STR(g_nvsHandle, "udpUrl", g_persistent.udpUrl, "255.255.255.255", TAG);
 
-NVS_GET_OR_SET_DEFAULT(u8,
+  NVS_GET_OR_SET_DEFAULT(u8,
                          nvs_get_u8,
                          nvs_set_u8,
                          g_nvsHandle,
@@ -772,7 +855,7 @@ NVS_GET_OR_SET_DEFAULT(u8,
                          g_persistent.bUdpEncrypt,
                          DEFAULT_UDP_ENCRYPTION,
                          TAG,
-                         "%d");    
+                         "%d");
 
   // * * * Websockets server configuration * * *
 
@@ -1106,6 +1189,107 @@ wifi_init_sta(void)
   ESP_ERROR_CHECK(esp_wifi_start());
 }
 
+static bool
+parse_ipv4_addr(const char *str, esp_ip4_addr_t *addr)
+{
+  if ((NULL == str) || (NULL == addr) || ('\0' == *str)) {
+    return false;
+  }
+
+  ip4_addr_t parsed = { 0 };
+  if (!ip4addr_aton(str, &parsed)) {
+    return false;
+  }
+
+  addr->addr = parsed.addr;
+  return true;
+}
+
+static esp_err_t
+apply_sta_ip_config(void)
+{
+  if (NULL == s_sta_netif) {
+    ESP_LOGW(TAG, "STA netif is not available");
+    return ESP_ERR_INVALID_STATE;
+  }
+
+  if (!g_persistent.wifiStaticEnable) {
+    ESP_LOGI(TAG, "WiFi static IPv4 disabled, using DHCP");
+    esp_err_t rv = esp_netif_dhcpc_start(s_sta_netif);
+    if ((ESP_OK != rv) && (ESP_ERR_ESP_NETIF_DHCP_ALREADY_STARTED != rv)) {
+      ESP_LOGW(TAG, "Failed to start DHCP client: %s", esp_err_to_name(rv));
+      return rv;
+    }
+    return ESP_OK;
+  }
+
+  esp_netif_ip_info_t ip_info = { 0 };
+  if (!parse_ipv4_addr(g_persistent.wifiStaticIp, &ip_info.ip) ||
+      !parse_ipv4_addr(g_persistent.wifiStaticNetmask, &ip_info.netmask) ||
+      !parse_ipv4_addr(g_persistent.wifiStaticGateway, &ip_info.gw)) {
+    ESP_LOGW(TAG,
+             "Invalid static IPv4 settings (ip=%s, mask=%s, gw=%s). Falling back to DHCP.",
+             g_persistent.wifiStaticIp,
+             g_persistent.wifiStaticNetmask,
+             g_persistent.wifiStaticGateway);
+    return ESP_ERR_INVALID_ARG;
+  }
+
+  esp_err_t rv = esp_netif_dhcpc_stop(s_sta_netif);
+  if ((ESP_OK != rv) && (ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED != rv)) {
+    ESP_LOGW(TAG, "Failed to stop DHCP client: %s", esp_err_to_name(rv));
+    return rv;
+  }
+
+  ESP_ERROR_CHECK(esp_netif_set_ip_info(s_sta_netif, &ip_info));
+
+  if ('\0' != g_persistent.wifiStaticDns[0]) {
+    esp_netif_dns_info_t dns_info = { 0 };
+    if (parse_ipv4_addr(g_persistent.wifiStaticDns, &dns_info.ip.u_addr.ip4)) {
+      dns_info.ip.type = ESP_IPADDR_TYPE_V4;
+      ESP_ERROR_CHECK(esp_netif_set_dns_info(s_sta_netif, ESP_NETIF_DNS_MAIN, &dns_info));
+    }
+    else {
+      ESP_LOGW(TAG, "Invalid static DNS address: %s", g_persistent.wifiStaticDns);
+    }
+  }
+
+  ESP_LOGI(TAG,
+           "Applied static IPv4 settings: ip=" IPSTR " mask=" IPSTR " gw=" IPSTR,
+           IP2STR(&ip_info.ip),
+           IP2STR(&ip_info.netmask),
+           IP2STR(&ip_info.gw));
+
+  return ESP_OK;
+}
+
+esp_err_t
+wcang_reconfigure_wifi_sta(void)
+{
+  if (NULL == s_sta_netif) {
+    return ESP_ERR_INVALID_STATE;
+  }
+
+  esp_err_t rv = apply_sta_ip_config();
+  if (ESP_OK != rv) {
+    return rv;
+  }
+
+  rv = esp_wifi_disconnect();
+  if ((ESP_OK != rv) && (ESP_ERR_WIFI_NOT_CONNECT != rv) && (ESP_ERR_WIFI_NOT_STARTED != rv)) {
+    ESP_LOGW(TAG, "esp_wifi_disconnect failed: %s", esp_err_to_name(rv));
+  }
+
+  rv = esp_wifi_connect();
+  if (ESP_OK != rv) {
+    ESP_LOGW(TAG, "esp_wifi_connect failed: %s", esp_err_to_name(rv));
+    return rv;
+  }
+
+  ESP_LOGI(TAG, "WiFi station reconfiguration requested");
+  return ESP_OK;
+}
+
 /**
  * @brief Generate unique device service name for provisioning
  *
@@ -1308,27 +1492,27 @@ app_main(void)
 
   crcInit(); // For calculating CRC of VSCP events
 
-  vscpEvent ev = { 0 };
-  ;
-  char *jsonobj = "{\"vscpHead\":321,\"vscpObid\":12345,\"vscpTimeStamp\":67890,\"vscpClass\":10,\"vscpType\":6,"
-                  "\"vscpGuid\":\"FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF\",\"vscpData\":[1,2,3,4,5,6,7,8]}";
+  // vscpEvent ev = { 0 };
+  // ;
+  // char *jsonobj = "{\"vscpHead\":321,\"vscpObid\":12345,\"vscpTimeStamp\":67890,\"vscpClass\":10,\"vscpType\":6,"
+  //                 "\"vscpGuid\":\"FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF\",\"vscpData\":[1,2,3,4,5,6,7,8]}";
 
-  int result = vscp_fwhlp_parse_json(&ev, jsonobj);
-  ESP_LOGE(TAG,
-           "Parsed event: status=%d class=%d, type=%d, data_len=%d",
-           result,
-           ev.vscp_class,
-           ev.vscp_type,
-           ev.sizeData);
+  // int result = vscp_fwhlp_parse_json(&ev, jsonobj);
+  // ESP_LOGI(TAG,
+  //          "Parsed event: status=%d class=%d, type=%d, data_len=%d",
+  //          result,
+  //          ev.vscp_class,
+  //          ev.vscp_type,
+  //          ev.sizeData);
 
-  vscpEventEx pex = { 0 };
-  vscp_fwhlp_parse_json_ex(&pex, jsonobj);
-  ESP_LOGE(TAG,
-           "Parsed event: status=%d class=%d, type=%d, data_len=%d",
-           result,
-           pex.vscp_class,
-           pex.vscp_type,
-           pex.sizeData);
+  // vscpEventEx pex = { 0 };
+  // vscp_fwhlp_parse_json_ex(&pex, jsonobj);
+  // ESP_LOGE(TAG,
+  //          "Parsed event: status=%d class=%d, type=%d, data_len=%d",
+  //          result,
+  //          pex.vscp_class,
+  //          pex.vscp_type,
+  //          pex.sizeData);
 
   // ============================================================================
   //                      NVS (Non-Volatile Storage) Init
@@ -1341,6 +1525,9 @@ app_main(void)
     ESP_ERROR_CHECK(nvs_flash_erase());
     ESP_ERROR_CHECK(nvs_flash_init());
   }
+
+  // Load all persistent configuration from NVS and increment boot counter
+  initPersistentStorage();
 
   // ============================================================================
   //                      Network Stack Initialization
@@ -1425,7 +1612,7 @@ app_main(void)
   // ============================================================================
 
   // Create WiFi station network interface
-  esp_netif_create_default_wifi_sta();
+  s_sta_netif = esp_netif_create_default_wifi_sta();
 
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_SOFTAP
   // Create WiFi AP interface for SoftAP provisioning
@@ -1435,6 +1622,9 @@ app_main(void)
   // Initialize WiFi driver with default configuration
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+  // Apply static IP/DNS configuration before WiFi STA starts
+  apply_sta_ip_config();
 
   // ============================================================================
   //                      WiFi Provisioning Setup
@@ -1645,9 +1835,6 @@ app_main(void)
   //                    Load Configuration from NVS
   // ============================================================================
 
-  // Load all persistent configuration from NVS and increment boot counter
-  initPersistentStorage();
-
   // ============================================================================
   //                    Start Web Configuration Server
   // ============================================================================
@@ -1696,9 +1883,11 @@ app_main(void)
 
   // Start MQTT client task if enabled
   mqtt_start();
-  
-  // multicast_start();   // Start UDP multicast task if enabled
-  udp_start();         // Start UDP unicast/broadcast task if enabled
+
+  udp_start(); // Start UDP unicast/broadcast task if enabled
+
+  multicast_start(); // Start UDP multicast task if enabled
+
   // ws_start();          // Start WebSocket server task if enabled
 
   // ============================================================================
@@ -1722,7 +1911,7 @@ app_main(void)
 
   while (1) {
 
-    //esp_task_wdt_reset(); // Reset the watchdog timer
+    // esp_task_wdt_reset(); // Reset the watchdog timer
 
     can4vscp_frame_t msg = {};
 

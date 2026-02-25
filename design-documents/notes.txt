@@ -4,13 +4,12 @@ Internal product page: http://192.168.1.7/wiki/doku.php?id=vscp-din-esp32-can-z1
 openocd -f board/esp32c3-builtin.cfg
 
 ------------------------------------------------------
-TODO
+                       TODO
 ------------------------------------------------------
 - Multicast support
-- UDP support
 - TLS support
 - Websocket support
-- Send heartbeat on all interfaces. (Multicast 9598)
+- Send heartbeat on Multicast 9598
 - VSCP Node scan on VSCP2CAN interface.
 - Buttons.  
 - LED functionality.

@@ -38,31 +38,37 @@
   @param nAlgorithm Encryption algorithm to use (vscp.h)
   @return VSCP_ERROR_SUCCESS on success else error code
 */
-int32_t
-multicast_sendEvent(int sock, const char *pstrev, bool bEncrypt, uint8_t nAlgorithm);
+// int32_t
+// multicast_sendEvent(int sock, const char *pstrev, bool bEncrypt, uint8_t nAlgorithm);
+
 
 /*!
-  @fn multicast_receive
-  @param buf Buffer with received data
-  @param len Length of received data
-  @brief Receive VSCP events as multicast UDP packets
+  Multicast heartbeat task
+  @param pvParameters Task parameters
 */
 void
-multicast_handle_vscp_event(uint8_t *buf, uint16_t len);
+multicast_heartbeat_task(void *pvParameters);
 
 /*!
-  @fn multicast_receive
-  @brief Receive multicast UDP packets
+  Multicast transmit task
+  @param pvParameters Task parameters
 */
 void
-multicast_receive(void);
+multicast_tx_task(void *pvParameters);
+
+
+
 
 /*!
-  @fn multicast_send_dummy
-  @brief Send multicast UDP packets
+  Multicast receive task
+  @param pvParameters Task parameters
 */
 void
-multicast_send_dummy(void);
+multicast_rx_task(void *pvParameters);
 
+/*!
+  Start Multicast server task
+*/
+void multicast_start(void);
 
 #endif

@@ -80,6 +80,20 @@ static const char *TAG = "udpsrv";
 
 #define UDP_HOST_MAX_LEN 128
 
+#if defined(CONFIG_LWIP_NETBUF_RECVINFO) && !defined(CONFIG_EXAMPLE_IPV6)
+////////////////////////////////////////////////////////////////////////////
+// is_ipv4_multicast_addr
+//
+// Return true if an IPv4 address (network byte order) is in 224.0.0.0/4.
+
+static bool
+is_ipv4_multicast_addr(uint32_t addr_net_order)
+{
+  uint32_t addr_host_order = ntohl(addr_net_order);
+  return (addr_host_order >= 0xE0000000UL) && (addr_host_order <= 0xEFFFFFFFUL);
+}
+#endif
+
 ////////////////////////////////////////////////////////////////////////////
 // normalize_udp_host
 //
@@ -415,26 +429,31 @@ udpsrv_rx_task(void *pvParameters)
 {
   int rv = 0;
   uint8_t rx_buffer[BUFFER_SIZE];
-  char addr_str[128];
   int addr_family = (int) pvParameters;
   int ip_protocol = 0;
+  struct sockaddr_in *dest_addr_ip4;
   struct sockaddr_in6 dest_addr;
 
-  while (1) {
+  if (addr_family == AF_INET) {
+    dest_addr_ip4                  = (struct sockaddr_in *) &dest_addr;
+    dest_addr_ip4->sin_addr.s_addr = htonl(INADDR_ANY);
+    dest_addr_ip4->sin_family      = AF_INET;
+    dest_addr_ip4->sin_port        = htons(VSCP_DEFAULT_UDP_PORT);
+    ip_protocol                    = IPPROTO_IP;
+  }
+  else if (addr_family == AF_INET6) {
+    bzero(&dest_addr.sin6_addr.un, sizeof(dest_addr.sin6_addr.un));
+    dest_addr.sin6_family = AF_INET6;
+    dest_addr.sin6_port   = htons(VSCP_DEFAULT_UDP_PORT);
+    ip_protocol           = IPPROTO_IPV6;
+  }
+  else {
+    ESP_LOGE(TAG, "Unknown address family");
+    vTaskDelete(NULL);
+    return;
+  }
 
-    if (addr_family == AF_INET) {
-      struct sockaddr_in *dest_addr_ip4 = (struct sockaddr_in *) &dest_addr;
-      dest_addr_ip4->sin_addr.s_addr    = htonl(INADDR_ANY);
-      dest_addr_ip4->sin_family         = AF_INET;
-      dest_addr_ip4->sin_port           = htons(VSCP_DEFAULT_UDP_PORT);
-      ip_protocol                       = IPPROTO_IP;
-    }
-    else if (addr_family == AF_INET6) {
-      bzero(&dest_addr.sin6_addr.un, sizeof(dest_addr.sin6_addr.un));
-      dest_addr.sin6_family = AF_INET6;
-      dest_addr.sin6_port   = htons(VSCP_DEFAULT_UDP_PORT);
-      ip_protocol           = IPPROTO_IPV6;
-    }
+  while (1) {
 
     int sock = socket(addr_family, SOCK_DGRAM, ip_protocol);
     if (sock < 0) {
@@ -444,8 +463,8 @@ udpsrv_rx_task(void *pvParameters)
     ESP_LOGI(TAG, "Socket created");
 
 #if defined(CONFIG_LWIP_NETBUF_RECVINFO) && !defined(CONFIG_EXAMPLE_IPV6)
-    int enable = 1;
-    lwip_setsockopt(sock, IPPROTO_IP, IP_PKTINFO, &enable, sizeof(enable));
+  int enable = 1;
+  lwip_setsockopt(sock, IPPROTO_IP, IP_PKTINFO, &enable, sizeof(enable));
 #endif
 
 #if defined(CONFIG_EXAMPLE_IPV4) && defined(CONFIG_EXAMPLE_IPV6)
@@ -463,11 +482,25 @@ udpsrv_rx_task(void *pvParameters)
     timeout.tv_usec = 0;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
 
-    int err = bind(sock, (struct sockaddr *) &dest_addr, sizeof(dest_addr));
-    if (err < 0) {
-      ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
+    int flag = 1;
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
+
+    if (addr_family == AF_INET) {
+      // ESP_LOGD(TAG, "Binding to %s:%d\n", inet_ntoa(dest_addr_ip4->sin_addr), ntohs(dest_addr_ip4->sin_port));
+
+      int err = bind(sock, (struct sockaddr *) dest_addr_ip4, sizeof(*dest_addr_ip4));
+      if (err < 0) {
+        ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
+      }
     }
-    ESP_LOGI(TAG, "Socket bound, port %d", VSCP_DEFAULT_UDP_PORT);
+    else if (addr_family == AF_INET6) {
+      ESP_LOGD(TAG, "Binding to [%s]:%d\n", inet6_ntoa(dest_addr.sin6_addr), ntohs(dest_addr.sin6_port));
+      int err = bind(sock, (struct sockaddr *) &dest_addr, sizeof(dest_addr));
+      if (err < 0) {
+        ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
+        break;
+      }
+    }
 
     struct sockaddr_storage source_addr; // Large enough for both IPv4 or IPv6
     socklen_t socklen = sizeof(source_addr);
@@ -492,6 +525,11 @@ udpsrv_rx_task(void *pvParameters)
     while (1) {
       ESP_LOGV(TAG, "Waiting for data");
 #if defined(CONFIG_LWIP_NETBUF_RECVINFO) && !defined(CONFIG_EXAMPLE_IPV6)
+      memset(cmsg_buf, 0, sizeof(cmsg_buf));
+      msg.msg_control    = cmsg_buf;
+      msg.msg_controllen = sizeof(cmsg_buf);
+      msg.msg_name       = (struct sockaddr *) &source_addr;
+      msg.msg_namelen    = socklen;
       int len = recvmsg(sock, &msg, 0);
 #else
       int len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *) &source_addr, &socklen);
@@ -508,6 +546,24 @@ udpsrv_rx_task(void *pvParameters)
       }
       // Data received
       else {
+#if defined(CONFIG_LWIP_NETBUF_RECVINFO) && !defined(CONFIG_EXAMPLE_IPV6)
+        bool bDropMulticast = false;
+        for (cmsgtmp = CMSG_FIRSTHDR(&msg); cmsgtmp != NULL; cmsgtmp = CMSG_NXTHDR(&msg, cmsgtmp)) {
+          if ((cmsgtmp->cmsg_level == IPPROTO_IP) && (cmsgtmp->cmsg_type == IP_PKTINFO)) {
+            struct in_pktinfo *pktinfo = (struct in_pktinfo *) CMSG_DATA(cmsgtmp);
+            if ((NULL != pktinfo) && is_ipv4_multicast_addr(pktinfo->ipi_addr.s_addr)) {
+              bDropMulticast = true;
+            }
+            break;
+          }
+        }
+
+        if (bDropMulticast) {
+          ESP_LOGD(TAG, "Dropped UDP packet addressed to multicast destination");
+          continue;
+        }
+#endif
+
         // Get the sender's ip address as string
         //         if (source_addr.ss_family == PF_INET) {
         //           inet_ntoa_r(((struct sockaddr_in *) &source_addr)->sin_addr, addr_str, sizeof(addr_str) - 1);
@@ -522,7 +578,8 @@ udpsrv_rx_task(void *pvParameters)
         // #endif
         //         }
         //         else if (source_addr.ss_family == PF_INET6) {
-        //           inet6_ntoa_r(((struct sockaddr_in6 *) &source_addr)->sin6_addr, addr_str, sizeof(addr_str) - 1);
+        //           inet6_ntoa_r(((struct sockaddr_in6 *) &source_addr)->sin6_addr, addr_str, sizeof(addr_str) -
+        //           1);
         //         }
 
         // rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string...
@@ -561,26 +618,85 @@ udpsrv_rx_task(void *pvParameters)
 
         } // encrypted frame
 
-        vscpEventEx ex;
-        memset(&ex, 0, sizeof(ex));
-        if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_getEventExFromFrame(&ex, rx_buffer, len))) {
-          fprintf(stderr, "Error reading event from frame. Check encryption key! rv=%d\n", rv);
-          continue;
-        }
+        // vscpEventEx ex;
+        // memset(&ex, 0, sizeof(ex));
+        // if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_getEventExFromFrame(&ex, rx_buffer, len))) {
+        //   fprintf(stderr, "Error reading event from frame. Check encryption key! rv=%d\n", rv);
+        //   continue;
+        // }
 
-        ESP_LOGI(TAG,
-                 "Parsed VSCP event from UDP frame: class=%u type=%u size=%u",
-                 ex.vscp_class,
-                 ex.vscp_type,
-                 ex.sizeData);
+        // ESP_LOGI(TAG,
+        //          "Parsed VSCP event from UDP frame: class=%u type=%u size=%u",
+        //          ex.vscp_class,
+        //          ex.vscp_type,
+        //          ex.sizeData);
 
         // int err = sendto(sock, rx_buffer, len, 0, (struct sockaddr *) &source_addr, sizeof(source_addr));
         // if (err < 0) {
         //   ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
         //   break;
         // }
+        vscpEvent ev;
+        memset(&ev, 0, sizeof(ev));
+        if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_getEventFromFrame(&ev, rx_buffer, len))) {
+          ESP_LOGE(TAG, "Error reading event from frame. rv=%d", rv);
+          continue;
+        }
+
+        if (0) {
+          printf("Event:\n");
+          printf("Head: %d\n", ev.head);
+          printf("Class: %d\n", ev.vscp_class);
+          printf("Type: %d\n", ev.vscp_type);
+          printf("Size: %d\n", ev.sizeData);
+          for (int i = 0; i < ev.sizeData; i++) {
+            printf("%02x ", ev.pdata[i]);
+          }
+          printf("\n");
+          printf("----------------------------------------------------\n");
+          printf("Timestamp: 0x%08lX\n", (long unsigned int) ev.timestamp);
+          printf("Obid: 0x%08lX\n", (long unsigned int) ev.obid);
+          printf("Year: %d\n", ev.year);
+          printf("Month: %d\n", ev.month);
+          printf("Day: %d\n", ev.day);
+          printf("Hour: %d\n", ev.hour);
+          printf("Minute: %d\n", ev.minute);
+          printf("Second: %d\n", ev.second);
+          printf("----------------------------------------------------\n");
+        }
+
+        // Add event to CAN queue
+        can4vscp_frame_t txmsg = {};
+        if (VSCP_ERROR_SUCCESS != (rv = can4vscp_event_to_msg(&txmsg, &ev))) {
+          ESP_LOGE(TAG, "Failed to convert VSCP event to CAN message rv=%d", rv);
+          if (ev.pdata) {
+            free(ev.pdata);
+          }
+          continue;
+        }
+
+        can4vscp_frame_t tx_msg;
+        tx_msg.data_length_code = ev.sizeData;
+        tx_msg.extd             = 1;
+        tx_msg.identifier = ev.GUID[0] + (ev.vscp_type << 8) + (ev.vscp_class << 16) + (((ev.head >> 5) & 7) << 26);
+        memcpy(tx_msg.data, ev.pdata, ev.sizeData);
+
+        ESP_LOGI(TAG,
+                 "Send multicast event as CAN message to queue: class=%u type=%u size=%u",
+                 ev.vscp_class,
+                 ev.vscp_type,
+                 ev.sizeData);
+
+        esp_err_t err;
+        if (ESP_OK != (err = can4vscp_send(&tx_msg, pdMS_TO_TICKS(10)))) {
+          ESP_LOGE(TAG, "Failed to send CAN message to queue: %d", err);
+        }
+
+        if (ev.pdata) {
+          free(ev.pdata);
+        }
       }
-    }
+    } // while
 
     if (sock != -1) {
       ESP_LOGE(TAG, "Shutting down socket and restarting...");
@@ -642,11 +758,10 @@ udpsrv_tx_task(void *pvParameters)
 
     vscp_fwhlp_deleteEvent(&pev);
 
-    uint8_t newlen       = 0;
+    uint8_t newlen              = 0;
     uint8_t encbuf[BUFFER_SIZE] = { 0 };
 
-    if (0 == (newlen =
-                vscp_fwhlp_encryptFrame(encbuf, frame, len, g_persistent.pmk, NULL, frame[0] & 0x0F))) {
+    if (0 == (newlen = vscp_fwhlp_encryptFrame(encbuf, frame, len, g_persistent.pmk, NULL, frame[0] & 0x0F))) {
       ESP_LOGI(TAG, "Error encrypting frame. newlen = %d", newlen);
       continue;
     }

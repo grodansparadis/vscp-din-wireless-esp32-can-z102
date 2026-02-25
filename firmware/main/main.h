@@ -178,6 +178,8 @@ typedef struct {
 
 #define DEFAULT_NODE_NAME        "VSCP CAN4VSCP Gateway"
 #define DEFAULT_ENCRYPTION_LEVEL VSCP_ENCRYPTION_NONE // 0 = none, 1 = AES128, 2 = AES192, 3 = AES256
+#define DEFAULT_MODULE_ZONE      0  // VSCP zone for module
+#define DEFAULT_MODULE_SUBZONE   0  // VSCP subzone for module
 
 #define DEFAULT_LOG_URL  " "
 #define DEFAULT_LOG_PORT 514
@@ -185,6 +187,7 @@ typedef struct {
 #define DEFAULT_CAN_MODE   0          // CAN4VSCP_NORMAL
 #define DEFAULT_CAN_SPEED  6          // CAN4VSCP_125K
 #define DEFAULT_CAN_FILTER 0xFFFFFFFF // Accept all
+#define DEFAULT_CAN_RAW    false       // Send and understand raw CAN frames
 
 #define DEFAULT_LOG_TYPE         LOG_TYPE_STD
 #define DEFAULT_LOG_LEVEL        0
@@ -217,10 +220,12 @@ typedef struct {
 #define DEFAULT_MQTT_RETAIN            false
 #define DEFAULT_MQTT_FORMAT            MQTT_FORMAT_JSON
 
-#define DEFAULT_MULTICAST_ENABLE false
-#define DEFAULT_MULTICAST_URL    "224.0.23.158"
-#define DEFAULT_MULTICAST_PORT   9598
-#define DEFAULT_MULTICAST_TTL    10
+#define DEFAULT_MULTICAST_ENABLE     false
+#define DEFAULT_MULTICAST_URL        "224.0.23.158"
+#define DEFAULT_MULTICAST_PORT       9598
+#define DEFAULT_MULTICAST_TTL        10
+#define DEFAULT_MULTICAST_ENCRYPTION false
+#define DEFAULT_MULTICAST_HEARTBEAT  true
 
 #define DEFAULT_UDP_RX_ENABLE  false
 #define DEFAULT_UDP_TX_ENABLE  false
@@ -233,10 +238,18 @@ typedef struct {
 #define DEFAULT_WEBSOCKETS_USER     "vscp"
 #define DEFAULT_WEBSOCKETS_PASSWORD "secret"
 
+#define DEFAULT_WIFI_STATIC_ENABLE  0
+#define DEFAULT_WIFI_STATIC_IP      ""
+#define DEFAULT_WIFI_STATIC_NETMASK ""
+#define DEFAULT_WIFI_STATIC_GATEWAY ""
+#define DEFAULT_WIFI_STATIC_DNS     ""
+
 typedef struct {
 
   // Module
   char nodeName[32];  // User name for node
+  uint8_t nodeZone;   // VSCP zone for node
+  uint8_t nodeSubzone; // VSCP subzone for node
   uint8_t guid[16];   // GUID for node (default: Constructed from MAC address)
   uint8_t encryptLvl; // Encryption level for UDP messages (0 = none, 1 = AES128, 2 = AES192, 3 = AES256)
   uint8_t pmk[16];    // System security key for encryption (AES128)
@@ -251,6 +264,7 @@ typedef struct {
   uint32_t nErr;      // Number of errors (not editable)
   uint32_t lastError; // Last error code (not editable)
   uint32_t canFilter; // CAN filter for incoming data
+  uint8_t bRawCan;    // Send and understand raw CAN frames 
 
   // Log
   uint8_t logType;         // Log type
@@ -266,6 +280,11 @@ typedef struct {
   char wifiPrimaryPassword[65];   // Primary WiFi Password
   char wifiSecondarySsid[33];     // Secondary WiFi SSID (fallback)
   char wifiSecondaryPassword[65]; // Secondary WiFi Password (fallback)
+  uint8_t wifiStaticEnable;       // Enable static IPv4 configuration
+  char wifiStaticIp[16];          // Static IPv4 address
+  char wifiStaticNetmask[16];     // Static IPv4 netmask
+  char wifiStaticGateway[16];     // Static IPv4 gateway
+  char wifiStaticDns[16];         // Static IPv4 DNS server
 
   // web server
   uint16_t webPort;     // Web server port
@@ -301,6 +320,8 @@ typedef struct {
   char multicastUrl[20];   // Multicast IP address
   uint16_t multicastPort;  // Multicast port
   uint8_t multicastTtl;    // Multicast TTL
+  uint8_t bMcastEncrypt;   // Enable encryption for multicast messages
+  uint8_t bHeartbeat;      // Enable heartbeat messages on multicast
 
   // UDP interface
   uint8_t enableUdpRx; // Enable UDP receive
@@ -336,5 +357,8 @@ getMilliSeconds(void);
  */
 bool
 validate_user(const char *user, const char *password);
+
+esp_err_t
+wcang_reconfigure_wifi_sta(void);
 
 #endif

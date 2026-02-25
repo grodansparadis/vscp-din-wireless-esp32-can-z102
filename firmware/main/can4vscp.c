@@ -147,8 +147,7 @@ can4vscp_rx_done_cb(twai_node_handle_t handle, const twai_rx_done_event_data_t *
   }
 
   BaseType_t task_woken = pdFALSE;
-  if ((NULL == s_twai_rx_queue) ||
-      (pdPASS != xQueueSendToBackFromISR(s_twai_rx_queue, &frame, &task_woken))) {
+  if ((NULL == s_twai_rx_queue) || (pdPASS != xQueueSendToBackFromISR(s_twai_rx_queue, &frame, &task_woken))) {
     s_rx_overruns++;
   }
 
@@ -163,7 +162,7 @@ can4vscp_rx_done_cb(twai_node_handle_t handle, const twai_rx_done_event_data_t *
 
 int
 can4vscp_msg_to_event(vscpEvent **pev, const can4vscp_frame_t *msg)
-{   
+{
   if ((NULL == pev) || (NULL == msg)) {
     return VSCP_ERROR_INVALID_POINTER;
   }
@@ -176,7 +175,7 @@ can4vscp_msg_to_event(vscpEvent **pev, const can4vscp_frame_t *msg)
 
   // Allocate data if the message has data
   if (msg->data_length_code) {
-    (*pev)->pdata = (uint8_t *) calloc(1,msg->data_length_code);
+    (*pev)->pdata = (uint8_t *) calloc(1, msg->data_length_code);
     if (NULL == (*pev)->pdata) {
       vscp_fwhlp_deleteEvent(pev);
       return VSCP_ERROR_MEMORY;
@@ -201,6 +200,36 @@ can4vscp_msg_to_event(vscpEvent **pev, const can4vscp_frame_t *msg)
   // Copy in data if any
   if (msg->data_length_code) {
     memcpy((*pev)->pdata, msg->data, msg->data_length_code);
+  }
+
+  return VSCP_ERROR_SUCCESS;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// can4vscp_event_to_msg
+//
+
+int
+can4vscp_event_to_msg(can4vscp_frame_t *msg, const vscpEvent *pev)
+{
+  if ((NULL == pev) || (NULL == msg)) {
+    return VSCP_ERROR_INVALID_POINTER;
+  }
+
+  msg->identifier = pev->GUID[0] + (pev->vscp_type << 8) + (pev->vscp_class << 16) + (((pev->head >> 5) & 7) << 26);
+  msg->extd       = 1;
+  msg->rtr        = 0;
+
+  if (pev->sizeData > sizeof(msg->data)) {
+    return VSCP_ERROR_INVALID_FORMAT;
+  }
+
+  if (pev->sizeData) {
+    memcpy(msg->data, pev->pdata, pev->sizeData);
+    msg->data_length_code = pev->sizeData;
+  }
+  else {
+    msg->data_length_code = 0;
   }
 
   return VSCP_ERROR_SUCCESS;
@@ -294,11 +323,11 @@ can4vscp_enable(void)
 
   // Accept all classic extended frames by default
   twai_mask_filter_config_t filter_cfg = {
-    .id         = 0,
-    .mask       = 0,
-    .is_ext     = true,
-    .no_classic = false,
-    .no_fd      = true,
+    .id          = 0,
+    .mask        = 0,
+    .is_ext      = true,
+    .no_classic  = false,
+    .no_fd       = true,
     .dual_filter = false,
   };
   if (ESP_OK != twai_node_config_mask_filter(s_twai_node, 0, &filter_cfg)) {

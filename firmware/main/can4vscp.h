@@ -91,6 +91,18 @@ typedef struct {
 int
 can4vscp_msg_to_event(vscpEvent **pev, const can4vscp_frame_t *msg);
 
+/*!
+  * @brief Translate VSCP event to CAN4VSCP message
+  * @param msg Pointer to CAN message that will be filled with data from event
+  * @param pev Pointer to event to translate
+  * @return VSCP_ERROR_SUCCESS if all is OK else error code.
+  * 
+  * The calling function is responsible for freeing the allocated event and its data. 
+  * free(*pev->pdata); free(*pev);
+  * Data is allocated and filled if the message has data.
+*/
+int
+can4vscp_event_to_msg(can4vscp_frame_t *msg, const vscpEvent *pev);
 
 /*!
   @fn can4vscp_block
