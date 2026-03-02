@@ -34,6 +34,12 @@
 #include <stdint.h>
 #include <esp_err.h>
 
+#define WS1_PKT_TYPE_UNKNOWN 0
+#define WS1_PKT_TYPE_COMMAND 1
+#define WS1_PKT_TYPE_EVENT 2
+#define WS1_PKT_TYPE_POSITIVE_RESPONSE 3
+#define WS1_PKT_TYPE_NEGATIVE_RESPONSE 4
+
 
 /*!
   Websocket server task

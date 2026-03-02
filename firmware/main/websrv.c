@@ -1177,7 +1177,7 @@ hello_get_handler(httpd_req_t *req)
 
   // Send response with custom headers and body set as the
   // string passed in user context
-  const char *resp_str = "Hi there mister m!"; //(const char *) req->user_ctx;
+  const char *resp_str = "Be Hungry - Stay Foolish!"; //(const char *) req->user_ctx;
   httpd_resp_send(req, resp_str, HTTPD_RESP_USE_STRLEN);
 
   // After sending the HTTP response the old HTTP request
@@ -1194,7 +1194,7 @@ static const httpd_uri_t hello = { .uri     = "/hello",
                                    .handler = hello_get_handler,
                                    // Let's pass response string in user
                                    // context to demonstrate it's usage
-                                   .user_ctx = "Hello World!" };
+                                   .user_ctx = "Be Hungry - Stay Foolish!" };
 
 ///////////////////////////////////////////////////////////////////////////////
 // mainpg_get_handler
@@ -4749,7 +4749,7 @@ start_webserver(void)
                          .user_ctx = NULL };
 
     // httpd_register_uri_handler(srv, &hello);
-    // httpd_register_uri_handler(srv, &echo);
+    //httpd_register_uri_handler(srv, &echo);
     // httpd_register_uri_handler(srv, &ctrl);
     // httpd_register_uri_handler(srv, &mainpg);
     httpd_register_uri_handler(srv, &dflt);
