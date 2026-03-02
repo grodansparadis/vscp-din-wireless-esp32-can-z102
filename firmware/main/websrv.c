@@ -4256,6 +4256,95 @@ echo_post_handler(httpd_req_t *req)
 static const httpd_uri_t echo = { .uri = "/echo", .method = HTTP_POST, .handler = echo_post_handler, .user_ctx = NULL };
 
 ///////////////////////////////////////////////////////////////////////////////
+// ws1_get_handler
+//
+// WebSocket protocol endpoint (/ws1)
+// Expects text frames on format: C;COMMAND;optional-data
+//
+
+static esp_err_t
+ws1_get_handler(httpd_req_t *req)
+{
+  if (req->method == HTTP_GET) {
+    ESP_LOGI(TAG, "WS1 handshake complete");
+    return ESP_OK;
+  }
+
+  httpd_ws_frame_t rx = { 0 };
+  rx.type             = HTTPD_WS_TYPE_TEXT;
+
+  esp_err_t rv = httpd_ws_recv_frame(req, &rx, 0);
+  if (ESP_OK != rv) {
+    ESP_LOGE(TAG, "WS1 failed to get frame len rv=%d", rv);
+    return rv;
+  }
+
+  if (0 == rx.len) {
+    return ESP_OK;
+  }
+
+  uint8_t *payload = calloc(1, rx.len + 1);
+  if (NULL == payload) {
+    return ESP_ERR_NO_MEM;
+  }
+
+  rx.payload = payload;
+  rv         = httpd_ws_recv_frame(req, &rx, rx.len);
+  if (ESP_OK != rv) {
+    ESP_LOGE(TAG, "WS1 failed to receive frame rv=%d", rv);
+    free(payload);
+    return rv;
+  }
+
+  ESP_LOGI(TAG, "WS1 RX: %s", (char *) payload);
+
+  httpd_ws_frame_t tx = { 0 };
+  tx.type             = HTTPD_WS_TYPE_TEXT;
+
+  if ((rx.len >= 3) && (payload[0] == 'C') && (payload[1] == ';')) {
+    char *cmd  = (char *) payload + 2;
+    char *data = strchr(cmd, ';');
+    if (NULL != data) {
+      *data = '\0';
+      data++;
+    }
+    else {
+      data = "";
+    }
+
+    ESP_LOGD(TAG, "WS1 command=%s data=%s", cmd, data);
+
+    size_t reply_len = strlen(cmd) + 3;
+    char *reply      = calloc(1, reply_len + 1);
+    if (NULL == reply) {
+      free(payload);
+      return ESP_ERR_NO_MEM;
+    }
+
+    snprintf(reply, reply_len + 1, "+;%s", cmd);
+    tx.payload = (uint8_t *) reply;
+    tx.len     = strlen(reply);
+    rv         = httpd_ws_send_frame(req, &tx);
+    free(reply);
+  }
+  else {
+    const char *errtxt = "-;ERR;Invalid frame";
+    tx.payload          = (uint8_t *) errtxt;
+    tx.len              = strlen(errtxt);
+    rv                  = httpd_ws_send_frame(req, &tx);
+  }
+
+  free(payload);
+  return rv;
+}
+
+static const httpd_uri_t ws1 = { .uri          = "/ws1",
+                                 .method       = HTTP_GET,
+                                 .handler      = ws1_get_handler,
+                                 .user_ctx     = NULL,
+                                 .is_websocket = true };
+
+///////////////////////////////////////////////////////////////////////////////
 // http_404_error_handler
 //
 // This handler allows the custom error handling functionality to be
@@ -4449,20 +4538,20 @@ default_get_handler(httpd_req_t *req)
 
   // -----------------------------------------------------------------------------
 
-  if (0 == strncmp(req->uri, "/hello", 6)) {
-    ESP_LOGV(TAG, "--------- HELLO ---------\n");
-    return hello_get_handler(req);
-  }
+  // if (0 == strncmp(req->uri, "/hello", 6)) {
+  //   ESP_LOGV(TAG, "--------- HELLO ---------\n");
+  //   return hello_get_handler(req);
+  // }
 
-  if (0 == strncmp(req->uri, "/echo", 5)) {
-    ESP_LOGV(TAG, "--------- ECHO ---------\n");
-    return echo_post_handler(req);
-  }
+  // if (0 == strncmp(req->uri, "/echo", 5)) {
+  //   ESP_LOGV(TAG, "--------- ECHO ---------\n");
+  //   return echo_post_handler(req);
+  // }
 
-  if (0 == strncmp(req->uri, "/ctrl", 5)) {
-    ESP_LOGV(TAG, "--------- CTRL ---------\n");
-    return ctrl_put_handler(req);
-  }
+  // if (0 == strncmp(req->uri, "/ctrl", 5)) {
+  //   ESP_LOGV(TAG, "--------- CTRL ---------\n");
+  //   return ctrl_put_handler(req);
+  // }
 
   if (0 == strncmp(req->uri, "/index.html", 11)) {
     ESP_LOGV(TAG, "--------- index ---------\n");
@@ -4737,18 +4826,22 @@ start_webserver(void)
     // Set URI handlers
     ESP_LOGD(TAG, "Registering URI handlers");
 
+    httpd_register_uri_handler(srv, &ws1);
+
     // URI handler for getting uploaded files
     // httpd_uri_t file_spiffs = { .uri      = "/*", // Match all URIs of type /path/to/file
     //                             .method   = HTTP_GET,
     //                             .handler  = spiffs_get_handler,
     //                             .user_ctx = NULL };
 
+    
+
     httpd_uri_t dflt = { .uri      = "/*", // Match all URIs of type /path/to/file
                          .method   = HTTP_GET,
                          .handler  = default_get_handler,
                          .user_ctx = NULL };
 
-    // httpd_register_uri_handler(srv, &hello);
+    httpd_register_uri_handler(srv, &hello);
     //httpd_register_uri_handler(srv, &echo);
     // httpd_register_uri_handler(srv, &ctrl);
     // httpd_register_uri_handler(srv, &mainpg);
