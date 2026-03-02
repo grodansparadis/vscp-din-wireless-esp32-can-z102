@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
+    inputs:
+      websocket:
+        description: "Enable HTTP websocket support"
+        type: boolean
+        required: false
+        default: true
 
 jobs:
   build-firmware:
@@ -26,8 +32,39 @@ jobs:
       - name: Build firmware (ESP32-C3)
         run: |
           . "$IDF_PATH/export.sh"
-          idf.py set-target esp32c3
-          idf.py build
+
+          if [ ! -f sdkconfig ]; then
+            echo "sdkconfig not found in firmware/"
+            exit 1
+          fi
+
+          if ! grep -q '^CONFIG_IDF_TARGET="esp32c3"$' sdkconfig; then
+            echo "sdkconfig target is not esp32c3"
+            exit 1
+          fi
+
+          ws_input="${{ github.event.inputs.websocket }}"
+          if [ -z "$ws_input" ]; then
+            ws_input="true"
+          fi
+
+          cp sdkconfig sdkconfig.ci
+          sed -i -E '/^CONFIG_HTTPD_WS_SUPPORT=|^# CONFIG_HTTPD_WS_SUPPORT is not set$/d' sdkconfig.ci
+
+          case "${ws_input,,}" in
+            true|1|yes|on)
+              printf "CONFIG_HTTPD_WS_SUPPORT=y\n" >> sdkconfig.ci
+              ;;
+            false|0|no|off)
+              printf "# CONFIG_HTTPD_WS_SUPPORT is not set\n" >> sdkconfig.ci
+              ;;
+            *)
+              echo "Invalid websocket switch value: $ws_input"
+              exit 1
+              ;;
+          esac
+
+          idf.py -D SDKCONFIG=sdkconfig.ci build
 
       - name: Upload firmware build artifacts
         uses: actions/upload-artifact@v4
