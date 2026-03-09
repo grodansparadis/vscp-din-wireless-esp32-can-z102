@@ -29,12 +29,67 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
+#include <sys/param.h>
+#include <sys/unistd.h>
+#include <sys/stat.h>
+#include <dirent.h>
+
+#include <esp_system.h>
+#include <esp_chip_info.h>
+#include <esp_flash_spi_init.h>
+#include <esp_flash.h>
+#include <esp_wifi.h>
+#include <esp_mac.h>
+#include <nvs.h>
+#include <esp_ota_ops.h>
+#include <esp_timer.h>
+#include <esp_err.h>
+#include <esp_log.h>
+#include <nvs_flash.h>
+#include <esp_http_server.h>
+
+#include <esp_event_base.h>
+#include <esp_tls_crypto.h>
+#include <esp_vfs.h>
+#include <esp_spiffs.h>
+#include <esp_http_server.h>
+#include <wifi_provisioning/manager.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 
+#include <vscp.h>
+#include <vscp-firmware-helper.h>
+
+#include "urldecode.h"
+#include "main.h"
+
+#include "vscp-ws1.h"
 #include "websocksrv.h"
+
+
+
+// External from main
+extern nvs_handle_t g_nvsHandle;
+extern node_persistent_config_t g_persistent;
+extern vprintf_like_t g_stdLogFunc;
+
+#define TAG __func__
+
+// Global server handle for WebSocket server instance
+httpd_handle_t g_server_websocket = NULL;
+
+/*
+ * Structure holding server handle
+ * and internal socket fd in order
+ * to use out of request send
+ */
+struct async_resp_arg {
+  httpd_handle_t hd;
+  int fd;
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 // ws_async_send
@@ -48,6 +103,7 @@ ws_async_send(void *arg)
   httpd_handle_t hd               = resp_arg->hd;
   int fd                          = resp_arg->fd;
 
+  static int led_state = 0;
   char buf[4];
   memset(buf, 0, sizeof(buf));
   sprintf(buf, "%d", led_state);
@@ -61,14 +117,14 @@ ws_async_send(void *arg)
   size_t fds                = max_clients;
   int client_fds[max_clients];
 
-  esp_err_t ret = httpd_get_client_list(server, &fds, client_fds);
+  esp_err_t ret = httpd_get_client_list(g_server_websocket, &fds, client_fds);
 
   if (ret != ESP_OK) {
     return;
   }
 
   for (int i = 0; i < fds; i++) {
-    int client_info = httpd_ws_get_fd_info(server, client_fds[i]);
+    int client_info = httpd_ws_get_fd_info(g_server_websocket, client_fds[i]);
     if (client_info == HTTPD_WS_CLIENT_WEBSOCKET) {
       httpd_ws_send_frame_async(hd, client_fds[i], &ws_pkt);
     }
@@ -93,7 +149,8 @@ trigger_async_send(httpd_handle_t handle, httpd_req_t *req)
 // handle_ws1_command
 //
 
-int handle_ws1_command(char *pCommand, const char *p)
+int
+handle_ws1_command(char *pCommand, const char *p, void *data)
 {
   // Make sure command is upper case for easier handling
   for (char *c = pCommand; *c; c++) {
@@ -101,41 +158,41 @@ int handle_ws1_command(char *pCommand, const char *p)
   }
 
   if (strcmp(pCommand, "NOOP") == 0) {
-    vscp_ws1_callback_noop();
+    // vscp_ws1_callback_noop();
   }
   else if (strcmp(pCommand, "VERSION") == 0) {
-    vscp_ws1_callback_version();
+    // vscp_ws1_callback_version();
   }
   else if (strcmp(pCommand, "COPYRIGHT") == 0) {
-    vscp_ws1_callback_copyright();
+    // vscp_ws1_callback_copyright();
   }
   else if (strcmp(pCommand, "AUTH") == 0) {
-    vscp_ws1_callback_auth(p);
+    // vscp_ws1_callback_auth(p);
   }
   else if (strcmp(pCommand, "CHALLENGE") == 0) {
-    vscp_ws1_callback_challenge(p);
+    // vscp_ws1_callback_challenge(p);
   }
   else if (strcmp(pCommand, "OPEN") == 0) {
-    vscp_ws1_callback_open();
+    // vscp_ws1_callback_open();
   }
   else if (strcmp(pCommand, "CLOSE") == 0) {
-    vscp_ws1_callback_close();
+    // vscp_ws1_callback_close();
   }
   else if (strcmp(pCommand, "SETFILTER") == 0) {
-    vscp_ws1_callback_setfilter(p);
+    // vscp_ws1_callback_setfilter(p);
   }
   else if (strcmp(pCommand, "SF") == 0) {
-    vscp_ws1_callback_setfilter();
+    // vscp_ws1_callback_setfilter();
   }
   else if (strcmp(pCommand, "CLRQUEUE") == 0) {
-    vscp_ws1_callback_clrqueue();
+    // vscp_ws1_callback_clrqueue();
   }
   else if (strcmp(pCommand, "CLRQ") == 0) {
     ;
   }
   else {
     ESP_LOGW(TAG, "Unknown command: %s", pCommand);
-    return VSCP_ERROR_INVALID_COMMAND;
+    return VSCP_ERROR_INVALID_SYNTAX;
   }
 
   return VSCP_ERROR_SUCCESS;
@@ -154,7 +211,7 @@ int handle_ws1_command(char *pCommand, const char *p)
 int
 handle_protocol_request_ws1(const char *packet)
 {
-  uint8_t packet_type = WS1_PKT_TYPE_UNKNOWN;
+  uint8_t packet_type = VSCP_WS1_PKT_TYPE_UNKNOWN;
   char *pCommand; // Pointer to command part of packet
 
   ESP_LOGI(TAG, "Handling protocol WS1");
@@ -163,7 +220,7 @@ handle_protocol_request_ws1(const char *packet)
 
   // Command
   if (*p == 'C') {
-    paket_type = WS1_PKT_TYPE_COMMAND;
+    packet_type = VSCP_WS1_PKT_TYPE_COMMAND;
     p++;
     if (';' != *p) {
       // Malformed packet, command part must be separated by ';'
@@ -183,28 +240,27 @@ handle_protocol_request_ws1(const char *packet)
       p++;
     }
     if (*p) {
-      *p = 0; // Null-terminate command part  
+      *p = 0; // Null-terminate command part
       p++;
     }
 
     // p now point to optional data part of packet (if any) or end of string
 
     ESP_LOGI(TAG, "Received command: %s", pCommand);
-    handle_ws1_command(pCommand, p);
-    
+    handle_ws1_command(pCommand, p, NULL);
   }
-  // Received event 
+  // Received event
   else if (*p == 'E') {
-    packet_type = WS1_PKT_TYPE_EVENT;
-    vscp_ws1_callback_event();
+    packet_type = VSCP_WS1_PKT_TYPE_EVENT;
+    // vscp_ws1_callback_event();
   }
-  // Positive respone
+  // Positive respone  else if (*p == '+') {
   else if (*p == '+') {
-    packet_type = WS1_PKT_TYPE_POSITIVE_RESPONSE;
+    packet_type = VSCP_WS1_PKT_TYPE_POSITIVE_RESPONSE;
   }
   // Negative response
   else if (*p == '-') {
-    packet_type = WS1_PKT_TYPE_NEGATIVE_RESPONSE;
+    packet_type = VSCP_WS1_PKT_TYPE_NEGATIVE_RESPONSE;
   }
   // Unknown packet type
   else {
@@ -315,7 +371,7 @@ handle_ws2_req(httpd_req_t *req)
 
 httpd_handle_t
 setup_websocket_server(void)
-{
+{  
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 
   httpd_uri_t ws1 = { .uri          = "/ws1",
@@ -326,14 +382,17 @@ setup_websocket_server(void)
 
   httpd_uri_t ws2 = { .uri          = "/ws2",
                       .method       = HTTP_GET,
-                      .handler      = handle_ws_req,
+                      .handler      = handle_ws2_req,
                       .user_ctx     = NULL,
                       .is_websocket = true };
 
-  if (httpd_start(&server, &config) == ESP_OK) {
-    httpd_register_uri_handler(server, &ws1);
-    httpd_register_uri_handler(server, &ws2);
+  // Start the httpd server
+  ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
+
+  if (httpd_start(&g_server_websocket, &config) == ESP_OK) {
+    httpd_register_uri_handler(g_server_websocket, &ws1);
+    httpd_register_uri_handler(g_server_websocket, &ws2);
   }
 
-  return server;
+  return g_server_websocket;
 }

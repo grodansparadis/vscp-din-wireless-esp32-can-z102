@@ -24,7 +24,7 @@
       "options": {
         "cwd": "${workspaceRoot}",
       },
-      "command": "idf.py build",
+      "command": "source /home/akhe/development/esp/esp-idf/export.sh && idf.py build",
       "problemMatcher": [
         "$gcc"
       ]
@@ -35,7 +35,7 @@
       "options": {
         "cwd": "${workspaceRoot}",
       },
-      "command": "idf.py fullclean",
+      "command": "source /home/akhe/development/esp/esp-idf/export.sh && idf.py fullclean",
       "problemMatcher": []
     },
     {
@@ -80,7 +80,7 @@
       "options": {
         "cwd": "${workspaceRoot}",
       },
-      "command": "idf.py ${config:esp32.port} flash",
+      "command": "source /home/akhe/development/esp/esp-idf/export.sh && idf.py ${config:esp32.port} flash",
       "problemMatcher": []
     },
     {
@@ -89,7 +89,7 @@
       "options": {
         "cwd": "${workspaceRoot}",
       },
-      "command": "idf.py ${config:esp32.port} monitor",
+      "command": "source /home/akhe/development/esp/esp-idf/export.sh && idf.py ${config:esp32.port} monitor",
       "problemMatcher": []
     },
     {
@@ -98,7 +98,7 @@
       "options": {
         "cwd": "${workspaceRoot}",
       },
-      "command": "idf.py ${config:esp32.port} flash monitor",
+      "command": "source /home/akhe/development/esp/esp-idf/export.sh && idf.py ${config:esp32.port} flash monitor",
       "problemMatcher": []
     },
     {
@@ -119,7 +119,7 @@
             "LC_ALL": "C",
         }
       },
-      "command": "idf.py menuconfig",
+      "command": "source /home/akhe/development/esp/esp-idf/export.sh && idf.py menuconfig",
       "problemMatcher": []
     },
     {
@@ -128,7 +128,7 @@
       "options": {
         "cwd": "${workspaceRoot}"
       },
-      "command": "export IDF_PATH=/home/akhe/development/esp/esp-idf && cd twai_network_master && /home/akhe/.espressif/python_env/idf5.5_py3.13_env/bin/python3 /home/akhe/development/esp/esp-idf/tools/idf.py --target esp32c3 build",
+      "command": "source /home/akhe/development/esp/esp-idf/export.sh && cd twai_network_master && idf.py set-target esp32c3 && idf.py build",
       "problemMatcher": [
         "$gcc"
       ]
@@ -139,7 +139,7 @@
       "options": {
         "cwd": "${workspaceRoot}"
       },
-      "command": "export IDF_PATH=/home/akhe/development/esp/esp-idf && cd twai_network_slave && /home/akhe/.espressif/python_env/idf5.5_py3.13_env/bin/python3 /home/akhe/development/esp/esp-idf/tools/idf.py --target esp32c3 build",
+      "command": "source /home/akhe/development/esp/esp-idf/export.sh && cd twai_network_slave && idf.py set-target esp32c3 && idf.py build",
       "problemMatcher": [
         "$gcc"
       ]
@@ -150,7 +150,7 @@
       "options": {
         "cwd": "${workspaceRoot}"
       },
-      "command": "export IDF_PATH=/home/akhe/development/esp/esp-idf && cd twai_network_listen_only && /home/akhe/.espressif/python_env/idf5.5_py3.13_env/bin/python3 /home/akhe/development/esp/esp-idf/tools/idf.py --target esp32c3 build",
+      "command": "source /home/akhe/development/esp/esp-idf/export.sh && cd twai_network_listen_only && idf.py set-target esp32c3 && idf.py build",
       "problemMatcher": [
         "$gcc"
       ]

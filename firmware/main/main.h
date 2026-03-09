@@ -234,7 +234,7 @@ typedef struct {
 #define DEFAULT_UDP_ENCRYPTION false
 
 #define DEFAULT_WEBSOCKETS_ENABLE   false
-#define DEFAULT_WEBSOCKETS_PORT     8080
+#define DEFAULT_WEBSOCKETS_PORT     8884
 #define DEFAULT_WEBSOCKETS_USER     "vscp"
 #define DEFAULT_WEBSOCKETS_PASSWORD "secret"
 

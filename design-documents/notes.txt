@@ -3,6 +3,8 @@ Internal product page: http://192.168.1.7/wiki/doku.php?id=vscp-din-esp32-can-z1
  
 openocd -f board/esp32c3-builtin.cfg
 
+node test_ws1.js --url ws://192.168.1.100:8884/ws1
+
 ------------------------------------------------------
                        TODO
 ------------------------------------------------------

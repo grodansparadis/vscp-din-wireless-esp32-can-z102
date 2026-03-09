@@ -1,6 +1,6 @@
 /*
   File: websocksrv.h
-  
+
   VSCP Wireless CAN4VSCP Gateway (VSCP-WCANG)
 
   This file is part of the VSCP (https://www.vscp.org)
@@ -34,12 +34,7 @@
 #include <stdint.h>
 #include <esp_err.h>
 
-#define WS1_PKT_TYPE_UNKNOWN 0
-#define WS1_PKT_TYPE_COMMAND 1
-#define WS1_PKT_TYPE_EVENT 2
-#define WS1_PKT_TYPE_POSITIVE_RESPONSE 3
-#define WS1_PKT_TYPE_NEGATIVE_RESPONSE 4
-
+#include "esp_http_server.h"
 
 /*!
   Websocket server task
@@ -47,5 +42,12 @@
 */
 void
 websocksrv_task(void *pvParameters);
+
+/*!
+  Setup and start the WebSocket server
+  @return HTTP server handle for the WebSocket server instance
+*/
+httpd_handle_t
+setup_websocket_server(void);
 
 #endif /* __VSCP_WEBSOCK_SERVER_H__ */

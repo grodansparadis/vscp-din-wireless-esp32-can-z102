@@ -1,7 +1,7 @@
 /*
   File: main.c
 
-  VSCP Wireless CAN4VSCP Gateway 
+  VSCP Wireless CAN4VSCP Gateway
 
   Main application entry point and system initialization for ESP32-C3 based
   VSCP CAN gateway with WiFi connectivity. This module handles:
@@ -83,6 +83,7 @@
 #include "udpsrv.h"
 #include "multicastsrv.h"
 #include "websrv.h"
+#include "websocksrv.h"
 #include "mqtt.h"
 
 #include "main.h"
@@ -110,14 +111,14 @@ nvs_handle_t g_nvsHandle;
  * Modified via web interface and saved to NVS for persistence across reboots.
  */
 node_persistent_config_t g_persistent = {
-  .nodeName   = DEFAULT_NODE_NAME,
-  .nodeZone   = DEFAULT_MODULE_ZONE,
+  .nodeName    = DEFAULT_NODE_NAME,
+  .nodeZone    = DEFAULT_MODULE_ZONE,
   .nodeSubzone = DEFAULT_MODULE_SUBZONE,
-  .guid       = { 0 }, // Default GUID is constructed from MAC address
-  .bootCnt    = 0,
-  .pmkLen     = 16,                       // AES128 (for future use)
-  .pmk        = { 0 },                    // Default key is all nills
-  .encryptLvl = DEFAULT_ENCRYPTION_LEVEL, // 0 = none, 1 = AES128, 2 = AES192, 3 = AES256
+  .guid        = { 0 }, // Default GUID is constructed from MAC address
+  .bootCnt     = 0,
+  .pmkLen      = 16,                       // AES128 (for future use)
+  .pmk         = { 0 },                    // Default key is all nills
+  .encryptLvl  = DEFAULT_ENCRYPTION_LEVEL, // 0 = none, 1 = AES128, 2 = AES192, 3 = AES256
 
   // CAN/TWAI
   .canSpeed  = DEFAULT_CAN_SPEED,
@@ -225,7 +226,10 @@ static QueueHandle_t tr_twai_rx;
 // ============================================================================
 
 // HTTP server handle for configuration web interface
-static httpd_handle_t server = NULL;
+static httpd_handle_t server_httpd = NULL;
+
+// WebSocket server handle
+static httpd_handle_t server_websock = NULL;
 
 // ============================================================================
 //                    WiFi Provisioning Security (Version 2)
@@ -1840,7 +1844,12 @@ app_main(void)
   // ============================================================================
 
   // Start HTTP server for web-based configuration interface
-  server = start_webserver();
+  server_httpd = start_webserver();
+
+  // Start websocket instance for real-time event monitoring and control (if enabled)
+  if (g_persistent.enableWebsock) {
+    server_websock = setup_websocket_server();
+  }
 
   // ============================================================================
   //                    CAN/TWAI Initialization
@@ -1882,11 +1891,17 @@ app_main(void)
 #endif
 
   // Start MQTT client task if enabled
-  mqtt_start();
+  if (g_persistent.enableMqtt) {
+    mqtt_start();
+  }
 
-  udp_start(); // Start UDP unicast/broadcast task if enabled
+  if (g_persistent.enableUdpRx || g_persistent.enableUdpTx) {
+    udp_start(); // Start UDP unicast/broadcast task if enabled
+  }
 
-  multicast_start(); // Start UDP multicast task if enabled
+  if (g_persistent.enableMulticast) {
+    multicast_start(); // Start UDP multicast task if enabled
+  }
 
   // ws_start();          // Start WebSocket server task if enabled
 

@@ -25,6 +25,27 @@ This example can be used, as it is, for adding a provisioning service to any app
 
 > Note: If you use this example code in your own project, in BLE mode, then remember to enable the BT stack and BTDM BLE control settings in your SDK configuration (e.g. by using the `sdkconfig.defaults` file from this project).
 
+## Websocket test scripts
+
+For WS1/WS2 test scripts and command-line URL override usage, see [test/ws/README.md](test/ws/README.md).
+For AUTH encryption details (AES-128, SID as IV), credential options, and Python AES backend troubleshooting, see [test/ws/README.md](test/ws/README.md#auth-encryption-js-and-python-scripts).
+
+### Quick start auth test
+
+```bash
+# WS1 (Node.js)
+node test/ws/test_ws1.js --url ws://192.168.1.50:8884/ws1 --user admin --password secret --key A4A86F7D7E119BA3F0CD06881E371B98
+
+# WS2 (Node.js)
+node test/ws/test_ws2.js --url ws://192.168.1.50:8884/ws2 --user admin --password secret --key A4A86F7D7E119BA3F0CD06881E371B98
+
+# WS1 (Python)
+python test/ws/test_ws1.py --url ws://192.168.1.50:8884/ws1 --user admin --password secret --key A4A86F7D7E119BA3F0CD06881E371B98
+
+# WS2 (Python)
+python test/ws/test_ws2.py --url ws://192.168.1.50:8884/ws2 --user admin --password secret --key A4A86F7D7E119BA3F0CD06881E371B98
+```
+
 ## How to use example
 
 ### Hardware Required

@@ -30,6 +30,9 @@
 #include <sys/param.h>
 #include <sys/unistd.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <dirent.h>
 
 #include <esp_system.h>
@@ -59,6 +62,7 @@
 
 #include "mqtt.h"
 #include "main.h"
+#include "vscp-ws1.h"
 #include "websrv.h"
 
 #ifdef CONFIG_EXAMPLE_PROV_TRANSPORT_BLE
@@ -82,6 +86,7 @@ app_initiate_firmware_upload(const char *url);
 extern nvs_handle_t g_nvsHandle;
 extern node_persistent_config_t g_persistent;
 extern vprintf_like_t g_stdLogFunc;
+
 #define TAG __func__
 
 // Max length a file path can have on storage
@@ -1596,7 +1601,7 @@ config_module_get_handler(httpd_req_t *req)
   free(pmkstr);
 
   sprintf(buf,
-          "Module name:<input type=\"text\" name=\"zone\" maxlength=\"32\" size=\"20\" value=\"%d\" >",
+          "Module zone:<input type=\"text\" name=\"zone\" maxlength=\"32\" size=\"20\" value=\"%d\" >",
           g_persistent.nodeZone);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
@@ -4266,15 +4271,59 @@ static const httpd_uri_t echo = { .uri = "/echo", .method = HTTP_POST, .handler 
 static esp_err_t
 ws1_get_handler(httpd_req_t *req)
 {
+  esp_err_t rv = ESP_OK;
+  ESP_LOGI(TAG, "WS1 handler called with method=%d", req->method);
+
   if (req->method == HTTP_GET) {
     ESP_LOGI(TAG, "WS1 handshake complete");
+
+    // // Get remote IP address
+    // int sockfd = httpd_req_to_sockfd(req);
+    // struct sockaddr_storage addr;
+    // socklen_t addr_len               = sizeof(addr);
+    // char remote_ip[INET6_ADDRSTRLEN] = { 0 };
+
+    // if (getpeername(sockfd, (struct sockaddr *) &addr, &addr_len) == 0) {
+    //   if (addr.ss_family == AF_INET) {
+    //     inet_ntoa_r(((struct sockaddr_in *) &addr)->sin_addr, remote_ip, sizeof(remote_ip) - 1);
+    //   }
+    //   else if (addr.ss_family == AF_INET6) {
+    //     inet6_ntoa_r(((struct sockaddr_in6 *) &addr)->sin6_addr, remote_ip, sizeof(remote_ip) - 1);
+    //   }
+    //   ESP_LOGI(TAG, "WS1 remote IP: %s", remote_ip);
+    // }
+
+    if (req->sess_ctx == NULL) {
+
+      ESP_LOGI(TAG, "WS1 session context is NULL");
+      req->sess_ctx = calloc(1, sizeof(vscp_ws1_connection_context_t));
+      if (NULL == req->sess_ctx) {
+        ESP_LOGE(TAG, "WS1 failed to allocate session context");
+        return ESP_ERR_NO_MEM;
+      }
+
+      // Save remote IP in session context for later use in callbacks
+      //strncpy(((vscp_ws1_connection_context_t *) req->sess_ctx)->remote_ip, remote_ip,
+      //sizeof(((vscp_ws1_connection_context_t *) req->sess_ctx)->remote_ip) - 1);
+ 
+      // Init the context structure for this connection. Save the request pointer in
+      // the session context so we can use it in the callbacks
+      if (VSCP_ERROR_SUCCESS != vscp_ws1_init((vscp_ws1_connection_context_t *) req->sess_ctx, (void *) req)) {
+        ESP_LOGE(TAG, "WS1 failed to initialize session context");
+        free(req->sess_ctx);
+        req->sess_ctx = NULL;
+        return ESP_FAIL;
+      }
+
+    } // no context
+
     return ESP_OK;
   }
 
   httpd_ws_frame_t rx = { 0 };
   rx.type             = HTTPD_WS_TYPE_TEXT;
 
-  esp_err_t rv = httpd_ws_recv_frame(req, &rx, 0);
+  rv = httpd_ws_recv_frame(req, &rx, 0);
   if (ESP_OK != rv) {
     ESP_LOGE(TAG, "WS1 failed to get frame len rv=%d", rv);
     return rv;
@@ -4297,7 +4346,96 @@ ws1_get_handler(httpd_req_t *req)
     return rv;
   }
 
-  ESP_LOGI(TAG, "WS1 RX: %s", (char *) payload);
+  // ESP_LOGI(TAG, "WS1 RX: %s", (char *) payload);
+
+  // httpd_ws_frame_t tx = { 0 };
+  // tx.type             = HTTPD_WS_TYPE_TEXT;
+
+  // ESP_LOGI(TAG, "WS1 frame len=%d", rx.len);
+  vscp_ws1_handle_protocol_request((char *)payload, rx.len, (vscp_ws1_connection_context_t *) req->sess_ctx);
+
+  // if ((rx.len >= 3) && (payload[0] == 'C') && (payload[1] == ';')) {
+  //   char *cmd  = (char *) payload + 2;
+  //   char *data = strchr(cmd, ';');
+  //   if (NULL != data) {
+  //     *data = '\0';
+  //     data++;
+  //   }
+  //   else {
+  //     data = "";
+  //   }
+
+    // ESP_LOGI(TAG, "WS1 command=%s data=%s", cmd, data);
+
+    // size_t reply_len = strlen(cmd) + 3;
+    // char *reply      = calloc(1, reply_len + 1);
+    // if (NULL == reply) {
+    //   free(payload);
+    //   return ESP_ERR_NO_MEM;
+    // }
+
+    // ESP_LOGI(TAG, "WS1 replying with: +;%s", cmd);
+    // snprintf(reply, reply_len + 1, "+;%s", cmd);
+    // tx.payload = (uint8_t *) reply;
+    // tx.len     = strlen(reply);
+    // rv         = httpd_ws_send_frame(req, &tx);
+    // free(reply);
+  // }
+  // else {
+  //   const char *errtxt = "-;ERR;Invalid frame";
+  //   tx.payload         = (uint8_t *) errtxt;
+  //   tx.len             = strlen(errtxt);
+  //   rv                 = httpd_ws_send_frame(req, &tx);
+  // }
+
+  free(payload);
+  return rv;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// ws2_get_handler
+//
+// WebSocket protocol endpoint (/ws2)
+// Expects text frames on format: C;COMMAND;optional-data
+//
+
+static esp_err_t
+ws2_get_handler(httpd_req_t *req)
+{
+  ESP_LOGI(TAG, "WS2 handler called with method=%d", req->method);
+
+  if (req->method == HTTP_GET) {
+    ESP_LOGI(TAG, "WS2 handshake complete");
+    return ESP_OK;
+  }
+
+  httpd_ws_frame_t rx = { 0 };
+  rx.type             = HTTPD_WS_TYPE_TEXT;
+
+  esp_err_t rv = httpd_ws_recv_frame(req, &rx, 0);
+  if (ESP_OK != rv) {
+    ESP_LOGE(TAG, "WS2 failed to get frame len rv=%d", rv);
+    return rv;
+  }
+
+  if (0 == rx.len) {
+    return ESP_OK;
+  }
+
+  uint8_t *payload = calloc(1, rx.len + 1);
+  if (NULL == payload) {
+    return ESP_ERR_NO_MEM;
+  }
+
+  rx.payload = payload;
+  rv         = httpd_ws_recv_frame(req, &rx, rx.len);
+  if (ESP_OK != rv) {
+    ESP_LOGE(TAG, "WS2 failed to receive frame rv=%d", rv);
+    free(payload);
+    return rv;
+  }
+
+  ESP_LOGI(TAG, "WS2 RX: %s", (char *) payload);
 
   httpd_ws_frame_t tx = { 0 };
   tx.type             = HTTPD_WS_TYPE_TEXT;
@@ -4313,7 +4451,7 @@ ws1_get_handler(httpd_req_t *req)
       data = "";
     }
 
-    ESP_LOGD(TAG, "WS1 command=%s data=%s", cmd, data);
+    ESP_LOGD(TAG, "WS2 command=%s data=%s", cmd, data);
 
     size_t reply_len = strlen(cmd) + 3;
     char *reply      = calloc(1, reply_len + 1);
@@ -4330,9 +4468,9 @@ ws1_get_handler(httpd_req_t *req)
   }
   else {
     const char *errtxt = "-;ERR;Invalid frame";
-    tx.payload          = (uint8_t *) errtxt;
-    tx.len              = strlen(errtxt);
-    rv                  = httpd_ws_send_frame(req, &tx);
+    tx.payload         = (uint8_t *) errtxt;
+    tx.len             = strlen(errtxt);
+    rv                 = httpd_ws_send_frame(req, &tx);
   }
 
   free(payload);
@@ -4344,6 +4482,47 @@ static const httpd_uri_t ws1 = { .uri          = "/ws1",
                                  .handler      = ws1_get_handler,
                                  .user_ctx     = NULL,
                                  .is_websocket = true };
+
+static const httpd_uri_t ws2 = { .uri          = "/ws2",
+                                 .method       = HTTP_GET,
+                                 .handler      = ws2_get_handler,
+                                 .user_ctx     = NULL,
+                                 .is_websocket = true };
+
+static httpd_handle_t g_websocket_srv = NULL;
+
+static httpd_handle_t
+start_websocket_server(void)
+{
+  httpd_handle_t ws_srv      = NULL;
+  httpd_config_t ws_config   = HTTPD_DEFAULT_CONFIG();
+  ws_config.server_port      = g_persistent.websockPort;
+  ws_config.ctrl_port        = ESP_HTTPD_DEF_CTRL_PORT + 1;
+  ws_config.stack_size       = 1024 * 5;
+  ws_config.lru_purge_enable = true;
+  ws_config.max_uri_handlers = 4;
+
+  ESP_LOGI(TAG, "Starting websocket server on port: '%d' (ctrl: '%d')", ws_config.server_port, ws_config.ctrl_port);
+  if (httpd_start(&ws_srv, &ws_config) == ESP_OK) {
+
+    if (ESP_OK != httpd_register_uri_handler(ws_srv, &ws1)) {
+      ESP_LOGE(TAG, "Failed to register WS1 URI handler");
+      httpd_stop(ws_srv);
+      return NULL;
+    }
+
+    if (ESP_OK != httpd_register_uri_handler(ws_srv, &ws2)) {
+      ESP_LOGE(TAG, "Failed to register WS2 URI handler");
+      httpd_stop(ws_srv);
+      return NULL;
+    }
+
+    return ws_srv;
+  }
+
+  ESP_LOGE(TAG, "Error starting websocket server!");
+  return NULL;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // http_404_error_handler
@@ -4827,15 +5006,11 @@ start_webserver(void)
     // Set URI handlers
     ESP_LOGD(TAG, "Registering URI handlers");
 
-    httpd_register_uri_handler(srv, &ws1);
-
     // URI handler for getting uploaded files
     // httpd_uri_t file_spiffs = { .uri      = "/*", // Match all URIs of type /path/to/file
     //                             .method   = HTTP_GET,
     //                             .handler  = spiffs_get_handler,
     //                             .user_ctx = NULL };
-
-    
 
     httpd_uri_t dflt = { .uri      = "/*", // Match all URIs of type /path/to/file
                          .method   = HTTP_GET,
@@ -4843,9 +5018,21 @@ start_webserver(void)
                          .user_ctx = NULL };
 
     httpd_register_uri_handler(srv, &hello);
-    //httpd_register_uri_handler(srv, &echo);
-    // httpd_register_uri_handler(srv, &ctrl);
-    // httpd_register_uri_handler(srv, &mainpg);
+    // httpd_register_uri_handler(srv, &echo);
+    //  httpd_register_uri_handler(srv, &ctrl);
+    //  httpd_register_uri_handler(srv, &mainpg);
+
+    if (g_persistent.websockPort == g_persistent.webPort) {
+      ESP_LOGW(TAG, "WebSocket port equals web port (%d); registering /ws1 on web server", g_persistent.webPort);
+      httpd_register_uri_handler(srv, &ws1);
+      httpd_register_uri_handler(srv, &ws2);
+      ESP_LOGI(TAG, "WebSocket server running on same port as web server");
+      g_websocket_srv = NULL;
+    }
+    else {
+      g_websocket_srv = start_websocket_server();
+    }
+
     httpd_register_uri_handler(srv, &dflt);
 
     httpd_register_uri_handler(srv, &upgrdlocal);
@@ -4877,6 +5064,12 @@ start_webserver(void)
 esp_err_t
 stop_webserver(httpd_handle_t server)
 {
+  if (g_websocket_srv) {
+    ESP_LOGD(TAG, "Stopping websocket server");
+    httpd_stop(g_websocket_srv);
+    g_websocket_srv = NULL;
+  }
+
   // Stop the httpd server
   return httpd_stop(server);
 }
