@@ -1254,6 +1254,10 @@ mainpg_get_handler(httpd_req_t *req)
           "<p><form id=but2 class=\"button\" action='info' method='get'><button>Node Information</button></form></p>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
+    sprintf(buf,
+      "<p><form id=but2a class=\"button\" action='canbus' method='get'><button>CAN Bus Console</button></form></p>");
+    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
   sprintf(buf,
           "<p><form id=but3 class=\"button\" action='upgrade' method='get'><button>Firmware "
           "Upgrade</button></form></p>");
@@ -1273,6 +1277,108 @@ mainpg_get_handler(httpd_req_t *req)
 
   return ESP_OK;
 }
+
+  ///////////////////////////////////////////////////////////////////////////////
+  // canbus_get_handler
+  //
+  // CAN bus web console using WS2 protocol
+  //
+
+  static esp_err_t
+  canbus_get_handler(httpd_req_t *req)
+  {
+    char *buf = (char *) calloc(CHUNK_BUFSIZE, 1);
+    if (NULL == buf) {
+      return ESP_ERR_NO_MEM;
+    }
+
+    const esp_app_desc_t *appDescr = esp_app_get_description();
+    uint16_t ws_port               = g_persistent.enableWebsock ? g_persistent.websockPort : g_persistent.webPort;
+
+    sprintf(buf, WEBPAGE_START_TEMPLATE, g_persistent.nodeName, "CAN Bus Console");
+    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+    sprintf(buf,
+      "<p style='font-size:0.95rem;color:#ddd;'>"
+      "Direct WebSocket bridge to CAN/TWAI (WS2). Use this page to send VSCP events and run node scans."
+      "</p>");
+    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+    sprintf(buf,
+      "<fieldset><legend>Connection</legend>"
+      "<div class='p'>WS URL</div><div class='q' id='wsurl'>-</div><br style='clear:both'>"
+      "<button id='btnConnect' type='button'>Connect</button><br><br>"
+      "<div class='p'>State</div><div class='q' id='state'>Disconnected</div><br style='clear:both'>"
+      "</fieldset>");
+    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+    sprintf(buf,
+      "<br><fieldset><legend>Send VSCP Event To CAN</legend>"
+      "<table style='width:100%%'>"
+      "<tr><td>Priority (0-7)</td><td><input id='prio' value='0'></td></tr>"
+      "<tr><td>Class</td><td><input id='vclass' value='0'></td></tr>"
+      "<tr><td>Type</td><td><input id='vtype' value='1'></td></tr>"
+      "<tr><td>Node/Nickname</td><td><input id='nick' value='255'></td></tr>"
+      "<tr><td>Data (hex)</td><td><input id='data' value='' placeholder='01 02 03'></td></tr>"
+      "</table>"
+      "<button id='btnSendEvent' type='button' class='bgrn'>Send Event</button>"
+      "</fieldset>");
+    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+    sprintf(buf,
+      "<br><fieldset><legend>CAN Bus Node Discovery</legend>"
+      "<table style='width:100%%'>"
+      "<tr><td>WHIS target nickname</td><td><input id='whisNick' value='255'></td></tr>"
+      "<tr><td>Scan start nickname</td><td><input id='scanStart' value='1'></td></tr>"
+      "<tr><td>Scan end nickname</td><td><input id='scanEnd' value='255'></td></tr>"
+      "</table>"
+      "<button id='btnWhis' type='button'>Send WHIS</button><br><br>"
+      "<button id='btnScan' type='button'>Run Node Scan</button>"
+      "</fieldset>");
+    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+    sprintf(buf,
+      "<br><fieldset><legend>Traffic / Replies</legend>"
+      "<textarea id='log' readonly style='height:260px;background:#101110;color:#8df186'></textarea>"
+      "</fieldset>");
+    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+    sprintf(buf,
+      "<script>"
+      "(function(){"
+      "var ws=null;"
+      "var wsPort=%u;"
+      "function el(id){return document.getElementById(id);}"
+      "function log(s){var t=el('log');if(!t)return;t.value+=(new Date()).toISOString()+\" \"+s+\"\\n\";t.scrollTop=t.scrollHeight;}"
+      "function wsUrl(){var p=(window.location.protocol==='https:')?'wss':'ws';var host=window.location.hostname;var port=(wsPort>0)?(':'+wsPort):'';return p+'://'+host+port+'/ws2';}"
+      "function send(cmd,arg){if(!ws||ws.readyState!==1){log('Not connected');return;}var f='C;'+cmd+(arg?';'+arg:'');ws.send(f);log('TX '+f);}"
+      "el('wsurl').textContent=wsUrl();"
+      "el('btnConnect').onclick=function(){"
+      "  if(ws&&ws.readyState===1){ws.close();return;}"
+      "  ws=new WebSocket(wsUrl());"
+      "  ws.onopen=function(){el('state').textContent='Connected';el('btnConnect').textContent='Disconnect';log('Connected');};"
+      "  ws.onclose=function(){el('state').textContent='Disconnected';el('btnConnect').textContent='Connect';log('Disconnected');};"
+      "  ws.onerror=function(){log('WebSocket error');};"
+      "  ws.onmessage=function(ev){log('RX '+ev.data);};"
+      "};"
+      "el('btnSendEvent').onclick=function(){"
+      "  var a=[el('prio').value.trim(),el('vclass').value.trim(),el('vtype').value.trim(),el('nick').value.trim(),el('data').value.trim()].join(',');"
+      "  send('SENDEVENT',a);"
+      "};"
+      "el('btnWhis').onclick=function(){send('WHIS',el('whisNick').value.trim());};"
+      "el('btnScan').onclick=function(){send('SCAN',el('scanStart').value.trim()+','+el('scanEnd').value.trim());};"
+      "})();"
+      "</script>",
+      (unsigned int) ws_port);
+    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+    sprintf(buf, WEBPAGE_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send_chunk(req, NULL, 0);
+
+    free(buf);
+    return ESP_OK;
+  }
 
 // static const httpd_uri_t mainpg = { .uri     = "/index.html",
 //                                    .method  = HTTP_GET,
@@ -4492,6 +4598,11 @@ default_get_handler(httpd_req_t *req)
   if (0 == strncmp(req->uri, "/config", 7)) {
     ESP_LOGV(TAG, "--------- config ---------\n");
     return config_get_handler(req);
+  }
+
+  if (0 == strncmp(req->uri, "/canbus", 7)) {
+    ESP_LOGV(TAG, "--------- canbus ---------\n");
+    return canbus_get_handler(req);
   }
 
   if (0 == strncmp(req->uri, "/cfgmodule", 10)) {

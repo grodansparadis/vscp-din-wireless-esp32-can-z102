@@ -799,6 +799,90 @@ ws1_get_handler(httpd_req_t *req)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// ws2 helpers
+//
+
+static bool
+ws2_is_digit_string(const char *s)
+{
+  if ((NULL == s) || ('\0' == *s)) {
+    return false;
+  }
+  for (const char *p = s; *p; ++p) {
+    if ((*p < '0') || (*p > '9')) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static int
+ws2_parse_uint8(const char *s, uint8_t *val)
+{
+  long v;
+  if ((NULL == s) || (NULL == val) || !ws2_is_digit_string(s)) {
+    return VSCP_ERROR_INVALID_SYNTAX;
+  }
+  v = strtol(s, NULL, 10);
+  if ((v < 0) || (v > 255)) {
+    return VSCP_ERROR_INVALID_SYNTAX;
+  }
+  *val = (uint8_t) v;
+  return VSCP_ERROR_SUCCESS;
+}
+
+static int
+ws2_parse_data_hex(const char *src, uint8_t *dst, uint8_t *len)
+{
+  size_t n = 0;
+  const char *p;
+  if ((NULL == src) || (NULL == dst) || (NULL == len)) {
+    return VSCP_ERROR_INVALID_POINTER;
+  }
+  *len = 0;
+  p    = src;
+  while (*p) {
+    while (*p && ((' ' == *p) || (',' == *p) || (';' == *p) || (':' == *p) || ('-' == *p) || ('\t' == *p))) {
+      p++;
+    }
+    if (!*p) {
+      break;
+    }
+    if (!isxdigit((unsigned char) p[0]) || !isxdigit((unsigned char) p[1])) {
+      return VSCP_ERROR_INVALID_SYNTAX;
+    }
+    if (n >= 8) {
+      return VSCP_ERROR_INVALID_SYNTAX;
+    }
+    char hex[3] = { p[0], p[1], 0 };
+    dst[n++]    = (uint8_t) strtol(hex, NULL, 16);
+    p += 2;
+  }
+  *len = (uint8_t) n;
+  return VSCP_ERROR_SUCCESS;
+}
+
+static esp_err_t
+ws2_send_vscp_as_can(uint8_t prio,
+                     uint16_t vscp_class,
+                     uint8_t vscp_type,
+                     uint8_t nickname,
+                     const uint8_t *pdata,
+                     uint8_t sizeData)
+{
+  can4vscp_frame_t msg = { 0 };
+  msg.identifier        = (uint32_t) nickname + (((uint32_t) vscp_type) << 8) + (((uint32_t) vscp_class) << 16) +
+                   ((((uint32_t) prio) & 0x07u) << 26);
+  msg.extd             = 1;
+  msg.rtr              = 0;
+  msg.data_length_code = sizeData;
+  if ((sizeData > 0) && (NULL != pdata)) {
+    memcpy(msg.data, pdata, sizeData);
+  }
+  return can4vscp_send(&msg, pdMS_TO_TICKS(100));
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // ws2_get_handler
 //
 // WebSocket protocol endpoint (/ws2)
@@ -859,18 +943,196 @@ ws2_get_handler(httpd_req_t *req)
 
     ESP_LOGD(TAG, "WS2 command=%s data=%s", cmd, data);
 
-    size_t reply_len = strlen(cmd) + 3;
-    char *reply      = calloc(1, reply_len + 1);
-    if (NULL == reply) {
-      free(payload);
-      return ESP_ERR_NO_MEM;
+    for (char *p = cmd; *p; ++p) {
+      *p = (char) toupper((unsigned char) *p);
     }
 
-    snprintf(reply, reply_len + 1, "+;%s", cmd);
-    tx.payload = (uint8_t *) reply;
-    tx.len     = strlen(reply);
-    rv         = httpd_ws_send_frame(req, &tx);
-    free(reply);
+    if (0 == strcmp(cmd, "SENDEVENT")) {
+      char local[128] = { 0 };
+      uint8_t prio;
+      uint8_t vtype;
+      uint8_t nick;
+      uint16_t vclass;
+      uint8_t frame_data[8] = { 0 };
+      uint8_t frame_data_len;
+      char *tok;
+      char *saveptr = NULL;
+
+      if (strlen(data) >= sizeof(local)) {
+        const char *errtxt = "-;SENDEVENT;Data too long";
+        tx.payload         = (uint8_t *) errtxt;
+        tx.len             = strlen(errtxt);
+        rv                 = httpd_ws_send_frame(req, &tx);
+      }
+      else {
+        strcpy(local, data);
+        tok = strtok_r(local, ",", &saveptr);
+        if ((NULL == tok) || (VSCP_ERROR_SUCCESS != ws2_parse_uint8(tok, &prio)) || (prio > 7)) {
+          const char *errtxt = "-;SENDEVENT;Invalid priority";
+          tx.payload         = (uint8_t *) errtxt;
+          tx.len             = strlen(errtxt);
+          rv                 = httpd_ws_send_frame(req, &tx);
+          goto ws2_done;
+        }
+
+        tok = strtok_r(NULL, ",", &saveptr);
+        if ((NULL == tok) || !ws2_is_digit_string(tok)) {
+          const char *errtxt = "-;SENDEVENT;Invalid class";
+          tx.payload         = (uint8_t *) errtxt;
+          tx.len             = strlen(errtxt);
+          rv                 = httpd_ws_send_frame(req, &tx);
+          goto ws2_done;
+        }
+        long cls = strtol(tok, NULL, 10);
+        if ((cls < 0) || (cls > 511)) {
+          const char *errtxt = "-;SENDEVENT;Class out of range";
+          tx.payload         = (uint8_t *) errtxt;
+          tx.len             = strlen(errtxt);
+          rv                 = httpd_ws_send_frame(req, &tx);
+          goto ws2_done;
+        }
+        vclass = (uint16_t) cls;
+
+        tok = strtok_r(NULL, ",", &saveptr);
+        if ((NULL == tok) || (VSCP_ERROR_SUCCESS != ws2_parse_uint8(tok, &vtype))) {
+          const char *errtxt = "-;SENDEVENT;Invalid type";
+          tx.payload         = (uint8_t *) errtxt;
+          tx.len             = strlen(errtxt);
+          rv                 = httpd_ws_send_frame(req, &tx);
+          goto ws2_done;
+        }
+
+        tok = strtok_r(NULL, ",", &saveptr);
+        if ((NULL == tok) || (VSCP_ERROR_SUCCESS != ws2_parse_uint8(tok, &nick))) {
+          const char *errtxt = "-;SENDEVENT;Invalid nickname";
+          tx.payload         = (uint8_t *) errtxt;
+          tx.len             = strlen(errtxt);
+          rv                 = httpd_ws_send_frame(req, &tx);
+          goto ws2_done;
+        }
+
+        tok = strtok_r(NULL, "", &saveptr);
+        if (NULL == tok) {
+          tok = "";
+        }
+        if (VSCP_ERROR_SUCCESS != ws2_parse_data_hex(tok, frame_data, &frame_data_len)) {
+          const char *errtxt = "-;SENDEVENT;Invalid data hex";
+          tx.payload         = (uint8_t *) errtxt;
+          tx.len             = strlen(errtxt);
+          rv                 = httpd_ws_send_frame(req, &tx);
+          goto ws2_done;
+        }
+
+        esp_err_t txrv = ws2_send_vscp_as_can(prio, vclass, vtype, nick, frame_data, frame_data_len);
+        if (ESP_OK != txrv) {
+          const char *errtxt = "-;SENDEVENT;CAN send failed";
+          tx.payload         = (uint8_t *) errtxt;
+          tx.len             = strlen(errtxt);
+          rv                 = httpd_ws_send_frame(req, &tx);
+        }
+        else {
+          const char *oktxt = "+;SENDEVENT";
+          tx.payload        = (uint8_t *) oktxt;
+          tx.len            = strlen(oktxt);
+          rv                = httpd_ws_send_frame(req, &tx);
+        }
+      }
+    }
+    else if (0 == strcmp(cmd, "WHIS")) {
+      uint8_t nick = 255;
+      if ((NULL != data) && ('\0' != *data)) {
+        if (VSCP_ERROR_SUCCESS != ws2_parse_uint8(data, &nick)) {
+          const char *errtxt = "-;WHIS;Invalid nickname";
+          tx.payload         = (uint8_t *) errtxt;
+          tx.len             = strlen(errtxt);
+          rv                 = httpd_ws_send_frame(req, &tx);
+          goto ws2_done;
+        }
+      }
+
+      // VSCP class=0 (CLASS1.PROTOCOL), type=1 (WHIS/Who Is There)
+      esp_err_t txrv = ws2_send_vscp_as_can(0, 0, 1, nick, NULL, 0);
+      if (ESP_OK != txrv) {
+        const char *errtxt = "-;WHIS;CAN send failed";
+        tx.payload         = (uint8_t *) errtxt;
+        tx.len             = strlen(errtxt);
+        rv                 = httpd_ws_send_frame(req, &tx);
+      }
+      else {
+        const char *oktxt = "+;WHIS";
+        tx.payload        = (uint8_t *) oktxt;
+        tx.len            = strlen(oktxt);
+        rv                = httpd_ws_send_frame(req, &tx);
+      }
+    }
+    else if (0 == strcmp(cmd, "SCAN")) {
+      uint8_t start_nick = 1;
+      uint8_t end_nick   = 255;
+      char local[32]     = { 0 };
+      char *a;
+      char *b;
+      if ((NULL != data) && ('\0' != *data)) {
+        if (strlen(data) >= sizeof(local)) {
+          const char *errtxt = "-;SCAN;Data too long";
+          tx.payload         = (uint8_t *) errtxt;
+          tx.len             = strlen(errtxt);
+          rv                 = httpd_ws_send_frame(req, &tx);
+          goto ws2_done;
+        }
+        strcpy(local, data);
+        a = strtok(local, ",");
+        b = strtok(NULL, ",");
+        if ((NULL == a) || (NULL == b) ||
+            (VSCP_ERROR_SUCCESS != ws2_parse_uint8(a, &start_nick)) ||
+            (VSCP_ERROR_SUCCESS != ws2_parse_uint8(b, &end_nick))) {
+          const char *errtxt = "-;SCAN;Invalid range";
+          tx.payload         = (uint8_t *) errtxt;
+          tx.len             = strlen(errtxt);
+          rv                 = httpd_ws_send_frame(req, &tx);
+          goto ws2_done;
+        }
+      }
+
+      if (start_nick > end_nick) {
+        const char *errtxt = "-;SCAN;Invalid range";
+        tx.payload         = (uint8_t *) errtxt;
+        tx.len             = strlen(errtxt);
+        rv                 = httpd_ws_send_frame(req, &tx);
+        goto ws2_done;
+      }
+
+      uint16_t sent = 0;
+      uint16_t fail = 0;
+      for (uint16_t nick = start_nick; nick <= end_nick; ++nick) {
+        esp_err_t txrv = ws2_send_vscp_as_can(0, 0, 1, (uint8_t) nick, NULL, 0);
+        if (ESP_OK == txrv) {
+          sent++;
+        }
+        else {
+          fail++;
+        }
+      }
+
+      char reply[64] = { 0 };
+      snprintf(reply, sizeof(reply), "+;SCAN;%u,%u", (unsigned int) sent, (unsigned int) fail);
+      tx.payload = (uint8_t *) reply;
+      tx.len     = strlen(reply);
+      rv         = httpd_ws_send_frame(req, &tx);
+    }
+    else {
+      size_t reply_len = strlen(cmd) + 3;
+      char *reply      = calloc(1, reply_len + 1);
+      if (NULL == reply) {
+        free(payload);
+        return ESP_ERR_NO_MEM;
+      }
+
+      snprintf(reply, reply_len + 1, "+;%s", cmd);
+      tx.payload = (uint8_t *) reply;
+      tx.len     = strlen(reply);
+      rv         = httpd_ws_send_frame(req, &tx);
+      free(reply);
+    }
   }
   else {
     const char *errtxt = "-;ERR;Invalid frame";
@@ -878,6 +1140,8 @@ ws2_get_handler(httpd_req_t *req)
     tx.len             = strlen(errtxt);
     rv                 = httpd_ws_send_frame(req, &tx);
   }
+
+ws2_done:
 
   free(payload);
   return rv;
