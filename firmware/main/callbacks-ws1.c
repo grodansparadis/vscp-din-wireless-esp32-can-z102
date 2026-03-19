@@ -77,7 +77,7 @@ extern node_persistent_config_t g_persistent;
 //
 
 int
-vscp_ws1_callback_init(vscp_ws1_connection_context_t *pctx)
+vscp_ws1_callback_init(vscp_ws_connection_context_t *pctx)
 {
   return VSCP_ERROR_SUCCESS;
 }
@@ -87,7 +87,7 @@ vscp_ws1_callback_init(vscp_ws1_connection_context_t *pctx)
 //
 
 int
-vscp_ws1_callback_cleanup(vscp_ws1_connection_context_t *pctx)
+vscp_ws1_callback_cleanup(vscp_ws_connection_context_t *pctx)
 {
   return VSCP_ERROR_SUCCESS;
 }
@@ -97,22 +97,21 @@ vscp_ws1_callback_cleanup(vscp_ws1_connection_context_t *pctx)
 //
 
 int
-vscp_ws1_callback_generate_sid(uint8_t *sid, size_t size, vscp_ws1_connection_context_t *pctx)
+vscp_ws1_callback_generate_sid(uint8_t *sid, size_t size, vscp_ws_connection_context_t *pctx)
 {
   return vscp_ws1_generate_sid(pctx->sid, sizeof(pctx->sid), pctx);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// vscp_ws1_callback_get_key
+// vscp_ws1_callback_get_primary_key
 //
 
-int
-vscp_ws1_callback_get_key(uint8_t **pkey, vscp_ws1_connection_context_t *pctx)
+const uint8_t *
+vscp_ws1_callback_get_primary_key(vscp_ws_connection_context_t *pctx)
 {
   // Return a pointer to the encryption key. If the key is larger on ths system
   // only the first 16 bytes will be used as the 128 bit key for encryption.
-  *pkey = g_persistent.pmk;
-  return VSCP_ERROR_SUCCESS;
+  return g_persistent.pmk;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -120,7 +119,7 @@ vscp_ws1_callback_get_key(uint8_t **pkey, vscp_ws1_connection_context_t *pctx)
 //
 
 int
-vscp_ws1_callback_is_allowed_event(vscpEvent *pEvent, vscp_ws1_connection_context_t *pctx)
+vscp_ws1_callback_is_allowed_event(vscpEvent *pEvent, vscp_ws_connection_context_t *pctx)
 {
   // All events are allowed
   return VSCP_ERROR_SUCCESS;
@@ -131,7 +130,7 @@ vscp_ws1_callback_is_allowed_event(vscpEvent *pEvent, vscp_ws1_connection_contex
 //
 
 int
-vscp_ws1_callback_is_allowed_connection(const char *pip, vscp_ws1_connection_context_t *pctx)
+vscp_ws1_callback_is_allowed_connection(const char *pip, vscp_ws_connection_context_t *pctx)
 {
   int sockfd = httpd_req_to_sockfd((httpd_req_t *) pctx->pdata);
   struct sockaddr_storage addr;
@@ -164,11 +163,11 @@ int
 vscp_ws1_callback_validate_user(const uint8_t *pcrypt,
                                 uint8_t crypto_len,
                                 const uint8_t *psid,
-                                vscp_ws1_connection_context_t *pctx)
+                                vscp_ws_connection_context_t *pctx)
 {
   int rv;
   size_t len;
-  uint8_t buf[128]    = { 0 };
+  //uint8_t buf[128]    = { 0 };
   uint8_t encbuf[128] = { 0 };
 
   ESP_LOGI(TAG, "Validating user with encrypted credentials crypto_len=%d", crypto_len);
@@ -203,27 +202,31 @@ vscp_ws1_callback_validate_user(const uint8_t *pcrypt,
 //
 
 int
-vscp_ws1_callback_reply(const char *response, vscp_ws1_connection_context_t *pctx)
+vscp_ws1_callback_reply(const char *response, vscp_ws_connection_context_t *pctx)
 {
+  if (NULL == response) {
+    return VSCP_ERROR_INVALID_POINTER;
+  }
+
   httpd_req_t *req = (httpd_req_t *) pctx->pdata;
   if (NULL == req) {
     return VSCP_ERROR_INVALID_CONTEXT;
   }
 
   // size_t reply_len = 40; // "+;AUTH0;55BCA4DC7C1FD9C3E6967F37C8747698" is 40 chars long
-  char *reply = calloc(1, strlen(response) + 1);
-  if (NULL == reply) {
-    return VSCP_ERROR_MEMORY;
-  }
+  // char *reply = calloc(1, strlen(response) + 1);
+  // if (NULL == reply) {
+  //   return VSCP_ERROR_MEMORY;
+  // }
 
   httpd_ws_frame_t tx = { 0 };
   tx.type             = HTTPD_WS_TYPE_TEXT;
   ESP_LOGI(TAG, "WS1 replying with: %s", response);
-  snprintf(reply, strlen(response) + 1, "%s", response);
-  tx.payload    = (uint8_t *) reply;
-  tx.len        = strlen(reply);
+  //snprintf(reply, strlen(response) + 1, "%s", response);
+  tx.payload    = (uint8_t *) response;
+  tx.len        = strlen(response);
   esp_err_t err = httpd_ws_send_frame(req, &tx);
-  free(reply);
+  //free(reply);
 
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Failed to send WS1 reply with error %d", err);
@@ -238,7 +241,7 @@ vscp_ws1_callback_reply(const char *response, vscp_ws1_connection_context_t *pct
 //
 
 int
-vscp_ws1_callback_event(vscpEvent *pEvent, vscp_ws1_connection_context_t *pctx)
+vscp_ws1_callback_event(vscpEvent *pEvent, vscp_ws_connection_context_t *pctx)
 {
   return VSCP_ERROR_SUCCESS;
 }
@@ -248,7 +251,7 @@ vscp_ws1_callback_event(vscpEvent *pEvent, vscp_ws1_connection_context_t *pctx)
 //
 
 int
-vscp_ws1_callback_copyright(vscp_ws1_connection_context_t *pctx)
+vscp_ws1_callback_copyright(vscp_ws_connection_context_t *pctx)
 {
   return VSCP_ERROR_SUCCESS;
 }
@@ -258,7 +261,7 @@ vscp_ws1_callback_copyright(vscp_ws1_connection_context_t *pctx)
 //
 
 int
-vscp_ws1_callback_open(vscp_ws1_connection_context_t *pctx)
+vscp_ws1_callback_open(vscp_ws_connection_context_t *pctx)
 {
   return VSCP_ERROR_SUCCESS;
 }
@@ -268,7 +271,7 @@ vscp_ws1_callback_open(vscp_ws1_connection_context_t *pctx)
 //
 
 int
-vscp_ws1_callback_close(vscp_ws1_connection_context_t *pctx)
+vscp_ws1_callback_close(vscp_ws_connection_context_t *pctx)
 {
   return VSCP_ERROR_SUCCESS;
 }
@@ -278,7 +281,7 @@ vscp_ws1_callback_close(vscp_ws1_connection_context_t *pctx)
 //
 
 int
-vscp_ws1_callback_setfilter(const vscpEventFilter *pfilter, vscp_ws1_connection_context_t *pctx)
+vscp_ws1_callback_setfilter(const vscpEventFilter *pfilter, vscp_ws_connection_context_t *pctx)
 {
   return VSCP_ERROR_SUCCESS;
 }
@@ -288,7 +291,7 @@ vscp_ws1_callback_setfilter(const vscpEventFilter *pfilter, vscp_ws1_connection_
 //
 
 int
-vscp_ws1_callback_clrqueue(vscp_ws1_connection_context_t *pctx)
+vscp_ws1_callback_clrqueue(vscp_ws_connection_context_t *pctx)
 {
   return VSCP_ERROR_SUCCESS;
 }

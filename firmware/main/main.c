@@ -1847,9 +1847,9 @@ app_main(void)
   server_httpd = start_webserver();
 
   // Start websocket instance for real-time event monitoring and control (if enabled)
-  if (g_persistent.enableWebsock) {
-    server_websock = setup_websocket_server();
-  }
+  // if (g_persistent.enableWebsock) {
+  //   server_websock = setup_websocket_server();
+  // }
 
   // ============================================================================
   //                    CAN/TWAI Initialization

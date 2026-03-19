@@ -1,4 +1,13 @@
 {
+  // markdown preview settings
+  "markdown-preview-enhanced.scrollBeyondLastLine": false,
+  "markdown-preview-enhanced.markdownItPlugins": {
+    "markdown-it-emoji": true
+  },
+  "editor.fontFamily": "Consolas, monospace",
+  "markdown.preview.fontFamily": "Consolas, monospace"
+
+
   "idf.adapterTargetName": "esp32c3",
   "C_Cpp.intelliSenseEngine": "Tag Parser",
   "idf.flashType": "JTAG",

@@ -1,6 +1,31 @@
 | Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-S2 | ESP32-S3 |
 | ----------------- | ----- | -------- | -------- | -------- | -------- |
 
+
+# Getting Started
+
+### Configure the project
+
+Go to the firmware folder
+
+```
+idf.py menuconfig
+```
+* Set the BLE/Soft AP transport under "Example Configuration" options. ESP32-S2 will have only SoftAP option.
+
+### Build and Flash
+
+Build the project and flash it to the board, then run monitor tool to view serial output:
+
+```
+idf.py -p PORT flash monitor
+```
+
+(To exit the serial monitor, type ``Ctrl-]``.)
+
+See the Getting Started Guide for full steps to configure and use ESP-IDF to build projects.
+
+
 # Wi-Fi Provisioning Manager Example
 
 (See the README.md file in the upper level 'examples' directory for more information about examples.)
@@ -70,24 +95,7 @@ To install the dependency packages needed, please refer to the top level [README
 
 `esp_prov` supports BLE and SoftAP transport for Linux, MacOS and Windows platforms. For BLE, however, if dependencies are not met, the script falls back to console mode and requires another application through which the communication can take place. The `esp_prov` console will guide you through the provisioning process of locating the correct BLE GATT services and characteristics, the values to write, and input read values.
 
-### Configure the project
 
-```
-idf.py menuconfig
-```
-* Set the BLE/Soft AP transport under "Example Configuration" options. ESP32-S2 will have only SoftAP option.
-
-### Build and Flash
-
-Build the project and flash it to the board, then run monitor tool to view serial output:
-
-```
-idf.py -p PORT flash monitor
-```
-
-(To exit the serial monitor, type ``Ctrl-]``.)
-
-See the Getting Started Guide for full steps to configure and use ESP-IDF to build projects.
 
 ## Example Output
 
@@ -436,3 +444,12 @@ BLECLI >> Enter data read from characteristic (in hex) :
 ```
 
 The write data is to be copied from the console output ```>>``` to the platform specific application and the data read from the application is to be pasted at the user input prompt ```<<``` of the console, in the format (hex) indicated in above sample log.
+
+
+## License
+
+The whole source code is published under the MIT license. Consider the different licenses of possible third party libraries too!
+
+## Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, shall be licensed as above, without any additional terms or conditions.

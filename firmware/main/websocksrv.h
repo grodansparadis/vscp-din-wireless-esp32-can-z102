@@ -43,11 +43,25 @@
 void
 websocksrv_task(void *pvParameters);
 
+
+/*!
+  Register URI handlers for the WebSocket server instance
+  @param server HTTP server handle for the WebSocket server instance
+  @return ESP_OK on success, error code otherwise
+
+  This is mainfly for the case where port is the same for the webserver and
+  the WebSocket server. If the WebSocket server is running on a different port
+  than the webserver, then the handlers should be registered in the function
+  that starts the WebSocket server (e.g. wss_start_websocket_server) after 
+  the server is started and the server handle is available.
+*/
+int wss_register_handlers(httpd_handle_t server);
+
 /*!
   Setup and start the WebSocket server
   @return HTTP server handle for the WebSocket server instance
 */
 httpd_handle_t
-setup_websocket_server(void);
+wss_start_websocket_server(void);
 
 #endif /* __VSCP_WEBSOCK_SERVER_H__ */

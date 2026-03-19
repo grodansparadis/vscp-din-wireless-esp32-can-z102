@@ -1,16 +1,57 @@
 Internal product page: http://192.168.1.7/wiki/doku.php?id=vscp-din-esp32-can-z102
 
- 
 openocd -f board/esp32c3-builtin.cfg
 
 node test_ws1.js --url ws://192.168.1.100:8884/ws1
+
+------------------------------------------------------
+                       Security
+------------------------------------------------------
+
+https://community.letsencrypt.org/t/how-to-install-certificate-on-a-microcontroller/197377
+Certificat bundle: https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/protocols/esp_https_server.html
+
+
+httpd_handle_t
+start_webserver(void)
+{
+  httpd_handle_t srv     = NULL;
+  httpd_ssl_config_t cfg = HTTPD_SSL_CONFIG_DEFAULT();
+  cfg.port_insecure = g_persistent.webPort;
+  cfg.httpd.server_port = g_persistent.webPort;
+
+  // 4096 is to low for OTA
+  cfg.httpd.stack_size = 1024 * 5;
+
+  cfg.httpd.lru_purge_enable = true;
+  // Use the URI wildcard matching function in order to
+  // allow the same handler to respond to multiple different
+  // target URIs which match the wildcard scheme
+  cfg.httpd.uri_match_fn = httpd_uri_match_wildcard;
+
+  cfg.httpd.max_uri_handlers = 20;
+
+  extern const unsigned char servercert_start[] asm("_binary_servercert_pem_start");
+  extern const unsigned char servercert_end[] asm("_binary_servercert_pem_end");
+  cfg.servercert     = servercert_start;
+  cfg.servercert_len = servercert_end - servercert_start;
+
+  extern const unsigned char prvtkey_pem_start[] asm("_binary_prvtkey_pem_start");
+  extern const unsigned char prvtkey_pem_end[] asm("_binary_prvtkey_pem_end");
+  cfg.prvtkey_pem = prvtkey_pem_start;
+  cfg.prvtkey_len = prvtkey_pem_end - prvtkey_pem_start;
+
+  // Start the httpd server
+  ESP_LOGD(TAG, "Starting httpd server on port: '%d' (insecure), '%d' (secure)", cfg.port_insecure, cfg.port_secure);
+
 
 ------------------------------------------------------
                        TODO
 ------------------------------------------------------
 - Multicast support
 - TLS support
-- Websocket support
+- Websocket supportgit status
+
 - Send heartbeat on Multicast 9598
 - VSCP Node scan on VSCP2CAN interface.
 - Buttons.  

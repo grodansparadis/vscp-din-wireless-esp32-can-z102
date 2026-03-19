@@ -31,32 +31,11 @@
  * ******************************************************************************
  */
 
-/*!
-  The VSCP Websocket Server (WS2) protocol is a simple text-based protocol designed 
-  for communication between a VSCP device and a client over a WebSocket connection. 
-  The protocol allows clients to send commands to the device and receive responses, 
-  as well as receive events from the device in real-time.
 
-  It is documented here 
-  https://grodansparadis.github.io/vscp-doc-spec/#/./vscp_websocket?id=ws2-description
- */
+ #include <string.h>
+ #include <stdlib.h>
+ #include <stdio.h>
+ #include <ctype.h>
 
+ #include "vscp-binary.h"
 
-#ifndef __VSCP_WS2_H__
-#define __VSCP_WS2_H__
-
-#include "vscp-compiler.h"
-#include "vscp-projdefs.h"
-
-#include <stdbool.h>
-
-#include "vscp.h"
-#include "vscp-firmware-helper.h"
-
-#include "vscp-ws-common.h"
-
-
-
-
-
-#endif  /* __VSCP_WS2_H__ */

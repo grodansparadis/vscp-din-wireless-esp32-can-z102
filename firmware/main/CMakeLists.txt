@@ -2,6 +2,7 @@ idf_component_register(SRCS "main.c"
                             "mqtt.c" 
                             "websrv.c"
                             "websocksrv.c"
+                            "keep-alive.c"
                             "can4vscp.c"
                             "urldecode.c"
                             "tcpsrv.c" 
@@ -17,4 +18,5 @@ idf_component_register(SRCS "main.c"
                             "../third_party/vscp-firmware/common/vscp-aes.c"
 
                     INCLUDE_DIRS "." 
-                                  "../third_party/vscp-firmware/common/")
+                                  "../third_party/vscp-firmware/common/"
+)

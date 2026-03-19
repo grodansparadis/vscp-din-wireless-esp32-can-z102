@@ -52,6 +52,12 @@
 #include "vscp.h"
 #include "vscp-firmware-helper.h"
 
+#include "vscp-ws-common.h"
+
+// ws1 is 0 and ws2 is 1, this is used in the session context to determine which protocol 
+// is being used for a given connection
+#define VSCP_WS1_PROTOCOL 0
+
 // Defines in vscp-projdefs.h that should be used by the ws1 protocol implementation
 // VSCP_WS1_MAX_CLIENTS - Maximum number of clients that can be connected at the same time
 
@@ -76,16 +82,17 @@
 #define VSCP_WS1_PROTOCOL_BUILD_VERSION   0
 
 // VSCP ws1 error codes
-#define VSCP_WS1_ERROR_NONE                0 // No error
-#define VSCP_WS1_ERROR_SYNTAX              1 // Syntax error
-#define VSCP_WS1_ERROR_UNKNOWN_COMMAND     2 // Unknown command
-#define VSCP_WS1_ERROR_TX_BUFFER_FULL      3 // Transmit buffer full
-#define VSCP_WS1_ERROR_MEMORY              4 // Problem allocating memory
-#define VSCP_WS1_ERROR_NOT_AUTHORIZED      5 // Not authorized
-#define VSCP_WS1_ERROR_NOT_AUTHORIZED_SEND 6 // Not authorized to send events
-#define VSCP_WS1_ERROR_NOT_ALLOWED         7 // Not allowed to do that
-#define VSCP_WS1_ERROR_PARSE               8 // Parse error, invalid format
-#define VSCP_WS1_ERROR_UNKNOWN_TYPE        9 // Unknown ws1 message type, only know "COMMAND" and "EVENT"
+#define VSCP_WS1_ERROR_NONE                0  // No error
+#define VSCP_WS1_ERROR_SYNTAX              1  // Syntax error
+#define VSCP_WS1_ERROR_UNKNOWN_COMMAND     2  // Unknown command
+#define VSCP_WS1_ERROR_TX_BUFFER_FULL      3  // Transmit buffer full
+#define VSCP_WS1_ERROR_MEMORY              4  // Problem allocating memory
+#define VSCP_WS1_ERROR_NOT_AUTHORIZED      5  // Not authorized
+#define VSCP_WS1_ERROR_NOT_AUTHORIZED_SEND 6  // Not authorized to send events
+#define VSCP_WS1_ERROR_NOT_ALLOWED         7  // Not allowed to do that
+#define VSCP_WS1_ERROR_PARSE               8  // Parse error, invalid format
+#define VSCP_WS1_ERROR_UNKNOWN_TYPE        9  // Unknown ws1 message type, only know "COMMAND" and "EVENT"
+#define VSCP_WS1_ERROR_GENERAL             10 // General error or exception
 
 #define VSCP_WS1_STR_ERROR_NONE                      "Everything is OK."
 #define VSCP_WS1_STR_ERROR_SYNTAX                    "Syntax error."
@@ -99,89 +106,7 @@
 #define VSCP_WS1_STR_ERROR_UNKNOWN_TYPE              "Unknown type, only know 'COMMAND' and 'EVENT'."
 #define VSCP_WS1_STR_ERROR_GENERAL                   "Exception or other general error."
 
-/*
-  This structure contains information about an authenticated user.
-  It is used in the authentication process and may be populated with information
-  from a user database or other source of user information. Some system may only
-  allow for one user. In that case this structure can be populated with the information
-  for that single user and the authentication process can simply check if the provided
-  credentials match the information in this structure.
 
-  Only the callbacks see this structure so the implementer may change it as he/she pleases.
-
-  The fields in the structure are as follows:
-  - username: The username of the user.
-  - password: The password of the user (this should be encrypted or hashed in a secure manner).
-  - fullname: The full name of the user.
-  - filtermask: The filter mask for the user.
-  - rights: The rights or permissions of the user. This can hold bits for rights this user has.
-  - remotes: The remote access information for the user. This can be a comma-separated list of IP addresses or hostnames
-  that the user is allowed to connect from.
-  - events: The events associated with the user. This can be a comma-separated list of event types or IDs that the user
-  is allowed to receive.
-  - note: Any additional notes about the user.
-*/
-typedef struct _ws1_user {
-
-  // Username of user
-  char username[32];
-
-  // Full name of user
-#ifndef VSCP_WS1_DISABLE_USER_FULL_NAME  
-  char fullname[64];
-#endif  
-
-  /*
-    Default filter mask for the user. Set after authentication. The user is allowed to change the
-    filter mask after authentication if he/she has the right to do so.
-    The filter mask is used to determine which events the user receives from the server.
-  */
-  vscpEventFilter rxfilter;
-
-  /*
-    Bitfield for user rights/permissions, see vscp.h for defined rights.
-    This field is used to determine what the user is allowed to do and not to do.
-  */
-  uint64_t user_rights;
-
-  /*
-    Remote IP addresses the user is allowed to connect from. 
-    The list is binary and the IPs are stored in network byte order. 
-    The list is terminated by an all-zero entry. For IPv4 addresses, 
-    the first 12 bytes should be set to 0 and the last 4 bytes should 
-    contain the IPv4 address in network byte order.
-    All zeros = end of list. 
-    An empty list (first entry is all zeros) means all remotes are allowed.
-    For IPv4: store in last 4 bytes, first 12 = 0x00...00FFFF prefix
-  */
-  uint8_t allowed_remotes[16][16];
-
-  /*
-    The list can be used to specify which events a user is allowed to send if the
-    user has the right to send events.  Events are stored binary as 16-bit value (MSB first) 
-    pairs (class,type). Two zeros (class=0, type=0) indicate the end of the list. An empty 
-    list (zeros on the first position) means all events are allowed. 
-  */
-  uint16_t events[16][2]; // Events the user is allowed to send
-
-  /*
-     Additional notes about the user.
-     If disabled by defining VSCP_WS1_DISABLE_USER_NOTES this field is not included in the 
-     structure to save memory. Notes will in this case be left blank on reports.
-  */
-#ifndef VSCP_WS1_DISABLE_USER_NOTES 
-  char note[256];
-#endif
-} ws1_user_t;
-
-typedef struct _vscp_ws1_connection_context {
-  uint8_t sid[16];                    // Session ID for authentication and encryption
-  bool bOpen;                         // Flag for open/closed channel- True oif open
-  bool bAuthenticated;                // Whether the client is authenticated. True if authenticated
-  vscpEventFilter filter;             // Filter/mask for received VSCP events for this connection
-  ws1_user_t user;                    // User information for athenticated user
-  void *pdata;                        // Pointer to user data that can be used to store connection-specific information
-} vscp_ws1_connection_context_t;
 
 /*!
   Initialize the WS1 protocol handler. This function should be called before any other functions
@@ -193,7 +118,7 @@ typedef struct _vscp_ws1_connection_context {
   failure.
 */
 int
-vscp_ws1_init(vscp_ws1_connection_context_t *pctx, void *pdata);
+vscp_ws1_init(vscp_ws_connection_context_t *pctx, void *pdata);
 
 /*!
   Clean up any resources used by the WS1 protocol handler. This function should be called when the
@@ -216,10 +141,10 @@ vscp_ws1_clearup();
   was a failure.
 */
 int
-vscp_ws1_generate_sid(uint8_t *sid, size_t size, vscp_ws1_connection_context_t *pctx);
+vscp_ws1_generate_sid(uint8_t *sid, size_t size, vscp_ws_connection_context_t *pctx);
 
 /*!
-  Handle a received WS1 protocol packet. This function should be called when a packet is received from the client.
+  Handle a text received WS1 protocol packet. This function should be called when a packet is received from the client.
   The function will parse the packet, determine the type of packet (command, event, etc.), and call the appropriate
   callback function to handle the packet.
   @param packet The received packet as a null-terminated string.
@@ -230,7 +155,23 @@ vscp_ws1_generate_sid(uint8_t *sid, size_t size, vscp_ws1_connection_context_t *
   a failure.
 */
 int
-vscp_ws1_handle_protocol_request(const char *packet, uint16_t len, vscp_ws1_connection_context_t *pctx);
+vscp_ws1_handle_text_protocol_request(const char *packet, uint16_t len, vscp_ws_connection_context_t *pctx);
+
+/*!
+  Handle a binray received WS1 protocol packet. This function should be called when a packet is received from the client.
+  The function will parse the packet, determine the type of packet (command, event, etc.), and call the appropriate
+  callback function to handle the packet.
+  @param packet The received packet as a null-terminated string.
+  @param len The length of the received packet.
+  @param pctx Pointer to the connection context for this command. This will contain information about the connection
+  and can be used to store connection-specific data as needed.
+  @return Returns VSCP_ERROR_SUCCESS if the packet was successfully processed, or an appropriate error code if there was
+  a failure.
+*/
+
+int
+vscp_ws1_handle_binary_protocol_request(const uint8_t *packet, uint16_t len, vscp_ws_connection_context_t *pctx);
+
 
 /*!
   Function called when a command is received via the WS1 protocol.
@@ -245,7 +186,21 @@ vscp_ws1_handle_protocol_request(const char *packet, uint16_t len, vscp_ws1_conn
   or an appropriate error code if there was a failure.
 */
 int
-vscp_ws1_handle_command(const char *command, const char *parg, vscp_ws1_connection_context_t *pctx);
+vscp_ws1_handle_command(const char *command, const char *parg, vscp_ws_connection_context_t *pctx);
+
+/*!
+  Function called when a command is received via the WS1 protocol in binary format.
+  The callback should process the command and send an appropriate reply using the
+  vscp_ws1_callback_reply function.
+  @fn vscp_ws1_callback_binary_command
+  @param command The command that was received. This is a 16-bit code.
+  @param parg The argument part of the command, if any. This will be a null-terminated string or NULL if there is no
+  argument.
+  @param pctx Pointer to the connection context for this command. This will contain information about
+  @return Returns VSCP_ERROR_SUCCESS if the command was successfully processed,
+  or an appropriate error code if there was a failure.
+*/
+int vscp_ws1_handle_binary_command(uint16_t command, const uint8_t *parg, vscp_ws_connection_context_t *pctx);
 
 ///////////////////////////////////////////////////////////////////////////////
 //                               CALLBACKS
@@ -260,7 +215,7 @@ vscp_ws1_handle_command(const char *command, const char *parg, vscp_ws1_connecti
   failure.
 */
 int
-vscp_ws1_callback_init(vscp_ws1_connection_context_t *pctx);
+vscp_ws1_callback_init(vscp_ws_connection_context_t *pctx);
 
 /*!
   This callback is called before the framework is about to terminate. The callback can be used to clean up any
@@ -271,7 +226,7 @@ vscp_ws1_callback_init(vscp_ws1_connection_context_t *pctx);
   error code if there was a failure.
 */
 int
-vscp_ws1_callback_cleanup(vscp_ws1_connection_context_t *pctx);
+vscp_ws1_callback_cleanup(vscp_ws_connection_context_t *pctx);
 
 /*!
   Function called when a session id is needed to be generated for a new connection.
@@ -284,22 +239,21 @@ vscp_ws1_callback_cleanup(vscp_ws1_connection_context_t *pctx);
   or an appropriate error code if there was a failure.
 */
 int
-vscp_ws1_callback_generate_sid(uint8_t *sid, size_t size, vscp_ws1_connection_context_t *pctx);
+vscp_ws1_callback_generate_sid(uint8_t *sid, size_t size, vscp_ws_connection_context_t *pctx);
 
 /*!
   @fn vscp_ws1_callback_get_key
   @brief Callback function to get the 128 bit encryption key for a given session.
-  @param pkey A pointer to a 128 bit encryption key is returned here.
   @param pdata Pointer to user data that can be used to store connection-specific information.
-  @return Returns VSCP_ERROR_SUCCESS if the encryption key was successfully returned in pkey,
-  or an appropriate error code if there was a failure (e.g. connection not found, key not available).
+  @return A pointer to a 128 bit encryption key is returned here. NULL on err
 */
-int
-vscp_ws1_callback_get_key(uint8_t **pkey, vscp_ws1_connection_context_t *pctx);
+const uint8_t *
+vscp_ws1_callback_get_primary_key(vscp_ws_connection_context_t *pctx);
 
 /*!
 @fn vscp_ws1_callback_validate_user
   @brief Callback function to validate a user based on client-supplied credentials.
+
   This function should validate the user information for the given credentials fetched
   from the AUTH command and return a positive reply if authentication was successful,
   or a negative reply if authentication failed.
@@ -307,6 +261,11 @@ vscp_ws1_callback_get_key(uint8_t **pkey, vscp_ws1_connection_context_t *pctx);
   pre-shared encryption key. The callback should decrypt the credentials using the session ID
   as the IV and the pre-shared secret key using AES-128 decryption. The decrypted credentials
   should be in the format "username:password".
+
+  The callback should check the credentials and if correct add a pointer to a user structure with
+  information about the authenticated user to the connection context. This information can then be
+  used by other callbacks to determine what the user is allowed to do and not do.
+
   @param pcrypto A pointer to the encrypted credentials provided by the client for authentication.
   This should be a binary buffer containing the AES-128 encrypted credentials over "user:password".
   @param psid A pointer to a buffer holding a 128 bit session ID in binary form  that is used
@@ -332,7 +291,10 @@ vscp_ws1_callback_get_key(uint8_t **pkey, vscp_ws1_connection_context_t *pctx);
 */
 
 int
-vscp_ws1_callback_validate_user(const uint8_t *pcrypto, uint8_t crypto_len, const uint8_t *psid, vscp_ws1_connection_context_t *pctx);
+vscp_ws1_callback_validate_user(const uint8_t *pcrypto,
+                                uint8_t crypto_len,
+                                const uint8_t *psid,
+                                vscp_ws_connection_context_t *pctx);
 
 /*!
   Return VSCP_ERROR_SUCCESS if the user is allowed to send the event based on  user's permissions. Just return
@@ -343,7 +305,7 @@ vscp_ws1_callback_validate_user(const uint8_t *pcrypto, uint8_t crypto_len, cons
   @return Returns VSCP_ERROR_SUCCESS if the user is allowed to send the event, or an appropriate error code if not.
 */
 int
-vscp_ws1_callback_is_allowed_event(vscpEvent *pEvent, vscp_ws1_connection_context_t *pctx);
+vscp_ws1_callback_is_allowed_event(vscpEvent *pEvent, vscp_ws_connection_context_t *pctx);
 
 /*!
   @fn vscp_ws1_callback_is_allowed_connection
@@ -357,7 +319,7 @@ vscp_ws1_callback_is_allowed_event(vscpEvent *pEvent, vscp_ws1_connection_contex
   code if there was a failure (e.g. connection not allowed).
 */
 int
-vscp_ws1_callback_is_allowed_connection(const char *pip, vscp_ws1_connection_context_t *pctx);
+vscp_ws1_callback_is_allowed_connection(const char *pip, vscp_ws_connection_context_t *pctx);
 
 /*!
   Send a reply to a command received via the WS1 protocol. The reply will be sent
@@ -370,7 +332,7 @@ vscp_ws1_callback_is_allowed_connection(const char *pip, vscp_ws1_connection_con
   or an appropriate error code if there was a failure.
 */
 int
-vscp_ws1_callback_reply(const char *response, vscp_ws1_connection_context_t *pctx);
+vscp_ws1_callback_reply(const char *response, vscp_ws_connection_context_t *pctx);
 
 /*!
   @fn vscp_ws1_callback_event
@@ -381,7 +343,7 @@ vscp_ws1_callback_reply(const char *response, vscp_ws1_connection_context_t *pct
   or an appropriate error code if there was a failure.
 */
 int
-vscp_ws1_callback_event(vscpEvent *pEvent, vscp_ws1_connection_context_t *pctx);
+vscp_ws1_callback_event(vscpEvent *pEvent, vscp_ws_connection_context_t *pctx);
 
 /*!
   @fn vscp_ws1_callback_copyright
@@ -393,8 +355,7 @@ vscp_ws1_callback_event(vscpEvent *pEvent, vscp_ws1_connection_context_t *pctx);
   or an appropriate error code if there was a failure.
 */
 int
-vscp_ws1_callback_copyright(vscp_ws1_connection_context_t *pctx);
-
+vscp_ws1_callback_copyright(vscp_ws_connection_context_t *pctx);
 
 /*!
   @fn vscp_ws1_callback_open
@@ -409,7 +370,7 @@ vscp_ws1_callback_copyright(vscp_ws1_connection_context_t *pctx);
   was a failure.
 */
 int
-vscp_ws1_callback_open(vscp_ws1_connection_context_t *pctx);
+vscp_ws1_callback_open(vscp_ws_connection_context_t *pctx);
 
 /*!
   @fn vscp_ws1_callback_close
@@ -424,7 +385,7 @@ vscp_ws1_callback_open(vscp_ws1_connection_context_t *pctx);
     was a failure.
 */
 int
-vscp_ws1_callback_close(vscp_ws1_connection_context_t *pctx);
+vscp_ws1_callback_close(vscp_ws_connection_context_t *pctx);
 
 /*!
   @fn vscp_ws1_callback_setfilter
@@ -437,7 +398,7 @@ vscp_ws1_callback_close(vscp_ws1_connection_context_t *pctx);
   a failure.
 */
 int
-vscp_ws1_callback_setfilter(const vscpEventFilter *pfilter, vscp_ws1_connection_context_t *pctx);
+vscp_ws1_callback_setfilter(const vscpEventFilter *pfilter, vscp_ws_connection_context_t *pctx);
 
 /*!
   @fn vscp_ws1_callback_clrqueue
@@ -452,6 +413,6 @@ vscp_ws1_callback_setfilter(const vscpEventFilter *pfilter, vscp_ws1_connection_
   was a failure.
 */
 int
-vscp_ws1_callback_clrqueue(vscp_ws1_connection_context_t *pctx);
+vscp_ws1_callback_clrqueue(vscp_ws_connection_context_t *pctx);
 
 #endif /* __VSCP_WS1_H__ */

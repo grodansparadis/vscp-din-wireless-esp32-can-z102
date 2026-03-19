@@ -75,13 +75,13 @@ vscp_ws1_is_hex_string(const char *str)
 //
 
 int
-vscp_ws1_init(vscp_ws1_connection_context_t *pctx, void *pdata)
+vscp_ws1_init(vscp_ws_connection_context_t *pctx, void *pdata)
 {
   int rv;
   char buf[VSCP_WS1_MAX_PACKET_SIZE] = { 0 };
 
   // Initialize the connection context
-  memset(pctx, 0, sizeof(vscp_ws1_connection_context_t));
+  memset(pctx, 0, sizeof(vscp_ws_connection_context_t));
   pctx->pdata          = pdata; // Save the user data (request pointer)
   pctx->bAuthenticated = false;
   pctx->bOpen          = false;
@@ -90,7 +90,6 @@ vscp_ws1_init(vscp_ws1_connection_context_t *pctx, void *pdata)
   // Clear the global VSCP filter
   memset(&pctx->filter, 0, sizeof(pctx->filter));
 
-  
   // Generate a random SID for the session
   if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_generate_sid(pctx->sid, sizeof(pctx->sid), pctx))) {
     ESP_LOGE(TAG, "Failed to generate SID with error %d", rv);
@@ -135,7 +134,7 @@ vscp_ws1_init(vscp_ws1_connection_context_t *pctx, void *pdata)
 //
 
 int
-vscp_ws1_clearup(vscp_ws1_connection_context_t *pctx)
+vscp_ws1_clearup(vscp_ws_connection_context_t *pctx)
 {
   int rv;
   if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_cleanup(pctx))) {
@@ -151,7 +150,7 @@ vscp_ws1_clearup(vscp_ws1_connection_context_t *pctx)
 //
 
 int
-vscp_ws1_generate_sid(uint8_t *sid, size_t size, vscp_ws1_connection_context_t *pctx)
+vscp_ws1_generate_sid(uint8_t *sid, size_t size, vscp_ws_connection_context_t *pctx)
 {
   // Generate a random SID (session ID) for authentication and encryption
   // In a real implementation, this should be done using a secure random generator
@@ -162,7 +161,7 @@ vscp_ws1_generate_sid(uint8_t *sid, size_t size, vscp_ws1_connection_context_t *
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// vscp_ws1_handle_protocol_request
+// vscp_ws1_handle_text_protocol_request
 //
 // Packets are
 // Command:        'C' ; command ; optional data that may be separated by additional semicolons.
@@ -172,13 +171,13 @@ vscp_ws1_generate_sid(uint8_t *sid, size_t size, vscp_ws1_connection_context_t *
 //
 
 int
-vscp_ws1_handle_protocol_request(const char *pframe, uint16_t len, vscp_ws1_connection_context_t *pctx)
+vscp_ws1_handle_text_protocol_request(const char *pframe, uint16_t len, vscp_ws_connection_context_t *pctx)
 {
   uint8_t frame_type = VSCP_WS1_PKT_TYPE_UNKNOWN;
   char frame_buf[VSCP_WS1_MAX_PACKET_SIZE];
   char *pCommand; // Pointer to command part of packet
 
-  ESP_LOGI(TAG, "Handling protocol WS1");
+  ESP_LOGI(TAG, "Handling text protocol WS1");
 
   if (NULL == pframe || 0 == len || len >= sizeof(frame_buf)) {
     return VSCP_ERROR_INVALID_FRAME;
@@ -186,7 +185,7 @@ vscp_ws1_handle_protocol_request(const char *pframe, uint16_t len, vscp_ws1_conn
 
   memcpy(frame_buf, pframe, len);
   frame_buf[len] = '\0';
-  char *p = frame_buf;
+  char *p        = frame_buf;
 
   // Command
   if (*p == 'C') {
@@ -221,7 +220,7 @@ vscp_ws1_handle_protocol_request(const char *pframe, uint16_t len, vscp_ws1_conn
   }
   // Received event
   else if (*p == 'E') {
-    frame_type       = VSCP_WS1_PKT_TYPE_EVENT;
+    frame_type        = VSCP_WS1_PKT_TYPE_EVENT;
     vscpEvent *pEvent = NULL;
     // Parse event data from packet (p should be in the format "E;head;
     vscp_ws1_callback_event(pEvent, pctx);
@@ -240,8 +239,100 @@ vscp_ws1_handle_protocol_request(const char *pframe, uint16_t len, vscp_ws1_conn
     return VSCP_ERROR_INVALID_FRAME;
   }
 
+  return VSCP_ERROR_SUCCESS;
+}
 
+///////////////////////////////////////////////////////////////////////////////
+// vscp_ws1_handle_binary_protocol_request
+//
+// VSCP general binary protocol
+// https://grodansparadis.github.io/vscp-doc-spec/#/./vscp_over_binary
+//
 
+int
+vscp_ws1_handle_binary_protocol_request(const uint8_t *pframe, uint16_t len, vscp_ws_connection_context_t *pctx)
+{
+  int rv;
+  uint8_t frame_type = VSCP_WS1_PKT_TYPE_UNKNOWN;
+  // char frame_buf[1 + VSCP_BINARY_PACKET0_HEADER_LENGTH + 2 +
+  //                512]; // Buffer to hold the binary frame, size should be enough to hold the largest expected frame
+
+  ESP_LOGI(TAG, "Handling binary protocol WS1");
+  uint8_t *pbuf =
+    (uint8_t *) calloc(1, 1 + VSCP_BINARY_PACKET_FRAME0_HEADER_LENGTH + 2 + 512); // Allocate buffer for decrypted frame
+  if (NULL == pbuf) {
+    ESP_LOGE(TAG, "Failed to allocate memory for binary frame buffer");
+    return VSCP_ERROR_MEMORY;
+  }
+
+  if (NULL == pframe || 0 == len || len >= sizeof(pbuf)) {
+    free(pbuf);
+    return VSCP_ERROR_INVALID_FRAME;
+  }
+
+  // We only support frame format 0,14 and 15 in this implementation
+  if ((0 != (pframe[0] & 0xf0)) && (0XF0 != (pframe[0] & 0xf0)) && (0xe0 != (pframe[0] & 0xf0))) {
+    free(pbuf);
+    return VSCP_ERROR_INVALID_FRAME;
+  }
+
+  if (VSCP_ERROR_SUCCESS !=
+      (rv = vscp_fwhlp_decryptFrame(
+         pbuf,                              // Buffer to hold decrypted frame
+         pframe,                            // Ecrypted data
+         len - (pframe[0] & 0x0f ? 16 : 0), // Length of data to decrypt (if encryption is used, the last 16 bytes are
+                                            // the IV and should not be included in the data to decrypt)
+         vscp_ws1_callback_get_primary_key(pctx), // Encryption key (should be obtained from the session context or
+                                                  // configuration)
+         pframe + len - 16,                       // IV is expected to be the last 16 bytes of the encrypted data
+         VSCP_ENCRYPTION_FROM_TYPE_BYTE))) {
+    free(pbuf);
+    ESP_LOGE(TAG, "Failed to decrypt binary frame with error %d", rv);
+    return rv;
+  }
+
+  if (len < (1 + VSCP_BINARY_PACKET_FRAME0_HEADER_LENGTH + 2)) {
+    // Frame is too short to be valid
+    free(pbuf);
+    return VSCP_ERROR_INVALID_FRAME;
+  }
+
+  // Command
+  if (0xe0 == (pbuf[0] & 0xf0)) {
+
+    const uint8_t *parg = pbuf + 3; // Point at argument part of packet (after header and command bytes)
+    frame_type = VSCP_WS1_PKT_TYPE_COMMAND;
+
+    uint16_t command = (uint16_t) pbuf[1] << 8 | (uint8_t) pbuf[2];
+
+    vscp_ws1_handle_binary_command(command, parg, pctx);
+  }
+  // Reply
+  else if (0xf0 == (pbuf[0] & 0xf0)) {
+    frame_type = VSCP_WS1_PKT_TYPE_POSITIVE_RESPONSE;
+  }
+  // Received event
+  else if (0x00 == (pbuf[0] & 0xf0)) {
+    frame_type        = VSCP_WS1_PKT_TYPE_EVENT;
+    vscpEvent *pEvent = NULL;
+    // Parse event data from packet (p should be in the format "E;head;
+    vscp_ws1_callback_event(pEvent, pctx);
+  }
+  // Positive respone
+  // else if (*p == '+') {
+  //   frame_type = VSCP_WS1_PKT_TYPE_POSITIVE_RESPONSE;
+  // }
+  // // Negative response
+  // else if (*p == '-') {
+  //   frame_type = VSCP_WS1_PKT_TYPE_NEGATIVE_RESPONSE;
+  // }
+  // Unknown packet type
+  else {
+    // Unknown packet type
+    return VSCP_ERROR_INVALID_FRAME;
+  }
+
+  free(pbuf);
   return VSCP_ERROR_SUCCESS;
 }
 
@@ -250,10 +341,10 @@ vscp_ws1_handle_protocol_request(const char *pframe, uint16_t len, vscp_ws1_conn
 //
 
 int
-vscp_ws1_handle_command(const char *pCommand, const char *parg, vscp_ws1_connection_context_t *pctx)
+vscp_ws1_handle_command(const char *pCommand, const char *parg, vscp_ws_connection_context_t *pctx)
 {
   int rv;
-  char buf[100] = { 0 };
+  char buf[512] = { 0 };
   char command_buf[VSCP_WS1_MAX_PACKET_SIZE];
 
   size_t command_len = strnlen(pCommand, sizeof(command_buf));
@@ -289,7 +380,7 @@ vscp_ws1_handle_command(const char *pCommand, const char *parg, vscp_ws1_connect
     char argbuf[VSCP_WS1_MAX_PACKET_SIZE];
     char *sid_hex;
     char *crypto_hex;
-    uint8_t sid[16]                  = { 0 };
+    uint8_t sid[16]                             = { 0 };
     uint8_t crypto[VSCP_WS1_MAX_CRYPTO_BIN_LEN] = { 0 };
     size_t sid_hex_len;
     size_t crypto_hex_len;
@@ -297,11 +388,13 @@ vscp_ws1_handle_command(const char *pCommand, const char *parg, vscp_ws1_connect
 
     if ((NULL == parg) || ('\0' == *parg)) {
       ESP_LOGE(TAG, "AUTH missing arguments");
+      vscp_ws1_callback_reply("-;AUTH;8,Not authorized", pctx);
       return VSCP_ERROR_INVALID_SYNTAX;
     }
 
     if (strnlen(parg, sizeof(argbuf)) >= sizeof(argbuf)) {
       ESP_LOGE(TAG, "AUTH arguments too long");
+      vscp_ws1_callback_reply("-;AUTH;8,Not authorized", pctx);
       return VSCP_ERROR_INVALID_SYNTAX;
     }
 
@@ -311,6 +404,7 @@ vscp_ws1_handle_command(const char *pCommand, const char *parg, vscp_ws1_connect
     crypto_hex = strchr(argbuf, ';');
     if (NULL == crypto_hex) {
       ESP_LOGE(TAG, "AUTH invalid format, expected sid;crypto");
+      vscp_ws1_callback_reply("-;AUTH;8,Not authorized", pctx);
       return VSCP_ERROR_INVALID_SYNTAX;
     }
 
@@ -319,6 +413,7 @@ vscp_ws1_handle_command(const char *pCommand, const char *parg, vscp_ws1_connect
 
     if (('\0' == *sid_hex) || ('\0' == *crypto_hex) || (NULL != strchr(crypto_hex, ';'))) {
       ESP_LOGE(TAG, "AUTH invalid format, expected exactly two arguments");
+      vscp_ws1_callback_reply("-;AUTH;8,Not authorized", pctx);
       return VSCP_ERROR_INVALID_SYNTAX;
     }
 
@@ -327,30 +422,141 @@ vscp_ws1_handle_command(const char *pCommand, const char *parg, vscp_ws1_connect
 
     if ((2 * VSCP_WS1_SID_SIZE != sid_hex_len) || ((sid_hex_len & 1U) != 0U) || !vscp_ws1_is_hex_string(sid_hex)) {
       ESP_LOGE(TAG, "AUTH invalid SID hex");
+      vscp_ws1_callback_reply("-;AUTH;8,Not authorized", pctx);
       return VSCP_ERROR_INVALID_SYNTAX;
     }
 
     if ((0 == crypto_hex_len) || ((crypto_hex_len & 1U) != 0U) ||
         (crypto_hex_len > (2U * VSCP_WS1_MAX_CRYPTO_BIN_LEN)) || !vscp_ws1_is_hex_string(crypto_hex)) {
       ESP_LOGE(TAG, "AUTH invalid crypto hex");
+      vscp_ws1_callback_reply("-;AUTH;8,Not authorized", pctx);
       return VSCP_ERROR_INVALID_SYNTAX;
     }
 
     if (16 != (rv = vscp_fwhlp_hex2bin(sid, sizeof(sid), sid_hex))) {
       ESP_LOGE(TAG, "Failed to convert AUTH SID from hex. len returned: %d", rv);
+      vscp_ws1_callback_reply("-;AUTH;8,Not authorized", pctx);
       return VSCP_ERROR_INVALID_FORMAT;
     }
 
-    if (16 != (crypto_bin_len = vscp_fwhlp_hex2bin(crypto+1, sizeof(crypto), crypto_hex))) {
+    if (16 != (crypto_bin_len = vscp_fwhlp_hex2bin(crypto + 1, sizeof(crypto), crypto_hex))) {
       ESP_LOGE(TAG, "Failed to convert AUTH crypto from hex %d", crypto_bin_len);
+      vscp_ws1_callback_reply("-;AUTH;8,Not authorized", pctx);
       return VSCP_ERROR_INVALID_FORMAT;
     }
 
     // Attempt to validate user with provided credentials  and session ID
-    vscp_ws1_callback_validate_user(crypto, crypto_bin_len+1, sid, pctx); 
+    rv = vscp_ws1_callback_validate_user(crypto, crypto_bin_len + 1, sid, pctx);
     if (VSCP_ERROR_SUCCESS != rv) {
+      ESP_LOGE(TAG, "Client authentication failed");
+      vscp_ws1_callback_reply("-;AUTH;8,Not authorized", pctx);
       return rv;
     }
+
+    // Validation is successful, mark connection as authenticated
+    pctx->bAuthenticated = true;
+    ESP_LOGI(TAG, "Client authenticated successfully");
+
+    // Send positive reply
+    char wrkbuf[80] = { 0 };
+    strcpy(buf, "+;AUTH;");
+    strcat(buf, pctx->user.username);
+    strcat(buf, ";;");
+#ifndef VSCP_WS1_DISABLE_USER_FULL_NAME
+    strcat(buf, pctx->user.fullname);
+#endif
+    // Filter
+    strcat(buf, ";");
+    vscp_fwhlp_writeFilterToString(wrkbuf, sizeof(wrkbuf), &pctx->filter);
+    strcat(buf, wrkbuf);
+    // Mask
+    strcat(buf, ";");
+    vscp_fwhlp_writeMaskToString(wrkbuf, sizeof(wrkbuf), &pctx->filter);
+    strcat(buf, wrkbuf);
+    // Rights
+    strcat(buf, ";");
+    sprintf(wrkbuf, "%llu", pctx->user.rights);
+    strcat(buf, wrkbuf);
+    // Remotes (allowed remote IP addresses)
+    strcat(buf, ";");
+    for (int i = 0; i < 16; i++) {
+      // Check for end of list (all zeros)
+      bool is_zero = true;
+      for (int j = 0; j < 16; j++) {
+        if (pctx->user.allowed_remotes[i][j] != 0) {
+          is_zero = false;
+          break;
+        }
+      }
+      if (is_zero) {
+        break;
+      }
+      if (i > 0) {
+        strcat(buf, ",");
+      }
+      // Check if IPv4 (first 10 bytes zero, bytes 10-11 are 0xFF or first 12 bytes zero)
+      bool is_ipv4 = true;
+      for (int j = 0; j < 10; j++) {
+        if (pctx->user.allowed_remotes[i][j] != 0) {
+          is_ipv4 = false;
+          break;
+        }
+      }
+      if (is_ipv4 && (pctx->user.allowed_remotes[i][10] == 0 || pctx->user.allowed_remotes[i][10] == 0xFF) &&
+          (pctx->user.allowed_remotes[i][11] == 0 || pctx->user.allowed_remotes[i][11] == 0xFF)) {
+        // IPv4 address in last 4 bytes
+        sprintf(wrkbuf,
+                "%u.%u.%u.%u",
+                pctx->user.allowed_remotes[i][12],
+                pctx->user.allowed_remotes[i][13],
+                pctx->user.allowed_remotes[i][14],
+                pctx->user.allowed_remotes[i][15]);
+      }
+      else {
+        // IPv6 address
+        sprintf(wrkbuf,
+                "%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X",
+                pctx->user.allowed_remotes[i][0],
+                pctx->user.allowed_remotes[i][1],
+                pctx->user.allowed_remotes[i][2],
+                pctx->user.allowed_remotes[i][3],
+                pctx->user.allowed_remotes[i][4],
+                pctx->user.allowed_remotes[i][5],
+                pctx->user.allowed_remotes[i][6],
+                pctx->user.allowed_remotes[i][7],
+                pctx->user.allowed_remotes[i][8],
+                pctx->user.allowed_remotes[i][9],
+                pctx->user.allowed_remotes[i][10],
+                pctx->user.allowed_remotes[i][11],
+                pctx->user.allowed_remotes[i][12],
+                pctx->user.allowed_remotes[i][13],
+                pctx->user.allowed_remotes[i][14],
+                pctx->user.allowed_remotes[i][15]);
+      }
+      strcat(buf, wrkbuf);
+    }
+    // Events
+    strcat(buf, ";");
+    for (int i = 0; i < 16; i++) {
+      // Are we done
+      if (pctx->user.events[i][0] && pctx->user.events[i][1]) {
+        break;
+      }
+      if (i > 0) {
+        strcat(buf, ",");
+      }
+      sprintf(wrkbuf, "%02X:%02X", pctx->user.events[i][0], pctx->user.events[i][1]);
+      strcat(buf, wrkbuf);
+    }
+    // Note
+    strcat(buf, ";");
+#ifndef VSCP_WS1_DISABLE_USER_NOTES
+    strcat(buf, pctx->user.note);
+#endif
+
+    ESP_LOGI(TAG, "Authentication successful, sending reply: %s", buf);
+
+    vscp_ws1_callback_reply(buf, pctx);
   }
   else if (strcmp(command_buf, "CHALLENGE") == 0) {
     sprintf(buf,
@@ -371,16 +577,50 @@ vscp_ws1_handle_command(const char *pCommand, const char *parg, vscp_ws1_connect
             pctx->sid[13],
             pctx->sid[14],
             pctx->sid[15]);
+
     if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_reply(buf, pctx))) {
       ESP_LOGE(TAG, "Failed to send CHALLENGE reply rv=%d", rv);
       return rv;
     }
   }
   else if (strcmp(command_buf, "OPEN") == 0) {
-    vscp_ws1_callback_open(pctx);
+    char wrkbuf[80] = { 0 };
+    if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_open(pctx))) {
+      ESP_LOGE(TAG, "Failed to open WS1 connection rv=%d", rv);
+      sprintf(buf, "-;OPEN;%d,%s", VSCP_WS1_ERROR_GENERAL, VSCP_WS1_STR_ERROR_GENERAL);
+      if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_reply(buf, pctx))) {
+        ESP_LOGE(TAG, "Failed to send OPEN reply rv=%d", rv);
+        return rv;
+      }
+      return rv;
+    }
+
+    // Set channel as open and ready to receive events
+    pctx->bOpen = true;
+
+    if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_reply("+;OPEN", pctx))) {
+      ESP_LOGE(TAG, "Failed to send OPEN reply rv=%d", rv);
+      return rv;
+    }
   }
   else if (strcmp(command_buf, "CLOSE") == 0) {
-    vscp_ws1_callback_close(pctx);
+    if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_close(pctx))) {
+      ESP_LOGE(TAG, "Failed to close WS1 connection rv=%d", rv);
+      sprintf(buf, "-;CLOSE;%d,%s", VSCP_WS1_ERROR_GENERAL, VSCP_WS1_STR_ERROR_GENERAL);
+      if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_reply(buf, pctx))) {
+        ESP_LOGE(TAG, "Failed to send CLOSE reply rv=%d", rv);
+        return rv;
+      }
+      return rv;
+    }
+
+    // Set channel as closed and not ready to receive events
+    pctx->bOpen = false;
+
+    if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_reply("+;CLOSE", pctx))) {
+      ESP_LOGE(TAG, "Failed to send CLOSE reply rv=%d", rv);
+      return rv;
+    }
   }
   else if ((strcmp(command_buf, "SETFILTER") == 0) || (strcmp(command_buf, "SF") == 0)) {
     vscpEventFilter filter;
@@ -388,25 +628,74 @@ vscp_ws1_handle_command(const char *pCommand, const char *parg, vscp_ws1_connect
 
     if ((NULL == parg) || ('\0' == *parg)) {
       ESP_LOGE(TAG, "SETFILTER missing filter argument");
+      sprintf(buf, "-;SETFILTER;%d,%s", VSCP_WS1_ERROR_SYNTAX, VSCP_WS1_STR_ERROR_SYNTAX);
+      if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_reply(buf, pctx))) {
+        ESP_LOGE(TAG, "Failed to send SETFILTER reply rv=%d", rv);
+        return rv;
+      }
       return VSCP_ERROR_INVALID_SYNTAX;
     }
 
     if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_parseFilter(&filter, parg))) {
       ESP_LOGE(TAG, "SETFILTER invalid filter string");
+      sprintf(buf, "-;SETFILTER;%d,%s", VSCP_WS1_ERROR_SYNTAX, VSCP_WS1_STR_ERROR_SYNTAX);
+      if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_reply(buf, pctx))) {
+        ESP_LOGE(TAG, "Failed to send SETFILTER reply rv=%d", rv);
+        return rv;
+      }
       return VSCP_ERROR_INVALID_SYNTAX;
     }
 
     if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_setfilter(&filter, pctx))) {
+      sprintf(buf, "-;SETFILTER;%d,%s", VSCP_WS1_ERROR_GENERAL, VSCP_WS1_STR_ERROR_GENERAL);
+      if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_reply(buf, pctx))) {
+        ESP_LOGE(TAG, "Failed to send SETFILTER reply rv=%d", rv);
+        return rv;
+      }
+      return rv;
+    }
+
+    if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_reply("+;SF", pctx))) {
+      ESP_LOGE(TAG, "Failed to send SETFILTER reply rv=%d", rv);
       return rv;
     }
   }
   else if ((strcmp(command_buf, "CLRQUEUE") == 0) || (strcmp(command_buf, "CLRQ") == 0)) {
-    vscp_ws1_callback_clrqueue(pctx);
+
+    if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_clrqueue(pctx))) {
+      ESP_LOGE(TAG, "Failed to clear WS1 event queue rv=%d", rv);
+      sprintf(buf, "-;CLRQUEUE;%d,%s", VSCP_WS1_ERROR_GENERAL, VSCP_WS1_STR_ERROR_GENERAL);
+      if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_reply(buf, pctx))) {
+        ESP_LOGE(TAG, "Failed to send CLRQUEUE reply rv=%d", rv);
+        return rv;
+      }
+      return rv;
+    }
+
+    if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_reply("+;CLRQ", pctx))) {
+      ESP_LOGE(TAG, "Failed to send CLRQUEUE reply rv=%d", rv);
+      return rv;
+    }
   }
   else {
-    // ESP_LOGW(TAG, "Unknown command: %s", pCommand);
+    ESP_LOGE(TAG, "Unknown command: %s", pCommand);
+    sprintf(buf, "-;%s;%d,%s", pCommand, VSCP_WS1_ERROR_UNKNOWN_COMMAND, VSCP_WS1_STR_ERROR_UNKNOWN_COMMAND);
+    if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_reply(buf, pctx))) {
+      ESP_LOGE(TAG, "Failed to send UNKNOWN_COMMAND reply rv=%d", rv);
+      return rv;
+    }
     return VSCP_ERROR_INVALID_SYNTAX;
   }
 
+  return VSCP_ERROR_SUCCESS;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// vscp_ws1_handle_binary_command
+//
+
+int
+vscp_ws1_handle_binary_command(uint16_t command, const uint8_t *parg, vscp_ws_connection_context_t *pctx)
+{
   return VSCP_ERROR_SUCCESS;
 }
