@@ -56,6 +56,10 @@
 #include <esp_mac.h> // esp_base_mac_addr_get
 #include <sys/param.h>
 
+#ifndef VSCP_FWHLP_BINARY_FRAME_SUPPORT
+#define VSCP_FWHLP_BINARY_FRAME_SUPPORT
+#endif
+
 #include <vscp.h>
 #include <vscp-firmware-helper.h>
 
@@ -478,6 +482,7 @@ mqtt_task_tx(void *pvParameters)
 
     char buf_msg[MQTT_SUBST_BUF_LEN]   = { 0 };
     char buf_topic[MQTT_SUBST_BUF_LEN] = { 0 };
+    int payload_len                    = 0;
 
     switch (g_persistent.mqttFormat) {
 
@@ -488,6 +493,7 @@ mqtt_task_tx(void *pvParameters)
           vscp_fwhlp_deleteEvent(&pev);
           continue;
         }
+        payload_len = strnlen(buf_msg, sizeof(buf_msg));
         break;
 
       case MQTT_FORMAT_XML:
@@ -498,6 +504,8 @@ mqtt_task_tx(void *pvParameters)
           continue;
         }
 
+        payload_len = strnlen(buf_msg, sizeof(buf_msg));
+
         break;
 
       case MQTT_FORMAT_STRING:
@@ -507,10 +515,18 @@ mqtt_task_tx(void *pvParameters)
           vscp_fwhlp_deleteEvent(&pev);
           continue;
         }
+        payload_len = strnlen(buf_msg, sizeof(buf_msg));
         break;
 
       case MQTT_FORMAT_BINARY:
-        if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_writeEventToFrame((uint8_t *) buf_msg, sizeof(buf_msg), 0, pev))) {
+        payload_len = (int) vscp_fwhlp_getFrameSizeFromEvent(pev);
+        if ((payload_len <= 0) || (payload_len > sizeof(buf_msg))) {
+          ESP_LOGE(TAG, "Invalid VSCP binary frame size %d", payload_len);
+          vscp_fwhlp_deleteEvent(&pev);
+          continue;
+        }
+
+        if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_writeEventToFrame((uint8_t *) buf_msg, payload_len, 0, pev))) {
           ESP_LOGE(TAG, "Failed to convert VSCP event to binary format rv=%d", rv);
           vscp_fwhlp_deleteEvent(&pev);
           continue;
@@ -535,9 +551,19 @@ mqtt_task_tx(void *pvParameters)
     int msgid = esp_mqtt_client_publish(g_mqtt_client,
                                         buf_topic,
                                         buf_msg,
-                                        strlen(buf_msg),
+                                        payload_len,
                                         g_persistent.mqttQos,
                                         g_persistent.mqttRetain);
+    if (-1 != msgid) {
+      s_mqtt_statistics.nPub++;
+    }
+    else {
+      s_mqtt_statistics.nPubFailures++;
+      ESP_LOGE(TAG,
+               "Failed to publish MQTT message. Topic=%s outbox-size=%d",
+               buf_topic,
+               esp_mqtt_client_get_outbox_size(g_mqtt_client));
+    }
 
     // vTaskDelay(pdMS_TO_TICKS(1000));
   }
