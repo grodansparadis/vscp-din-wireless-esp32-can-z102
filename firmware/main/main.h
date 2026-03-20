@@ -361,4 +361,23 @@ validate_user(const char *user, const char *password);
 esp_err_t
 wcang_reconfigure_wifi_sta(void);
 
+/**
+ * @brief Dedicated CAN command/reply transport for the HTTP CAN API.
+ *
+ * Used by:
+ *   - HTTP /canapi?cmd=send    (queued TX to CAN bus)
+ *   - HTTP /canapi?cmd=scan    (command replies only)
+ *   - HTTP /canapi?cmd=whis    (command replies only)
+ */
+extern transport_t tr_canapi;
+
+/**
+ * @brief Dedicated CAN monitor/command-reply transport.
+ *
+ * twai_receive_task pushes every received extended frame to
+ * tr_monitor.fromcan_queue unconditionally.  Used by:
+ *   - HTTP /canapi?cmd=monitor  (passive bus display)
+ */
+extern transport_t tr_monitor;
+
 #endif

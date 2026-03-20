@@ -1,3 +1,4 @@
+extern void twai_transmit_task(void *arg);
 /*
   File: main.c
 
@@ -204,6 +205,10 @@ transport_t tr_mqtt                        = {}; // MQTT client transport
 transport_t tr_multicast                   = {}; // Multicast UDP transport
 transport_t tr_udp                         = {}; // UDP broadcast transport
 transport_t tr_websockets                  = {}; // WebSocket server transport
+
+// Dedicated monitor/command-reply transport - always fed by twai_receive_task
+transport_t tr_canapi = {};
+transport_t tr_monitor = {};
 
 // Semaphore for controlling access to main event distribution task
 SemaphoreHandle_t ctrl_task_sem;
@@ -1599,6 +1604,14 @@ app_main(void)
   tr_websockets.tocan_queue   = xQueueCreate(10, sizeof(can4vscp_frame_t));
   tr_websockets.fromcan_queue = xQueueCreate(10, sizeof(can4vscp_frame_t));
 
+  // HTTP CAN API command/reply queues
+  tr_canapi.tocan_queue   = xQueueCreate(10, sizeof(can4vscp_frame_t));
+  tr_canapi.fromcan_queue = xQueueCreate(50, sizeof(can4vscp_frame_t));
+
+  // Monitor transport queues (depth 50 buffers bursts between poll intervals)
+  tr_monitor.tocan_queue   = xQueueCreate(10, sizeof(can4vscp_frame_t));
+  tr_monitor.fromcan_queue = xQueueCreate(50, sizeof(can4vscp_frame_t));
+
   // Create control semaphore for main task synchronization
   ctrl_task_sem = xSemaphoreCreateBinary();
 
@@ -1877,7 +1890,9 @@ app_main(void)
   // ============================================================================
 
   // Create CAN receive task that fills tr_twai_rx queue
-  xTaskCreate(twai_receive_task, "can4vscp", 4096, &tr_twai_rx, 10, NULL);
+  // Create CAN receive and transmit tasks
+  xTaskCreate(twai_receive_task, "can4vscp_rx", 4096, &tr_twai_rx, 10, NULL);
+  xTaskCreate(twai_transmit_task, "can4vscp_tx", 2048, NULL, 10, NULL);
 
   // Release control semaphore to allow task execution
   xSemaphoreGive(ctrl_task_sem);

@@ -69,6 +69,8 @@ extern transport_t tr_mqtt;
 extern transport_t tr_multicast;
 extern transport_t tr_udp;
 extern transport_t tr_websockets;
+extern transport_t tr_canapi;
+extern transport_t tr_monitor;
 
 #define TAG __func__
 enum bus_state { OFF_BUS, ON_BUS };
@@ -691,6 +693,17 @@ twai_receive_task(void *arg)
           }
         }
 
+        // HTTP CAN API reply transport — used by SCAN/WHIS and other command replies.
+        if (NULL != tr_canapi.fromcan_queue) {
+          xQueueSendToBack(tr_canapi.fromcan_queue, (void *) &rxmsg, 0);
+        }
+
+        // Passive monitor transport — always filled for the HTTP monitor endpoint.
+        if (NULL != tr_monitor.fromcan_queue) {
+          // Non-blocking: if full just discard; old frames are stale anyway
+          xQueueSendToBack(tr_monitor.fromcan_queue, (void *) &rxmsg, 0);
+        }
+
         // UBaseType_t cnt = uxQueueMessagesWaiting(ptr->msg_queue);
         // ESP_LOGI(TAG,"count=%u %d",cnt,rv);
         xSemaphoreTake(ctrl_task_sem, portMAX_DELAY);
@@ -701,6 +714,35 @@ twai_receive_task(void *arg)
   }
 
 } // while
+
+///////////////////////////////////////////////////////////////////////////////
+// twai_transmit_task
+//
+// Drains tr_canapi.tocan_queue and sends each frame to the CAN bus.
+// Running as a dedicated task means the HTTP handler (cmd=send) returns
+// immediately after queuing the frame, not blocking on CAN TX.
+//
+
+void
+twai_transmit_task(void *arg)
+{
+  ESP_LOGI(TAG, "TWAI transmit task started");
+
+  while (1) {
+    can4vscp_frame_t msg = { 0 };
+    if (NULL == tr_canapi.tocan_queue) {
+      vTaskDelay(pdMS_TO_TICKS(50));
+      continue;
+    }
+
+    if (pdPASS == xQueueReceive(tr_canapi.tocan_queue, &msg, portMAX_DELAY)) {
+      esp_err_t rv = can4vscp_send(&msg, pdMS_TO_TICKS(100));
+      if (ESP_OK != rv) {
+        ESP_LOGW(TAG, "TWAI transmit failed: %s (id=0x%lX)", esp_err_to_name(rv), msg.identifier);
+      }
+    }
+  }
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // twai_recover_stopped_check

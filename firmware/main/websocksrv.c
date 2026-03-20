@@ -99,6 +99,7 @@ httpd_handle_t g_websocket_srv = NULL;
 struct async_resp_arg {
   httpd_handle_t hd;
   int fd;
+  char event_data[512];  // Buffer for formatted VSCP event string
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -275,8 +276,6 @@ wss_close_fd(httpd_handle_t hd, int sockfd)
 static void
 send_event(void *arg)
 {
-  static const char *data =
-    "E;0,30,5,0,2020-01-29T23:05:59Z,0,FF:FF:FF:FF:FF:FF:FF:F5:00:00:00:00:00:02:00:00,1,2,3,4,5,6";
   struct async_resp_arg *resp_arg = arg;
   httpd_handle_t hd               = resp_arg->hd;
   int fd                          = resp_arg->fd;
@@ -284,15 +283,28 @@ send_event(void *arg)
   // We need to check which protocol the client expects
   vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *)httpd_sess_get_ctx(hd,fd);
 
-  ESP_LOGI(TAG, "send_event: protocol=%d", pctx->protocol);
+  if (pctx == NULL) {
+    ESP_LOGW(TAG, "send_event: client context is NULL, skipping send for fd=%d", fd);
+    free(resp_arg);
+    return;
+  }
 
+  ESP_LOGI(TAG, "send_event: Sending to fd=%d, protocol=%d, event=%s", fd, pctx->protocol, resp_arg->event_data);
+
+  // Create a new frame with the event payload
   httpd_ws_frame_t ws_pkt;
   memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-  ws_pkt.payload = (uint8_t *) data;
-  ws_pkt.len     = strlen(data);
   ws_pkt.type    = HTTPD_WS_TYPE_TEXT;
-
-  httpd_ws_send_frame_async(hd, fd, &ws_pkt);
+  ws_pkt.payload = (uint8_t *) resp_arg->event_data;
+  ws_pkt.len     = strlen(resp_arg->event_data);
+  
+  // Send the frame - httpd_ws_send_frame_async copies the payload internally
+  esp_err_t ret = httpd_ws_send_frame_async(hd, fd, &ws_pkt);
+  
+  if (ret != ESP_OK) {
+    ESP_LOGE(TAG, "send_event: httpd_ws_send_frame_async failed for fd=%d, error=%d", fd, ret);
+  }
+  
   free(resp_arg);
 }
 
@@ -580,59 +592,94 @@ wss_send_event_task(void *pvParameters)
   int rv;
   bool send_messages     = true;
   can4vscp_frame_t rxmsg = {};
+  uint32_t event_count = 0;
 
   httpd_handle_t *server = (httpd_handle_t *) pvParameters;
 
-  // Send async message to all connected clients that use websocket protocol every 10 seconds
+  ESP_LOGI(TAG, "wss_send_event_task: Started, listening for CAN events on tr_websockets.fromcan_queue");
+
+  // Continuously monitor incoming CAN events and broadcast to all WebSocket clients
   while (send_messages) {
 
-    // vTaskDelay(10000 / portTICK_PERIOD_MS);
-
+    // Wait for CAN event with 500ms timeout
     if (pdPASS != xQueueReceive(tr_websockets.fromcan_queue, (void *) &rxmsg, 500)) {
+      // Every 10 seconds, log that we're waiting for events
+      if ((event_count % 20) == 0) {
+        ESP_LOGD(TAG, "wss_send_event_task: Waiting for CAN events (processed %lu so far)", event_count);
+      }
+      event_count++;
       continue;
     }
 
+    ESP_LOGI(TAG, "wss_send_event_task: Received CAN message (event_count=%lu, identifier=0x%lX, dlc=%u)", 
+             event_count, rxmsg.identifier, rxmsg.data_length_code);
+
+    event_count++;
+
+    // Convert CAN4VSCP message to VSCP event
     vscpEvent *pev = NULL;
     if (VSCP_ERROR_SUCCESS != (rv = can4vscp_msg_to_event(&pev, &rxmsg))) {
-      ESP_LOGE(TAG, "Failed to convert CAN message to VSCP event rv=%d", rv);
+      ESP_LOGE(TAG, "wss_send_event_task: Failed to convert CAN message to VSCP event rv=%d", rv);
       vscp_fwhlp_deleteEvent(&pev);
       continue;
     }
 
     if (!*server) { // httpd might not have been created by now
+      ESP_LOGW(TAG, "wss_send_event_task: httpd server not ready yet");
       vscp_fwhlp_deleteEvent(&pev);
       continue;
     }
 
-    ESP_LOGI(TAG, "Sending async message to all clients");
+    // Format the event as a string for WebSocket transmission
+    char event_str[512];
+    if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_eventToString(event_str, sizeof(event_str), pev))) {
+      ESP_LOGE(TAG, "wss_send_event_task: Failed to format event to string rv=%d", rv);
+      vscp_fwhlp_deleteEvent(&pev);
+      continue;
+    }
 
+    ESP_LOGI(TAG, "wss_send_event_task: Broadcasting event: %s", event_str);
+
+    // Get list of connected WebSocket clients
     size_t clients = max_clients;
     int client_fds[max_clients];
     if (httpd_get_client_list(g_websocket_srv, &clients, client_fds) == ESP_OK) {
+      ESP_LOGI(TAG, "wss_send_event_task: Found %u connected WebSocket clients", clients);
+      
+      if (clients == 0) {
+        ESP_LOGW(TAG, "wss_send_event_task: No connected clients to send event to");
+      }
+      
       for (size_t i = 0; i < clients; ++i) {
         int sock = client_fds[i];
         if (httpd_ws_get_fd_info(g_websocket_srv, sock) == HTTPD_WS_CLIENT_WEBSOCKET) {
-          ESP_LOGI(TAG, "Active client (fd=%d) -> sending async message", sock);
+          ESP_LOGI(TAG, "wss_send_event_task: Queuing event for WebSocket client fd=%d", sock);
           struct async_resp_arg *resp_arg = malloc(sizeof(struct async_resp_arg));
           assert(resp_arg != NULL);
           resp_arg->hd = g_websocket_srv;
           resp_arg->fd = sock;
+          // Copy the formatted event string to the response argument
+          strncpy(resp_arg->event_data, event_str, sizeof(resp_arg->event_data) - 1);
+          resp_arg->event_data[sizeof(resp_arg->event_data) - 1] = '\0';
+          
           if (httpd_queue_work(resp_arg->hd, send_event, resp_arg) != ESP_OK) {
-            ESP_LOGE(TAG, "httpd_queue_work failed!");
+            ESP_LOGE(TAG, "wss_send_event_task: httpd_queue_work failed for fd=%d!", sock);
             free(resp_arg);
             send_messages = false;
             break;
           }
+        } else {
+          ESP_LOGD(TAG, "wss_send_event_task: Client fd=%d is not a WebSocket client", sock);
         }
       }
     }
     else {
-      ESP_LOGE(TAG, "httpd_get_client_list failed!");
+      ESP_LOGE(TAG, "wss_send_event_task: httpd_get_client_list failed!");
     }
     vscp_fwhlp_deleteEvent(&pev);
   }
 
-  ESP_LOGI(TAG, "websocket async send event task ended");
+  ESP_LOGI(TAG, "websocket async send event task ended (processed %lu events total)", event_count);
 
   vTaskDelete(NULL);
 }
@@ -799,90 +846,6 @@ ws1_get_handler(httpd_req_t *req)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// ws2 helpers
-//
-
-static bool
-ws2_is_digit_string(const char *s)
-{
-  if ((NULL == s) || ('\0' == *s)) {
-    return false;
-  }
-  for (const char *p = s; *p; ++p) {
-    if ((*p < '0') || (*p > '9')) {
-      return false;
-    }
-  }
-  return true;
-}
-
-static int
-ws2_parse_uint8(const char *s, uint8_t *val)
-{
-  long v;
-  if ((NULL == s) || (NULL == val) || !ws2_is_digit_string(s)) {
-    return VSCP_ERROR_INVALID_SYNTAX;
-  }
-  v = strtol(s, NULL, 10);
-  if ((v < 0) || (v > 255)) {
-    return VSCP_ERROR_INVALID_SYNTAX;
-  }
-  *val = (uint8_t) v;
-  return VSCP_ERROR_SUCCESS;
-}
-
-static int
-ws2_parse_data_hex(const char *src, uint8_t *dst, uint8_t *len)
-{
-  size_t n = 0;
-  const char *p;
-  if ((NULL == src) || (NULL == dst) || (NULL == len)) {
-    return VSCP_ERROR_INVALID_POINTER;
-  }
-  *len = 0;
-  p    = src;
-  while (*p) {
-    while (*p && ((' ' == *p) || (',' == *p) || (';' == *p) || (':' == *p) || ('-' == *p) || ('\t' == *p))) {
-      p++;
-    }
-    if (!*p) {
-      break;
-    }
-    if (!isxdigit((unsigned char) p[0]) || !isxdigit((unsigned char) p[1])) {
-      return VSCP_ERROR_INVALID_SYNTAX;
-    }
-    if (n >= 8) {
-      return VSCP_ERROR_INVALID_SYNTAX;
-    }
-    char hex[3] = { p[0], p[1], 0 };
-    dst[n++]    = (uint8_t) strtol(hex, NULL, 16);
-    p += 2;
-  }
-  *len = (uint8_t) n;
-  return VSCP_ERROR_SUCCESS;
-}
-
-static esp_err_t
-ws2_send_vscp_as_can(uint8_t prio,
-                     uint16_t vscp_class,
-                     uint8_t vscp_type,
-                     uint8_t nickname,
-                     const uint8_t *pdata,
-                     uint8_t sizeData)
-{
-  can4vscp_frame_t msg = { 0 };
-  msg.identifier        = (uint32_t) nickname + (((uint32_t) vscp_type) << 8) + (((uint32_t) vscp_class) << 16) +
-                   ((((uint32_t) prio) & 0x07u) << 26);
-  msg.extd             = 1;
-  msg.rtr              = 0;
-  msg.data_length_code = sizeData;
-  if ((sizeData > 0) && (NULL != pdata)) {
-    memcpy(msg.data, pdata, sizeData);
-  }
-  return can4vscp_send(&msg, pdMS_TO_TICKS(100));
-}
-
-///////////////////////////////////////////////////////////////////////////////
 // ws2_get_handler
 //
 // WebSocket protocol endpoint (/ws2)
@@ -943,196 +906,18 @@ ws2_get_handler(httpd_req_t *req)
 
     ESP_LOGD(TAG, "WS2 command=%s data=%s", cmd, data);
 
-    for (char *p = cmd; *p; ++p) {
-      *p = (char) toupper((unsigned char) *p);
+    size_t reply_len = strlen(cmd) + 3;
+    char *reply      = calloc(1, reply_len + 1);
+    if (NULL == reply) {
+      free(payload);
+      return ESP_ERR_NO_MEM;
     }
 
-    if (0 == strcmp(cmd, "SENDEVENT")) {
-      char local[128] = { 0 };
-      uint8_t prio;
-      uint8_t vtype;
-      uint8_t nick;
-      uint16_t vclass;
-      uint8_t frame_data[8] = { 0 };
-      uint8_t frame_data_len;
-      char *tok;
-      char *saveptr = NULL;
-
-      if (strlen(data) >= sizeof(local)) {
-        const char *errtxt = "-;SENDEVENT;Data too long";
-        tx.payload         = (uint8_t *) errtxt;
-        tx.len             = strlen(errtxt);
-        rv                 = httpd_ws_send_frame(req, &tx);
-      }
-      else {
-        strcpy(local, data);
-        tok = strtok_r(local, ",", &saveptr);
-        if ((NULL == tok) || (VSCP_ERROR_SUCCESS != ws2_parse_uint8(tok, &prio)) || (prio > 7)) {
-          const char *errtxt = "-;SENDEVENT;Invalid priority";
-          tx.payload         = (uint8_t *) errtxt;
-          tx.len             = strlen(errtxt);
-          rv                 = httpd_ws_send_frame(req, &tx);
-          goto ws2_done;
-        }
-
-        tok = strtok_r(NULL, ",", &saveptr);
-        if ((NULL == tok) || !ws2_is_digit_string(tok)) {
-          const char *errtxt = "-;SENDEVENT;Invalid class";
-          tx.payload         = (uint8_t *) errtxt;
-          tx.len             = strlen(errtxt);
-          rv                 = httpd_ws_send_frame(req, &tx);
-          goto ws2_done;
-        }
-        long cls = strtol(tok, NULL, 10);
-        if ((cls < 0) || (cls > 511)) {
-          const char *errtxt = "-;SENDEVENT;Class out of range";
-          tx.payload         = (uint8_t *) errtxt;
-          tx.len             = strlen(errtxt);
-          rv                 = httpd_ws_send_frame(req, &tx);
-          goto ws2_done;
-        }
-        vclass = (uint16_t) cls;
-
-        tok = strtok_r(NULL, ",", &saveptr);
-        if ((NULL == tok) || (VSCP_ERROR_SUCCESS != ws2_parse_uint8(tok, &vtype))) {
-          const char *errtxt = "-;SENDEVENT;Invalid type";
-          tx.payload         = (uint8_t *) errtxt;
-          tx.len             = strlen(errtxt);
-          rv                 = httpd_ws_send_frame(req, &tx);
-          goto ws2_done;
-        }
-
-        tok = strtok_r(NULL, ",", &saveptr);
-        if ((NULL == tok) || (VSCP_ERROR_SUCCESS != ws2_parse_uint8(tok, &nick))) {
-          const char *errtxt = "-;SENDEVENT;Invalid nickname";
-          tx.payload         = (uint8_t *) errtxt;
-          tx.len             = strlen(errtxt);
-          rv                 = httpd_ws_send_frame(req, &tx);
-          goto ws2_done;
-        }
-
-        tok = strtok_r(NULL, "", &saveptr);
-        if (NULL == tok) {
-          tok = "";
-        }
-        if (VSCP_ERROR_SUCCESS != ws2_parse_data_hex(tok, frame_data, &frame_data_len)) {
-          const char *errtxt = "-;SENDEVENT;Invalid data hex";
-          tx.payload         = (uint8_t *) errtxt;
-          tx.len             = strlen(errtxt);
-          rv                 = httpd_ws_send_frame(req, &tx);
-          goto ws2_done;
-        }
-
-        esp_err_t txrv = ws2_send_vscp_as_can(prio, vclass, vtype, nick, frame_data, frame_data_len);
-        if (ESP_OK != txrv) {
-          const char *errtxt = "-;SENDEVENT;CAN send failed";
-          tx.payload         = (uint8_t *) errtxt;
-          tx.len             = strlen(errtxt);
-          rv                 = httpd_ws_send_frame(req, &tx);
-        }
-        else {
-          const char *oktxt = "+;SENDEVENT";
-          tx.payload        = (uint8_t *) oktxt;
-          tx.len            = strlen(oktxt);
-          rv                = httpd_ws_send_frame(req, &tx);
-        }
-      }
-    }
-    else if (0 == strcmp(cmd, "WHIS")) {
-      uint8_t nick = 255;
-      if ((NULL != data) && ('\0' != *data)) {
-        if (VSCP_ERROR_SUCCESS != ws2_parse_uint8(data, &nick)) {
-          const char *errtxt = "-;WHIS;Invalid nickname";
-          tx.payload         = (uint8_t *) errtxt;
-          tx.len             = strlen(errtxt);
-          rv                 = httpd_ws_send_frame(req, &tx);
-          goto ws2_done;
-        }
-      }
-
-      // VSCP class=0 (CLASS1.PROTOCOL), type=1 (WHIS/Who Is There)
-      esp_err_t txrv = ws2_send_vscp_as_can(0, 0, 1, nick, NULL, 0);
-      if (ESP_OK != txrv) {
-        const char *errtxt = "-;WHIS;CAN send failed";
-        tx.payload         = (uint8_t *) errtxt;
-        tx.len             = strlen(errtxt);
-        rv                 = httpd_ws_send_frame(req, &tx);
-      }
-      else {
-        const char *oktxt = "+;WHIS";
-        tx.payload        = (uint8_t *) oktxt;
-        tx.len            = strlen(oktxt);
-        rv                = httpd_ws_send_frame(req, &tx);
-      }
-    }
-    else if (0 == strcmp(cmd, "SCAN")) {
-      uint8_t start_nick = 1;
-      uint8_t end_nick   = 255;
-      char local[32]     = { 0 };
-      char *a;
-      char *b;
-      if ((NULL != data) && ('\0' != *data)) {
-        if (strlen(data) >= sizeof(local)) {
-          const char *errtxt = "-;SCAN;Data too long";
-          tx.payload         = (uint8_t *) errtxt;
-          tx.len             = strlen(errtxt);
-          rv                 = httpd_ws_send_frame(req, &tx);
-          goto ws2_done;
-        }
-        strcpy(local, data);
-        a = strtok(local, ",");
-        b = strtok(NULL, ",");
-        if ((NULL == a) || (NULL == b) ||
-            (VSCP_ERROR_SUCCESS != ws2_parse_uint8(a, &start_nick)) ||
-            (VSCP_ERROR_SUCCESS != ws2_parse_uint8(b, &end_nick))) {
-          const char *errtxt = "-;SCAN;Invalid range";
-          tx.payload         = (uint8_t *) errtxt;
-          tx.len             = strlen(errtxt);
-          rv                 = httpd_ws_send_frame(req, &tx);
-          goto ws2_done;
-        }
-      }
-
-      if (start_nick > end_nick) {
-        const char *errtxt = "-;SCAN;Invalid range";
-        tx.payload         = (uint8_t *) errtxt;
-        tx.len             = strlen(errtxt);
-        rv                 = httpd_ws_send_frame(req, &tx);
-        goto ws2_done;
-      }
-
-      uint16_t sent = 0;
-      uint16_t fail = 0;
-      for (uint16_t nick = start_nick; nick <= end_nick; ++nick) {
-        esp_err_t txrv = ws2_send_vscp_as_can(0, 0, 1, (uint8_t) nick, NULL, 0);
-        if (ESP_OK == txrv) {
-          sent++;
-        }
-        else {
-          fail++;
-        }
-      }
-
-      char reply[64] = { 0 };
-      snprintf(reply, sizeof(reply), "+;SCAN;%u,%u", (unsigned int) sent, (unsigned int) fail);
-      tx.payload = (uint8_t *) reply;
-      tx.len     = strlen(reply);
-      rv         = httpd_ws_send_frame(req, &tx);
-    }
-    else {
-      size_t reply_len = strlen(cmd) + 3;
-      char *reply      = calloc(1, reply_len + 1);
-      if (NULL == reply) {
-        free(payload);
-        return ESP_ERR_NO_MEM;
-      }
-
-      snprintf(reply, reply_len + 1, "+;%s", cmd);
-      tx.payload = (uint8_t *) reply;
-      tx.len     = strlen(reply);
-      rv         = httpd_ws_send_frame(req, &tx);
-      free(reply);
-    }
+    snprintf(reply, reply_len + 1, "+;%s", cmd);
+    tx.payload = (uint8_t *) reply;
+    tx.len     = strlen(reply);
+    rv         = httpd_ws_send_frame(req, &tx);
+    free(reply);
   }
   else {
     const char *errtxt = "-;ERR;Invalid frame";
@@ -1140,8 +925,6 @@ ws2_get_handler(httpd_req_t *req)
     tx.len             = strlen(errtxt);
     rv                 = httpd_ws_send_frame(req, &tx);
   }
-
-ws2_done:
 
   free(payload);
   return rv;

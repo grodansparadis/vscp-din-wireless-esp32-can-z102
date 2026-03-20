@@ -5,7 +5,7 @@
     "markdown-it-emoji": true
   },
   "editor.fontFamily": "Consolas, monospace",
-  "markdown.preview.fontFamily": "Consolas, monospace"
+  "markdown.preview.fontFamily": "Consolas, monospace",
 
 
   "idf.adapterTargetName": "esp32c3",
@@ -215,5 +215,20 @@
     "ESP_NOW_VER_MINOR": "5",
     "ESP_NOW_VER_PATCH": "2",
     "IDF_TARGET": "esp32c3"
+  },
+  "chat.tools.terminal.autoApprove": {
+    "idf.py": true,
+    "/^source /home/akhe/development/esp/esp-idf/export\\.sh && idf\\.py build 2>&1 \\| tail -30$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^source /home/akhe/development/esp/esp-idf/export\\.sh 2>/dev/null && idf\\.py build 2>&1 \\| grep -E \"error:\\|warning:\\|FAILED\\|Build complete\\|ninja\"$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^source /home/akhe/development/esp/esp-idf/export\\.sh 2>/dev/null && idf\\.py build 2>&1 \\| grep -E \"error:\\|FAILED\\|warning:\\|ninja\"$/": {
+      "approve": true,
+      "matchCommandLine": true
+    }
   }
 }

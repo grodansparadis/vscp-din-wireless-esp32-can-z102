@@ -27,6 +27,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include <sys/param.h>
 #include <sys/unistd.h>
 #include <sys/stat.h>
@@ -55,6 +56,8 @@
 #include <wifi_provisioning/manager.h>
 
 #include <vscp.h>
+#include <vscp-class.h>
+#include <vscp-type.h>
 #include <vscp-firmware-helper.h>
 
 #include "urldecode.h"
@@ -90,6 +93,9 @@ app_initiate_firmware_upload(const char *url);
 extern nvs_handle_t g_nvsHandle;
 extern node_persistent_config_t g_persistent;
 extern vprintf_like_t g_stdLogFunc;
+extern transport_t tr_websockets;
+extern transport_t tr_canapi;
+extern transport_t tr_monitor;
 
 // Extern from webnsocksrv
 extern httpd_handle_t g_websocket_srv;
@@ -1278,107 +1284,977 @@ mainpg_get_handler(httpd_req_t *req)
   return ESP_OK;
 }
 
-  ///////////////////////////////////////////////////////////////////////////////
-  // canbus_get_handler
-  //
-  // CAN bus web console using WS2 protocol
-  //
+///////////////////////////////////////////////////////////////////////////////
+// canbus_get_handler
+//
+// CAN bus web console using direct device HTTP API
+//
 
-  static esp_err_t
-  canbus_get_handler(httpd_req_t *req)
-  {
-    char *buf = (char *) calloc(CHUNK_BUFSIZE, 1);
-    if (NULL == buf) {
-      return ESP_ERR_NO_MEM;
+static esp_err_t
+canbus_get_handler(httpd_req_t *req)
+{
+  char *buf = (char *) calloc(CHUNK_BUFSIZE, 1);
+  if (NULL == buf) {
+    return ESP_ERR_NO_MEM;
+  }
+
+  const esp_app_desc_t *appDescr = esp_app_get_description();
+
+  sprintf(buf, WEBPAGE_START_TEMPLATE, g_persistent.nodeName, "CAN Bus Console");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<p style='font-size:0.95rem;color:#ddd;'>"
+          "Direct device API access to TWAI/CAN. This page sends commands straight to the firmware CAN backend."
+          "</p>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<fieldset><legend>Interface</legend>"
+          "<div class='p'>Mode</div><div class='q'>Direct TWAI/CAN API</div><br style='clear:both'>"
+          "<div class='p'>Endpoint</div><div class='q'>/canapi</div><br style='clear:both'>"
+          "</fieldset>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<br><fieldset><legend>Send VSCP Event To CAN</legend>"
+          "<table style='width:100%%'>"
+          "<tr><td>Priority (0-7)</td><td><input id='prio' value='0'></td></tr>"
+          "<tr><td>Class</td><td><input id='vclass' value='0'></td></tr>"
+          "<tr><td>Type</td><td><input id='vtype' value='1'></td></tr>"
+          "<tr><td>Node/Nickname</td><td><input id='nick' value='255'></td></tr>"
+      "<tr><td>Data (comma separated)</td><td><input id='data' value='' placeholder='0x01,2,0b00000011'></td></tr>"
+          "</table>"
+          "<button id='btnSendEvent' type='button' class='bgrn'>Send Event</button>"
+          "</fieldset>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<br><fieldset><legend>CAN Bus Node Discovery</legend>"
+          "<table style='width:100%%'>"
+          "<tr><td>Who Is There target nickname</td><td><input id='whisNick' value='255'></td></tr>"
+          "<tr><td>Scan start nickname</td><td><input id='scanStart' value='1'></td></tr>"
+          "<tr><td>Scan end nickname</td><td><input id='scanEnd' value='255'></td></tr>"
+      "<tr><td>Serial per-node scan</td><td><input id='scanSerial' type='checkbox' checked></td></tr>"
+      "<tr><td>Per-node timeout (ms)</td><td><input id='scanPerNodeMs' value='20'></td></tr>"
+          "</table>"
+          "<button id='btnWhis' type='button'>Send Who Is There</button><br><br>"
+          "<button id='btnScan' type='button'>Run Node Scan</button>"
+          "</fieldset>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<br><fieldset><legend>TWAI Monitor Filters</legend>"
+          "<table style='width:100%%'>"
+          "<tr><td>CAN ID min (hex)</td><td><input id='filterIdMin' value='0' placeholder='0x0'></td></tr>"
+          "<tr><td>CAN ID max (hex)</td><td><input id='filterIdMax' value='FFFFFFFF' placeholder='0xFFFFFFFF'></td></tr>"
+          "<tr><td>VSCP Class</td><td><input id='filterClass' value='' placeholder='(empty=all)'></td></tr>"
+          "<tr><td>VSCP Type</td><td><input id='filterType' value='' placeholder='(empty=all)'></td></tr>"
+          "<tr><td>Node Nickname</td><td><input id='filterNick' value='' placeholder='(empty=all)'></td></tr>"
+          "<tr><td>Extended Frames Only</td><td><input id='filterExtd' type='checkbox' checked></td></tr>"
+      "<tr><td>Show transmitted frames</td><td><input id='showTxInLog' type='checkbox'></td></tr>"
+          "</table>"
+          "</fieldset>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<br><fieldset><legend>API Replies</legend>"
+      "<div style='font-size:0.9rem;margin-bottom:6px'>"
+      "<span style='color:#66d9ff'>SCAN</span> "
+      "<span style='color:#ffd166'>WHO IS THERE</span> "
+      "<span style='color:#d6b3ff'>SEND</span> "
+      "<span style='color:#ff7b72'>ERROR</span> "
+      "<span style='color:#8df186'>TWAI</span>"
+      "</div>"
+      "<div id='log' style='height:260px;overflow:auto;background:#101110;color:#8df186;"
+      "font-family:monospace;padding:6px;white-space:pre-wrap;border:1px solid #2f3a2f'></div>"
+          "</fieldset>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<script>"
+          "(function(){"
+          "function el(id){return document.getElementById(id);}"
+      "function parseByteToken(tok){"
+      "  var s=(tok||'').trim();"
+      "  if(!s.length) return null;"
+      "  if(/^0[bB][01]+$/.test(s)){var v=0;for(var i=2;i<s.length;i++){v=(v<<1)+(s.charCodeAt(i)-48);}return (v>=0&&v<=255)?v:null;}"
+      "  if(/^0[xX][0-9a-fA-F]+$/.test(s)){var v=parseInt(s.substring(2),16);return (v>=0&&v<=255)?v:null;}"
+      "  if(/^0[dD][0-9]+$/.test(s)){var v=parseInt(s.substring(2),10);return (v>=0&&v<=255)?v:null;}"
+      "  if(/^[0-9]+$/.test(s)){var v=parseInt(s,10);return (v>=0&&v<=255)?v:null;}"
+      "  return null;"
+      "}"
+      "function hexByte(v){var s=(v&255).toString(16).toUpperCase();return (s.length<2?'0':'')+s;}"
+      "function buildTxPreview(){"
+      "  var prio=parseInt(el('prio').value.trim(),10);"
+      "  var vclass=parseInt(el('vclass').value.trim(),10);"
+      "  var vtype=parseInt(el('vtype').value.trim(),10);"
+      "  var nick=parseInt(el('nick').value.trim(),10);"
+      "  if(!(prio>=0&&prio<=7&&vclass>=0&&vclass<=511&&vtype>=0&&vtype<=255&&nick>=0&&nick<=255)){return null;}"
+      "  var raw=el('data').value.trim();"
+      "  var parts=[];"
+      "  if(raw.length){parts=raw.split(/[\\s,;]+/).filter(function(x){return x.length>0;});}"
+      "  if(parts.length>8){return null;}"
+      "  var bytes=[];"
+      "  for(var i=0;i<parts.length;i++){var b=parseByteToken(parts[i]);if(null===b){return null;}bytes.push(b);}"
+      "  var canid=(nick + (vtype<<8) + (vclass<<16) + ((prio&7)<<26))>>>0;"
+      "  var data=bytes.map(hexByte).join(':');"
+      "  return 'TX: id=0x'+canid.toString(16).toUpperCase()+' prio='+prio+' class='+vclass+' type='+vtype+' nick='+nick+' extd=1 dlc='+bytes.length+' data='+data;"
+      "}"
+      "function log(s,cls){var t=el('log');if(!t)return;var d=document.createElement('div');"
+      "d.textContent=(new Date()).toISOString()+\" \"+s;"
+      "if('scan'===cls){d.style.color='#66d9ff';}"
+      "else if('whis'===cls){d.style.color='#ffd166';}"
+      "else if('error'===cls){d.style.color='#ff7b72';}"
+      "else if('twai'===cls){d.style.color='#8df186';}"
+      "else if('send'===cls){d.style.color='#d6b3ff';}"
+      "t.appendChild(d);t.scrollTop=t.scrollHeight;}"
+          "function api(q){fetch('/canapi?'+q,{method:'GET'})"
+          "  .then(function(r){return r.text().then(function(t){return {ok:r.ok,status:r.status,text:t};});})"
+      "  .then(function(res){"
+      "    var cls='';"
+      "    if(q.indexOf('cmd=scan')===0) cls='scan';"
+      "    else if(q.indexOf('cmd=whis')===0) cls='whis';"
+      "    else if(q.indexOf('cmd=send')===0) cls='send';"
+      "    if(!res.ok) cls='error';"
+      "    log('API '+res.status+' '+res.text,cls);"
+      "  })"
+      "  .catch(function(e){log('API error '+e,'error');});}"
+          "el('btnSendEvent').onclick=function(){"
+          "  if(el('showTxInLog').checked){var preview=buildTxPreview();if(preview){log(preview,'send');}else{log('TX preview unavailable: invalid outgoing frame fields','error');}}"
+          "  var q='cmd=send'"
+          "    +'&prio='+encodeURIComponent(el('prio').value.trim())"
+          "    +'&class='+encodeURIComponent(el('vclass').value.trim())"
+          "    +'&type='+encodeURIComponent(el('vtype').value.trim())"
+          "    +'&nick='+encodeURIComponent(el('nick').value.trim())"
+          "    +'&data='+encodeURIComponent(el('data').value.trim());"
+          "  api(q);"
+          "};"
+          "el('btnWhis').onclick=function(){"
+          "  api('cmd=whis&nick='+encodeURIComponent(el('whisNick').value.trim()));"
+          "};"
+          "el('btnScan').onclick=function(){"
+          "  var q='cmd=scan&start='+encodeURIComponent(el('scanStart').value.trim())"
+          "    +'&end='+encodeURIComponent(el('scanEnd').value.trim())"
+          "    +'&mode='+(el('scanSerial').checked?'serial':'burst')"
+          "    +'&pernode_ms='+encodeURIComponent(el('scanPerNodeMs').value.trim());"
+          "  api(q);"
+          "};"
+          "log('Starting TWAI bus monitor - polling for CAN frames...','twai');"
+          "var twaiRunning=true;"
+          "function twaiMonitor(){"
+          "  if(!twaiRunning) return;"
+          "  var q='cmd=monitor';"
+          "  var idMin=el('filterIdMin').value.trim();"
+          "  var idMax=el('filterIdMax').value.trim();"
+          "  var cls=el('filterClass').value.trim();"
+          "  var typ=el('filterType').value.trim();"
+          "  var nick=el('filterNick').value.trim();"
+          "  var extdOnly=el('filterExtd').checked;"
+          "  if(idMin) q+='&id_min='+encodeURIComponent(idMin);"
+          "  if(idMax) q+='&id_max='+encodeURIComponent(idMax);"
+          "  if(cls) q+='&class='+encodeURIComponent(cls);"
+          "  if(typ) q+='&type='+encodeURIComponent(typ);"
+          "  if(nick) q+='&nick='+encodeURIComponent(nick);"
+          "  if(extdOnly) q+='&extd_only=1';"
+          "  fetch('/canapi?'+q,{method:'GET'})"
+          "    .then(function(r){return r.text();})"
+          "    .then(function(text){"
+          "      if(text && text.length>0){"
+          "        var lines=text.split('\\n');"
+          "        for(var i=0;i<lines.length;i++){"
+          "          if(lines[i].length>0){"
+          "            log('TWAI: '+lines[i],'twai');"
+          "          }"
+          "        }"
+          "      }"
+          "      setTimeout(twaiMonitor,500);"
+          "    })"
+          "    .catch(function(e){"
+          "      log('TWAI monitor error: '+e,'error');"
+          "      setTimeout(twaiMonitor,500);"
+          "    });"
+          "}"
+          "twaiMonitor();"
+          "})();"
+          "</script>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, WEBPAGE_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  httpd_resp_send_chunk(req, NULL, 0);
+
+  free(buf);
+  return ESP_OK;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// canapi helpers
+//
+
+static bool
+canapi_is_digit_string(const char *s)
+{
+  if ((NULL == s) || ('\0' == *s)) {
+    return false;
+  }
+
+  for (const char *p = s; *p; ++p) {
+    if ((*p < '0') || (*p > '9')) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static int
+canapi_parse_byte_token(const char *tok, size_t tok_len, uint8_t *val)
+{
+  char tmp[24] = { 0 };
+
+  if ((NULL == tok) || (NULL == val) || (0 == tok_len) || (tok_len >= sizeof(tmp))) {
+    return VSCP_ERROR_INVALID_SYNTAX;
+  }
+
+  memcpy(tmp, tok, tok_len);
+  tmp[tok_len] = '\0';
+
+  // Accept common byte formats: decimal (42), hex (0x2A), binary (0b101010).
+  if ((tok_len > 2) && ('0' == tmp[0]) && (('b' == tmp[1]) || ('B' == tmp[1]))) {
+    int v = 0;
+    char *p = tmp + 2;
+    if ('\0' == *p) {
+      return VSCP_ERROR_INVALID_SYNTAX;
+    }
+    while ('\0' != *p) {
+      if (('0' != *p) && ('1' != *p)) {
+        return VSCP_ERROR_INVALID_SYNTAX;
+      }
+      v = (v << 1) + (*p - '0');
+      if (v > 255) {
+        return VSCP_ERROR_INVALID_SYNTAX;
+      }
+      p++;
+    }
+    *val = (uint8_t) v;
+    return VSCP_ERROR_SUCCESS;
+  }
+
+  char *p = tmp;
+  int base = 10;
+  if ((tok_len > 2) && ('0' == tmp[0]) && (('x' == tmp[1]) || ('X' == tmp[1]))) {
+    p = tmp + 2;
+    base = 16;
+  }
+  else if ((tok_len > 2) && ('0' == tmp[0]) && (('d' == tmp[1]) || ('D' == tmp[1]))) {
+    p = tmp + 2;
+    base = 10;
+  }
+
+  if ('\0' == *p) {
+    return VSCP_ERROR_INVALID_SYNTAX;
+  }
+
+  char *endptr = NULL;
+  long v = strtol(p, &endptr, base);
+  if ((NULL == endptr) || ('\0' != *endptr) || (v < 0) || (v > 255)) {
+    return VSCP_ERROR_INVALID_SYNTAX;
+  }
+
+  *val = (uint8_t) v;
+  return VSCP_ERROR_SUCCESS;
+}
+
+static int
+canapi_parse_data_list(const char *src, uint8_t *dst, uint8_t *len)
+{
+  size_t n = 0;
+  const char *p = src;
+
+  if ((NULL == src) || (NULL == dst) || (NULL == len)) {
+    return VSCP_ERROR_INVALID_POINTER;
+  }
+
+  *len = 0;
+
+  while (*p) {
+    while (*p && ((' ' == *p) || (',' == *p) || (';' == *p) || ('\t' == *p) || ('\r' == *p) || ('\n' == *p))) {
+      p++;
     }
 
-    const esp_app_desc_t *appDescr = esp_app_get_description();
-    uint16_t ws_port               = g_persistent.enableWebsock ? g_persistent.websockPort : g_persistent.webPort;
+    if (!*p) {
+      break;
+    }
 
-    sprintf(buf, WEBPAGE_START_TEMPLATE, g_persistent.nodeName, "CAN Bus Console");
-    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+    const char *tok = p;
+    while (*p && !(' ' == *p || ',' == *p || ';' == *p || '\t' == *p || '\r' == *p || '\n' == *p)) {
+      p++;
+    }
+    size_t tok_len = (size_t) (p - tok);
 
-    sprintf(buf,
-      "<p style='font-size:0.95rem;color:#ddd;'>"
-      "Direct WebSocket bridge to CAN/TWAI (WS2). Use this page to send VSCP events and run node scans."
-      "</p>");
-    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+    if (n >= 8) {
+      return VSCP_ERROR_INVALID_SYNTAX;
+    }
 
-    sprintf(buf,
-      "<fieldset><legend>Connection</legend>"
-      "<div class='p'>WS URL</div><div class='q' id='wsurl'>-</div><br style='clear:both'>"
-      "<button id='btnConnect' type='button'>Connect</button><br><br>"
-      "<div class='p'>State</div><div class='q' id='state'>Disconnected</div><br style='clear:both'>"
-      "</fieldset>");
-    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+    if (VSCP_ERROR_SUCCESS != canapi_parse_byte_token(tok, tok_len, &dst[n])) {
+      return VSCP_ERROR_INVALID_SYNTAX;
+    }
+    n++;
+  }
 
-    sprintf(buf,
-      "<br><fieldset><legend>Send VSCP Event To CAN</legend>"
-      "<table style='width:100%%'>"
-      "<tr><td>Priority (0-7)</td><td><input id='prio' value='0'></td></tr>"
-      "<tr><td>Class</td><td><input id='vclass' value='0'></td></tr>"
-      "<tr><td>Type</td><td><input id='vtype' value='1'></td></tr>"
-      "<tr><td>Node/Nickname</td><td><input id='nick' value='255'></td></tr>"
-      "<tr><td>Data (hex)</td><td><input id='data' value='' placeholder='01 02 03'></td></tr>"
-      "</table>"
-      "<button id='btnSendEvent' type='button' class='bgrn'>Send Event</button>"
-      "</fieldset>");
-    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  *len = (uint8_t) n;
+  return VSCP_ERROR_SUCCESS;
+}
 
-    sprintf(buf,
-      "<br><fieldset><legend>CAN Bus Node Discovery</legend>"
-      "<table style='width:100%%'>"
-      "<tr><td>WHIS target nickname</td><td><input id='whisNick' value='255'></td></tr>"
-      "<tr><td>Scan start nickname</td><td><input id='scanStart' value='1'></td></tr>"
-      "<tr><td>Scan end nickname</td><td><input id='scanEnd' value='255'></td></tr>"
-      "</table>"
-      "<button id='btnWhis' type='button'>Send WHIS</button><br><br>"
-      "<button id='btnScan' type='button'>Run Node Scan</button>"
-      "</fieldset>");
-    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+static esp_err_t
+canapi_send_vscp_as_can(uint8_t prio,
+                        uint16_t vscp_class,
+                        uint8_t vscp_type,
+                        uint8_t nickname,
+                        const uint8_t *pdata,
+                        uint8_t sizeData)
+{
+  can4vscp_frame_t msg = { 0 };
+  msg.identifier        = (uint32_t) nickname + (((uint32_t) vscp_type) << 8) + (((uint32_t) vscp_class) << 16) +
+                   ((((uint32_t) prio) & 0x07u) << 26);
+  msg.extd             = 1;
+  msg.rtr              = 0;
+  msg.data_length_code = sizeData;
+  if ((sizeData > 0) && (NULL != pdata)) {
+    memcpy(msg.data, pdata, sizeData);
+  }
+  return can4vscp_send(&msg, pdMS_TO_TICKS(100));
+}
 
-    sprintf(buf,
-      "<br><fieldset><legend>Traffic / Replies</legend>"
-      "<textarea id='log' readonly style='height:260px;background:#101110;color:#8df186'></textarea>"
-      "</fieldset>");
-    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+static void
+canapi_decode_can4vscp_identifier(uint32_t identifier, uint8_t *prio, uint16_t *vscp_class, uint8_t *vscp_type, uint8_t *nickname)
+{
+  if (NULL != prio) {
+    *prio = (uint8_t) ((identifier >> 26) & 0x07u);
+  }
 
-    sprintf(buf,
-      "<script>"
-      "(function(){"
-      "var ws=null;"
-      "var wsPort=%u;"
-      "function el(id){return document.getElementById(id);}"
-      "function log(s){var t=el('log');if(!t)return;t.value+=(new Date()).toISOString()+\" \"+s+\"\\n\";t.scrollTop=t.scrollHeight;}"
-      "function wsUrl(){var p=(window.location.protocol==='https:')?'wss':'ws';var host=window.location.hostname;var port=(wsPort>0)?(':'+wsPort):'';return p+'://'+host+port+'/ws2';}"
-      "function send(cmd,arg){if(!ws||ws.readyState!==1){log('Not connected');return;}var f='C;'+cmd+(arg?';'+arg:'');ws.send(f);log('TX '+f);}"
-      "el('wsurl').textContent=wsUrl();"
-      "el('btnConnect').onclick=function(){"
-      "  if(ws&&ws.readyState===1){ws.close();return;}"
-      "  ws=new WebSocket(wsUrl());"
-      "  ws.onopen=function(){el('state').textContent='Connected';el('btnConnect').textContent='Disconnect';log('Connected');};"
-      "  ws.onclose=function(){el('state').textContent='Disconnected';el('btnConnect').textContent='Connect';log('Disconnected');};"
-      "  ws.onerror=function(){log('WebSocket error');};"
-      "  ws.onmessage=function(ev){log('RX '+ev.data);};"
-      "};"
-      "el('btnSendEvent').onclick=function(){"
-      "  var a=[el('prio').value.trim(),el('vclass').value.trim(),el('vtype').value.trim(),el('nick').value.trim(),el('data').value.trim()].join(',');"
-      "  send('SENDEVENT',a);"
-      "};"
-      "el('btnWhis').onclick=function(){send('WHIS',el('whisNick').value.trim());};"
-      "el('btnScan').onclick=function(){send('SCAN',el('scanStart').value.trim()+','+el('scanEnd').value.trim());};"
-      "})();"
-      "</script>",
-      (unsigned int) ws_port);
-    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  if (NULL != vscp_class) {
+    *vscp_class = (uint16_t) ((identifier >> 16) & 0x01ffu);
+  }
 
-    sprintf(buf, WEBPAGE_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
-    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-    httpd_resp_send_chunk(req, NULL, 0);
+  if (NULL != vscp_type) {
+    *vscp_type = (uint8_t) ((identifier >> 8) & 0xffu);
+  }
 
+  if (NULL != nickname) {
+    *nickname = (uint8_t) (identifier & 0xffu);
+  }
+}
+
+static void
+canapi_reset_reply_queue(void)
+{
+  if (NULL == tr_canapi.fromcan_queue) {
+    return;
+  }
+
+  can4vscp_frame_t rxmsg = { 0 };
+  while (pdPASS == xQueueReceive(tr_canapi.fromcan_queue, &rxmsg, 0)) {
+    ;
+  }
+}
+
+static size_t
+canapi_append_nick_list(char *dst, size_t dst_len, const bool *seen)
+{
+  size_t used = 0;
+
+  if ((NULL == dst) || (0 == dst_len) || (NULL == seen)) {
+    return 0;
+  }
+
+  for (uint16_t nick = 0; nick < 256; ++nick) {
+    if (!seen[nick]) {
+      continue;
+    }
+
+    int n;
+    if (used > 0) {
+      n = snprintf(dst + used, dst_len - used, ",%u", (unsigned int) nick);
+    }
+    else {
+      n = snprintf(dst + used, dst_len - used, "%u", (unsigned int) nick);
+    }
+
+    if ((n <= 0) || ((size_t) n >= (dst_len - used))) {
+      break;
+    }
+
+    used += (size_t) n;
+  }
+
+  return used;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// canapi_get_handler
+//
+// Direct HTTP API for CAN operations
+//
+
+static esp_err_t
+canapi_get_handler(httpd_req_t *req)
+{
+  char qbuf[256]  = { 0 };
+  char cmd[16]    = { 0 };
+  char param[128] = { 0 };
+
+  httpd_resp_set_type(req, "text/plain");
+
+  size_t qlen = httpd_req_get_url_query_len(req) + 1;
+  if (qlen <= 1 || qlen > sizeof(qbuf)) {
+    httpd_resp_set_status(req, "400 Bad Request");
+    httpd_resp_sendstr(req, "ERR: missing query");
+    return ESP_OK;
+  }
+
+  if (ESP_OK != httpd_req_get_url_query_str(req, qbuf, sizeof(qbuf))) {
+    httpd_resp_set_status(req, "400 Bad Request");
+    httpd_resp_sendstr(req, "ERR: invalid query");
+    return ESP_OK;
+  }
+
+  if (ESP_OK != httpd_query_key_value(qbuf, "cmd", cmd, sizeof(cmd))) {
+    httpd_resp_set_status(req, "400 Bad Request");
+    httpd_resp_sendstr(req, "ERR: missing cmd");
+    return ESP_OK;
+  }
+
+  for (char *p = cmd; *p; ++p) {
+    *p = (char) tolower((unsigned char) *p);
+  }
+
+  if (0 == strcmp(cmd, "send")) {
+    uint8_t prio;
+    uint8_t vtype;
+    uint8_t nick;
+    uint16_t vclass;
+    uint8_t frame_data[8] = { 0 };
+    uint8_t frame_data_len = 0;
+    char *decoded_data = NULL;
+
+    if ((ESP_OK != httpd_query_key_value(qbuf, "prio", param, sizeof(param))) || !canapi_is_digit_string(param)) {
+      httpd_resp_set_status(req, "400 Bad Request");
+      httpd_resp_sendstr(req, "ERR: invalid prio");
+      return ESP_OK;
+    }
+    long l = strtol(param, NULL, 10);
+    if ((l < 0) || (l > 7)) {
+      httpd_resp_set_status(req, "400 Bad Request");
+      httpd_resp_sendstr(req, "ERR: prio out of range");
+      return ESP_OK;
+    }
+    prio = (uint8_t) l;
+
+    if ((ESP_OK != httpd_query_key_value(qbuf, "class", param, sizeof(param))) || !canapi_is_digit_string(param)) {
+      httpd_resp_set_status(req, "400 Bad Request");
+      httpd_resp_sendstr(req, "ERR: invalid class");
+      return ESP_OK;
+    }
+    l = strtol(param, NULL, 10);
+    if ((l < 0) || (l > 511)) {
+      httpd_resp_set_status(req, "400 Bad Request");
+      httpd_resp_sendstr(req, "ERR: class out of range");
+      return ESP_OK;
+    }
+    vclass = (uint16_t) l;
+
+    if ((ESP_OK != httpd_query_key_value(qbuf, "type", param, sizeof(param))) || !canapi_is_digit_string(param)) {
+      httpd_resp_set_status(req, "400 Bad Request");
+      httpd_resp_sendstr(req, "ERR: invalid type");
+      return ESP_OK;
+    }
+    l = strtol(param, NULL, 10);
+    if ((l < 0) || (l > 255)) {
+      httpd_resp_set_status(req, "400 Bad Request");
+      httpd_resp_sendstr(req, "ERR: type out of range");
+      return ESP_OK;
+    }
+    vtype = (uint8_t) l;
+
+    if ((ESP_OK != httpd_query_key_value(qbuf, "nick", param, sizeof(param))) || !canapi_is_digit_string(param)) {
+      httpd_resp_set_status(req, "400 Bad Request");
+      httpd_resp_sendstr(req, "ERR: invalid nick");
+      return ESP_OK;
+    }
+    l = strtol(param, NULL, 10);
+    if ((l < 0) || (l > 255)) {
+      httpd_resp_set_status(req, "400 Bad Request");
+      httpd_resp_sendstr(req, "ERR: nick out of range");
+      return ESP_OK;
+    }
+    nick = (uint8_t) l;
+
+    if (ESP_OK == httpd_query_key_value(qbuf, "data", param, sizeof(param))) {
+      decoded_data = urlDecode(param);
+      const char *datastr = (NULL != decoded_data) ? decoded_data : param;
+      if (VSCP_ERROR_SUCCESS != canapi_parse_data_list(datastr, frame_data, &frame_data_len)) {
+        if (NULL != decoded_data) {
+          free(decoded_data);
+        }
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_sendstr(req, "ERR: invalid data");
+        return ESP_OK;
+      }
+    }
+
+    // Push frame to TX queue — twai_transmit_task will call can4vscp_send.
+    // This returns immediately without blocking the HTTP task on CAN bus TX.
+    can4vscp_frame_t tx_frame = { 0 };
+    tx_frame.identifier       = (uint32_t) nick +
+                                ((uint32_t) vtype << 8) +
+                                ((uint32_t) vclass << 16) +
+                                (((uint32_t) prio & 0x07u) << 26);
+    tx_frame.extd             = 1;
+    tx_frame.rtr              = 0;
+    tx_frame.data_length_code = frame_data_len;
+    if (frame_data_len > 0) {
+      memcpy(tx_frame.data, frame_data, frame_data_len);
+    }
+
+    if ((NULL == tr_canapi.tocan_queue) ||
+      (pdPASS != xQueueSendToBack(tr_canapi.tocan_queue, &tx_frame, pdMS_TO_TICKS(10)))) {
+      if (NULL != decoded_data) {
+        free(decoded_data);
+      }
+      httpd_resp_set_status(req, "500 Internal Server Error");
+      httpd_resp_sendstr(req, "ERR: CAN TX queue full");
+      return ESP_OK;
+    }
+
+    if (NULL != decoded_data) {
+      free(decoded_data);
+    }
+
+    char rsp[64] = { 0 };
+    snprintf(rsp, sizeof(rsp), "OK: SENDEVENT dlc=%u", (unsigned int) frame_data_len);
+    httpd_resp_sendstr(req, rsp);
+    return ESP_OK;
+  }
+  else if (0 == strcmp(cmd, "whis")) {
+    uint8_t nick = 255;
+    bool seen[256] = { 0 };
+    uint16_t replies = 0;
+
+    if (ESP_OK == httpd_query_key_value(qbuf, "nick", param, sizeof(param))) {
+      if (!canapi_is_digit_string(param)) {
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_sendstr(req, "ERR: invalid nick");
+        return ESP_OK;
+      }
+      long l = strtol(param, NULL, 10);
+      if ((l < 0) || (l > 255)) {
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_sendstr(req, "ERR: nick out of range");
+        return ESP_OK;
+      }
+      nick = (uint8_t) l;
+    }
+
+    if (NULL == tr_canapi.fromcan_queue) {
+      httpd_resp_set_status(req, "500 Internal Server Error");
+      httpd_resp_sendstr(req, "ERR: CAN reply queue unavailable");
+      return ESP_OK;
+    }
+
+    canapi_reset_reply_queue();
+
+    uint8_t data[1] = { nick };
+    if (ESP_OK != canapi_send_vscp_as_can(0,
+                                          VSCP_CLASS1_PROTOCOL,
+                                          VSCP_TYPE_PROTOCOL_WHO_IS_THERE,
+                                          0,
+                                          data,
+                                          sizeof(data))) {
+      httpd_resp_set_status(req, "500 Internal Server Error");
+      httpd_resp_sendstr(req, "ERR: Who Is There send failed");
+      return ESP_OK;
+    }
+
+    int64_t deadline = esp_timer_get_time() + (int64_t) (1500 * 1000);
+    while (esp_timer_get_time() < deadline) {
+      can4vscp_frame_t rxmsg = { 0 };
+      if (pdPASS != xQueueReceive(tr_canapi.fromcan_queue, &rxmsg, pdMS_TO_TICKS(50))) {
+        continue;
+      }
+
+      if (!rxmsg.extd) {
+        continue;
+      }
+
+      uint16_t rx_class = 0;
+      uint8_t rx_type = 0;
+      uint8_t src_nick = 0;
+      canapi_decode_can4vscp_identifier(rxmsg.identifier, NULL, &rx_class, &rx_type, &src_nick);
+
+      if ((VSCP_CLASS1_PROTOCOL == rx_class) && (VSCP_TYPE_PROTOCOL_WHO_IS_THERE_RESPONSE == rx_type)) {
+        if (!seen[src_nick]) {
+          seen[src_nick] = true;
+          replies++;
+        }
+      }
+    }
+
+    char node_list[700] = { 0 };
+    canapi_append_nick_list(node_list, sizeof(node_list), seen);
+
+    char rsp[900] = { 0 };
+    snprintf(rsp,
+             sizeof(rsp),
+             "OK: Who Is There target=%u replies=%u nodes=%s",
+             (unsigned int) nick,
+             (unsigned int) replies,
+             (0 == node_list[0]) ? "-" : node_list);
+    httpd_resp_sendstr(req, rsp);
+    return ESP_OK;
+  }
+  else if (0 == strcmp(cmd, "scan")) {
+    uint8_t start_nick = 1;
+    uint8_t end_nick   = 255;
+    uint16_t pernode_ms = 20;
+    bool serial_mode = true;
+    bool seen[256] = { 0 };
+
+    if (ESP_OK == httpd_query_key_value(qbuf, "start", param, sizeof(param))) {
+      if (!canapi_is_digit_string(param)) {
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_sendstr(req, "ERR: invalid start");
+        return ESP_OK;
+      }
+      long l = strtol(param, NULL, 10);
+      if ((l < 0) || (l > 255)) {
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_sendstr(req, "ERR: start out of range");
+        return ESP_OK;
+      }
+      start_nick = (uint8_t) l;
+    }
+
+    if (ESP_OK == httpd_query_key_value(qbuf, "end", param, sizeof(param))) {
+      if (!canapi_is_digit_string(param)) {
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_sendstr(req, "ERR: invalid end");
+        return ESP_OK;
+      }
+      long l = strtol(param, NULL, 10);
+      if ((l < 0) || (l > 255)) {
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_sendstr(req, "ERR: end out of range");
+        return ESP_OK;
+      }
+      end_nick = (uint8_t) l;
+    }
+
+    if (start_nick > end_nick) {
+      httpd_resp_set_status(req, "400 Bad Request");
+      httpd_resp_sendstr(req, "ERR: invalid range");
+      return ESP_OK;
+    }
+
+    if (ESP_OK == httpd_query_key_value(qbuf, "mode", param, sizeof(param))) {
+      for (char *p = param; *p; ++p) {
+        *p = (char) tolower((unsigned char) *p);
+      }
+
+      if (0 == strcmp(param, "serial")) {
+        serial_mode = true;
+      }
+      else if (0 == strcmp(param, "burst")) {
+        serial_mode = false;
+      }
+      else {
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_sendstr(req, "ERR: invalid mode");
+        return ESP_OK;
+      }
+    }
+
+    if (ESP_OK == httpd_query_key_value(qbuf, "pernode_ms", param, sizeof(param))) {
+      if (!canapi_is_digit_string(param)) {
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_sendstr(req, "ERR: invalid pernode_ms");
+        return ESP_OK;
+      }
+
+      long l = strtol(param, NULL, 10);
+      if ((l < 1) || (l > 2000)) {
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_sendstr(req, "ERR: pernode_ms out of range");
+        return ESP_OK;
+      }
+      pernode_ms = (uint16_t) l;
+    }
+
+    if (NULL == tr_canapi.fromcan_queue) {
+      httpd_resp_set_status(req, "500 Internal Server Error");
+      httpd_resp_sendstr(req, "ERR: CAN reply queue unavailable");
+      return ESP_OK;
+    }
+
+    canapi_reset_reply_queue();
+
+    ESP_LOGI(TAG, "SCAN: Started (serial_mode=%u, pernode_ms=%u, range=%u-%u)",
+             serial_mode, pernode_ms, start_nick, end_nick);
+
+    uint16_t sent = 0;
+    uint16_t fail = 0;
+    uint16_t replies = 0;
+
+    for (uint16_t nick = start_nick; nick <= end_nick; ++nick) {
+      uint8_t data[2] = { (uint8_t) nick, VSCP_STD_REGISTER_GUID };
+      if (ESP_OK == canapi_send_vscp_as_can(0,
+                                            VSCP_CLASS1_PROTOCOL,
+                                            VSCP_TYPE_PROTOCOL_READ_REGISTER,
+                                            0,
+                                            data,
+                                            sizeof(data))) {
+        sent++;
+        ESP_LOGD(TAG, "SCAN: Sent READ_REGISTER 0x%02X to node %u", VSCP_STD_REGISTER_GUID, nick);
+      }
+      else {
+        fail++;
+        ESP_LOGW(TAG, "SCAN: Failed to send READ_REGISTER to node %u", nick);
+        continue;
+      }
+
+      if (!serial_mode) {
+        vTaskDelay(pdMS_TO_TICKS(2));
+        continue;
+      }
+
+      int64_t pernode_deadline = esp_timer_get_time() + ((int64_t) pernode_ms * 1000);
+      while (esp_timer_get_time() < pernode_deadline) {
+        can4vscp_frame_t rxmsg = { 0 };
+        if (pdPASS != xQueueReceive(tr_canapi.fromcan_queue, &rxmsg, pdMS_TO_TICKS(5))) {
+          continue;
+        }
+
+        ESP_LOGI(TAG, "SCAN serial mode: Received frame id=0x%lX, extd=%u, dlc=%u, data[0]=0x%02X, data[1]=0x%02X",
+                 rxmsg.identifier, rxmsg.extd, rxmsg.data_length_code, rxmsg.data[0], rxmsg.data[1]);
+
+        if (!rxmsg.extd) {
+          ESP_LOGD(TAG, "SCAN serial mode: Skipping non-extended frame");
+          continue;
+        }
+
+        uint16_t rx_class = 0;
+        uint8_t rx_type = 0;
+        uint8_t src_nick = 0;
+        canapi_decode_can4vscp_identifier(rxmsg.identifier, NULL, &rx_class, &rx_type, &src_nick);
+
+        ESP_LOGI(TAG, "SCAN serial mode: Decoded - src_nick=%u, type=%u, class=%u, target_nick=%u",
+                 src_nick, rx_type, rx_class, (unsigned int) nick);
+
+        if ((VSCP_CLASS1_PROTOCOL == rx_class) &&
+            (VSCP_TYPE_PROTOCOL_RW_RESPONSE == rx_type) &&
+            (rxmsg.data_length_code >= 2) &&
+            (VSCP_STD_REGISTER_GUID == rxmsg.data[0]) &&
+            (src_nick >= start_nick) &&
+            (src_nick <= end_nick)) {
+          ESP_LOGI(TAG, "SCAN serial mode: Found node %u", src_nick);
+          if (!seen[src_nick]) {
+            seen[src_nick] = true;
+            replies++;
+          }
+
+          if (src_nick == (uint8_t) nick) {
+            break;
+          }
+        } else {
+          ESP_LOGW(TAG, "SCAN serial mode: Frame didn't match criteria (class=%u!=0, type=%u!=10, dlc=%u, data[0]=0x%02X!=0x%02X, src_nick=%u in [%u,%u])",
+                   rx_class, rx_type, rxmsg.data_length_code, rxmsg.data[0], VSCP_STD_REGISTER_GUID, src_nick, start_nick, end_nick);
+        }
+      }
+    }
+
+    if (!serial_mode) {
+      int64_t deadline = esp_timer_get_time() + (int64_t) (2000 * 1000);
+      while (esp_timer_get_time() < deadline) {
+        can4vscp_frame_t rxmsg = { 0 };
+        if (pdPASS != xQueueReceive(tr_canapi.fromcan_queue, &rxmsg, pdMS_TO_TICKS(50))) {
+          continue;
+        }
+
+        ESP_LOGI(TAG, "SCAN burst mode: Received frame id=0x%lX, extd=%u, dlc=%u, data[0]=0x%02X",
+                 rxmsg.identifier, rxmsg.extd, rxmsg.data_length_code, rxmsg.data[0]);
+
+        if (!rxmsg.extd) {
+          ESP_LOGD(TAG, "SCAN burst mode: Skipping non-extended frame");
+          continue;
+        }
+
+        uint16_t rx_class = 0;
+        uint8_t rx_type = 0;
+        uint8_t src_nick = 0;
+        canapi_decode_can4vscp_identifier(rxmsg.identifier, NULL, &rx_class, &rx_type, &src_nick);
+
+        ESP_LOGI(TAG, "SCAN burst mode: Decoded - src_nick=%u, type=%u, class=%u",
+                 src_nick, rx_type, rx_class);
+
+        if ((VSCP_CLASS1_PROTOCOL == rx_class) &&
+            (VSCP_TYPE_PROTOCOL_RW_RESPONSE == rx_type) &&
+            (rxmsg.data_length_code >= 2) &&
+            (VSCP_STD_REGISTER_GUID == rxmsg.data[0]) &&
+            (src_nick >= start_nick) &&
+            (src_nick <= end_nick)) {
+          ESP_LOGI(TAG, "SCAN burst mode: Found node %u", src_nick);
+          if (!seen[src_nick]) {
+            seen[src_nick] = true;
+            replies++;
+          }
+        }
+      }
+    }
+
+    char node_list[700] = { 0 };
+    canapi_append_nick_list(node_list, sizeof(node_list), seen);
+
+    char rsp[950] = { 0 };
+    snprintf(rsp,
+             sizeof(rsp),
+             "OK: SCAN mode=%s pernode_ms=%u reg=0x%02X range=%u-%u sent=%u failed=%u replies=%u nodes=%s",
+             serial_mode ? "serial" : "burst",
+             (unsigned int) pernode_ms,
+             (unsigned int) VSCP_STD_REGISTER_GUID,
+             (unsigned int) start_nick,
+             (unsigned int) end_nick,
+             (unsigned int) sent,
+             (unsigned int) fail,
+             (unsigned int) replies,
+             (0 == node_list[0]) ? "-" : node_list);
+    httpd_resp_sendstr(req, rsp);
+    return ESP_OK;
+  }
+  else if (0 == strcmp(cmd, "monitor")) {
+    // Return raw TWAI frames from the input queue with optional filtering
+    // Parse filter parameters from query string — reuse the already-populated qbuf.
+    
+    // Default filter values (no filtering)
+    uint32_t id_min = 0;
+    uint32_t id_max = 0xFFFFFFFFu;
+    uint16_t filter_class = 0;  // 0 = any
+    uint8_t filter_type = 0;    // 0 = any
+    uint8_t filter_nick = 0;    // 0 = any
+    bool filter_extd_only = false;
+    
+    // Parse individual parameters
+    char param_val[32] = { 0 };
+    
+    // Parse id_min (hex)
+    if (httpd_query_key_value(qbuf, "id_min", param_val, sizeof(param_val)) == ESP_OK) {
+      id_min = strtoul(param_val, NULL, 16);
+    }
+    
+    // Parse id_max (hex)
+    memset(param_val, 0, sizeof(param_val));
+    if (httpd_query_key_value(qbuf, "id_max", param_val, sizeof(param_val)) == ESP_OK) {
+      id_max = strtoul(param_val, NULL, 16);
+    }
+    
+    // Parse class (decimal)
+    memset(param_val, 0, sizeof(param_val));
+    if (httpd_query_key_value(qbuf, "class", param_val, sizeof(param_val)) == ESP_OK) {
+      filter_class = (uint16_t) strtoul(param_val, NULL, 10);
+    }
+    
+    // Parse type (decimal)
+    memset(param_val, 0, sizeof(param_val));
+    if (httpd_query_key_value(qbuf, "type", param_val, sizeof(param_val)) == ESP_OK) {
+      filter_type = (uint8_t) strtoul(param_val, NULL, 10);
+    }
+    
+    // Parse nickname (decimal)
+    memset(param_val, 0, sizeof(param_val));
+    if (httpd_query_key_value(qbuf, "nick", param_val, sizeof(param_val)) == ESP_OK) {
+      filter_nick = (uint8_t) strtoul(param_val, NULL, 10);
+    }
+    
+    // Parse extd_only (presence = true)
+    memset(param_val, 0, sizeof(param_val));
+    if (httpd_query_key_value(qbuf, "extd_only", param_val, sizeof(param_val)) == ESP_OK) {
+      filter_extd_only = true;
+    }
+    
+    // Heap-allocate to avoid overflowing the httpd task stack.
+    // NOTE: use a named constant — sizeof(buf) on a pointer gives pointer size (4),
+    //       not the allocation size, which was the original cause of heap corruption.
+    #define MONITOR_BUFSIZE 2048
+    char *buf = (char *) calloc(MONITOR_BUFSIZE, 1);
+    if (NULL == buf) {
+      httpd_resp_set_status(req, "500 Internal Server Error");
+      httpd_resp_sendstr(req, "ERR: out of memory");
+      return ESP_OK;
+    }
+    size_t offset = 0;
+    can4vscp_frame_t rxmsg = { 0 };
+
+    // Drain frames from the dedicated monitor queue (filled by twai_receive_task)
+    while ((offset < MONITOR_BUFSIZE - 256) && (NULL != tr_monitor.fromcan_queue) &&
+           (pdPASS == xQueueReceive(tr_monitor.fromcan_queue, &rxmsg, 0))) {
+      
+      // Decode identifier
+      uint8_t prio = (uint8_t) ((rxmsg.identifier >> 26) & 0x07u);
+      uint16_t vscp_class = (uint16_t) ((rxmsg.identifier >> 16) & 0x01ffu);
+      uint8_t vscp_type = (uint8_t) ((rxmsg.identifier >> 8) & 0xffu);
+      uint8_t nickname = (uint8_t) (rxmsg.identifier & 0xffu);
+      
+      // Apply filters
+      if (rxmsg.identifier < id_min || rxmsg.identifier > id_max) {
+        continue;  // Outside CAN ID range
+      }
+      if (filter_extd_only && !rxmsg.extd) {
+        continue;  // Not extended frame but extended-only filter active
+      }
+      if (filter_class != 0 && vscp_class != filter_class) {
+        continue;  // Class mismatch
+      }
+      if (filter_type != 0 && vscp_type != filter_type) {
+        continue;  // Type mismatch
+      }
+      if (filter_nick != 0 && nickname != filter_nick) {
+        continue;  // Nickname mismatch
+      }
+      
+      // Frame passes all filters - add to output
+      int line_len = snprintf(buf + offset, MONITOR_BUFSIZE - offset,
+                              "id=0x%lX prio=%u class=%u type=%u nick=%u extd=%u dlc=%u data=",
+                              rxmsg.identifier, prio, vscp_class, vscp_type, nickname,
+                              rxmsg.extd, rxmsg.data_length_code);
+      if (line_len < 0) break;
+      offset += (size_t) line_len;
+
+      // Append data bytes
+      for (int i = 0; i < rxmsg.data_length_code && i < 8; i++) {
+        line_len = snprintf(buf + offset, MONITOR_BUFSIZE - offset, "%02X", rxmsg.data[i]);
+        if (line_len < 0) break;
+        offset += (size_t) line_len;
+        if (i < rxmsg.data_length_code - 1) {
+          buf[offset++] = ':';
+        }
+      }
+      buf[offset++] = '\n';
+      #undef MONITOR_BUFSIZE
+    }
+
+    if (offset > 0) {
+      httpd_resp_send(req, buf, offset);
+    } else {
+      httpd_resp_sendstr(req, "");
+    }
     free(buf);
     return ESP_OK;
   }
+
+  httpd_resp_set_status(req, "400 Bad Request");
+  httpd_resp_sendstr(req, "ERR: unknown cmd");
+  return ESP_OK;
+}
 
 // static const httpd_uri_t mainpg = { .uri     = "/index.html",
 //                                    .method  = HTTP_GET,
@@ -4605,6 +5481,11 @@ default_get_handler(httpd_req_t *req)
     return canbus_get_handler(req);
   }
 
+  if (0 == strncmp(req->uri, "/canapi", 7)) {
+    ESP_LOGV(TAG, "--------- canapi ---------\n");
+    return canapi_get_handler(req);
+  }
+
   if (0 == strncmp(req->uri, "/cfgmodule", 10)) {
     ESP_LOGV(TAG, "--------- cfgmodule ---------\n");
     return config_module_get_handler(req);
@@ -4844,7 +5725,7 @@ start_webserver(void)
   cfg.server_port = g_persistent.webPort;
 
   // 4096 is to low for OTA
-  cfg.stack_size = 1024 * 5;
+  cfg.stack_size = 1024 * 8;
 
   cfg.lru_purge_enable = true;
   // Use the URI wildcard matching function in order to
@@ -4853,6 +5734,7 @@ start_webserver(void)
   cfg.uri_match_fn = httpd_uri_match_wildcard;
 
   cfg.max_uri_handlers = 20;
+  cfg.max_open_sockets  = 12;
 
   // extern const unsigned char servercert_start[] asm("_binary_servercert_pem_start");
   // extern const unsigned char servercert_end[] asm("_binary_servercert_pem_end");
