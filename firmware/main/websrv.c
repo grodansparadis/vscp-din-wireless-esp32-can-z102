@@ -5292,7 +5292,7 @@ http_404_error_handler(httpd_req_t *req, httpd_err_code_t err)
 // registration and deregistration of URI handlers
 //
 
-static esp_err_t
+static esp_err_t __attribute__((unused))
 ctrl_put_handler(httpd_req_t *req)
 {
   char buf;
@@ -5830,7 +5830,7 @@ stop_webserver(httpd_handle_t server)
 // disconnect_handler
 //
 
-static void
+static void __attribute__((unused))
 disconnect_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
   httpd_handle_t *server = (httpd_handle_t *) arg;
@@ -5849,7 +5849,7 @@ disconnect_handler(void *arg, esp_event_base_t event_base, int32_t event_id, voi
 // connect_handler
 //
 
-static void
+static void __attribute__((unused))
 connect_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
   httpd_handle_t *server = (httpd_handle_t *) arg;

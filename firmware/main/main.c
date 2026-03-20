@@ -233,9 +233,6 @@ static QueueHandle_t tr_twai_rx;
 // HTTP server handle for configuration web interface
 static httpd_handle_t server_httpd = NULL;
 
-// WebSocket server handle
-static httpd_handle_t server_websock = NULL;
-
 // ============================================================================
 //                    WiFi Provisioning Security (Version 2)
 // ============================================================================

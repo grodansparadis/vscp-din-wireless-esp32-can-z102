@@ -112,7 +112,6 @@ ws_async_send(void *arg)
   httpd_ws_frame_t ws_pkt;
   struct async_resp_arg *resp_arg = arg;
   httpd_handle_t hd               = resp_arg->hd;
-  int fd                          = resp_arg->fd;
 
   static int led_state = 0;
   char buf[4];
@@ -148,7 +147,7 @@ ws_async_send(void *arg)
 // trigger_async_send
 //
 
-static esp_err_t
+static esp_err_t __attribute__((unused))
 trigger_async_send(httpd_handle_t handle, httpd_req_t *req)
 {
   struct async_resp_arg *resp_arg = malloc(sizeof(struct async_resp_arg));
