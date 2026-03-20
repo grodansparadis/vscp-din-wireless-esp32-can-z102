@@ -1366,6 +1366,7 @@ canbus_get_handler(httpd_req_t *req)
       "<span style='color:#ff7b72'>ERROR</span> "
       "<span style='color:#8df186'>TWAI</span>"
       "</div>"
+      "<div style='margin-bottom:6px'><button id='btnClearLog' type='button'>Clear Log</button></div>"
       "<div id='log' style='height:260px;overflow:auto;background:#101110;color:#8df186;"
       "font-family:monospace;padding:6px;white-space:pre-wrap;border:1px solid #2f3a2f'></div>"
           "</fieldset>");
@@ -1420,6 +1421,7 @@ canbus_get_handler(httpd_req_t *req)
       "    log('API '+res.status+' '+res.text,cls);"
       "  })"
       "  .catch(function(e){log('API error '+e,'error');});}"
+          "el('btnClearLog').onclick=function(){var t=el('log');if(t){t.textContent='';}};"
           "el('btnSendEvent').onclick=function(){"
           "  if(el('showTxInLog').checked){var preview=buildTxPreview();if(preview){log(preview,'send');}else{log('TX preview unavailable: invalid outgoing frame fields','error');}}"
           "  var q='cmd=send'"

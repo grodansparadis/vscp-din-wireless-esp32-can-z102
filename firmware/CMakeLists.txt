@@ -2,6 +2,15 @@
 # in this exact order for cmake to work correctly
 cmake_minimum_required(VERSION 3.22)
 
+# PROJECT_VER must be defined before project() so esp_app_desc.version uses it.
+file(READ "${CMAKE_SOURCE_DIR}/build_counter.txt" BUILD_COUNTER_RAW)
+string(STRIP "${BUILD_COUNTER_RAW}" BUILD_COUNTER)
+if("${BUILD_COUNTER}" STREQUAL "")
+    set(BUILD_COUNTER 0)
+endif()
+math(EXPR BUILD_COUNTER_NEXT "${BUILD_COUNTER} + 1")
+set(PROJECT_VER "0.0.1.${BUILD_COUNTER_NEXT}")
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(vscp_can4vscp_gw)
 
@@ -19,5 +28,3 @@ add_custom_target(build_counter ALL DEPENDS ${BUILD_COUNTER_HEADER})
 add_dependencies(${PROJECT_NAME}.elf build_counter)
 
 include_directories(${CMAKE_BINARY_DIR})
-
-set(PROJECT_VER "0.0.1.${BUILD_COUNTER}")
