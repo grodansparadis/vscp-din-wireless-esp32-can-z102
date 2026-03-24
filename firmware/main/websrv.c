@@ -53,7 +53,7 @@
 #include <esp_tls_crypto.h>
 #include <esp_vfs.h>
 #include <esp_spiffs.h>
-#include <wifi_provisioning/manager.h>
+#include <network_provisioning/manager.h>
 
 #include <vscp.h>
 #include <vscp-class.h>
@@ -73,11 +73,11 @@
 #endif
 
 #ifdef CONFIG_EXAMPLE_PROV_TRANSPORT_BLE
-#include <wifi_provisioning/scheme_ble.h>
+#include <network_provisioning/scheme_ble.h>
 #endif /* PROV_EXAMPLE_TRANSPORT_BLE */
 
 #ifdef CONFIG_EXAMPLE_PROV_TRANSPORT_SOFTAP
-#include <wifi_provisioning/scheme_softap.h>
+#include <network_provisioning/scheme_softap.h>
 #endif /* PROV_EXAMPLE_TRANSPORT_SOFTAP */
 
 // #define MIN(a, b) (((a) < (b)) ? (a) : (b))
@@ -624,7 +624,7 @@ info_get_handler(httpd_req_t *req)
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   uint8_t mac[6];
-  esp_wifi_get_mac(ESP_IF_WIFI_STA, mac);
+  esp_wifi_get_mac(ESP_MAC_WIFI_STA, mac);
   // printf("Wifi STA MAC address: " MACSTR "\n", MAC2STR(mac));
   sprintf(buf,
           "<tr><td class=\"name\">Wifi STA MAC address:</td><td class=\"prop\">" MACSTR "</td></tr>",

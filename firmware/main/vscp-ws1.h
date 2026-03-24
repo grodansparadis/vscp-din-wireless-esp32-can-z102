@@ -126,7 +126,7 @@ vscp_ws1_init(vscp_ws_connection_context_t *pctx, void *pdata);
   @return Returns VSCP_ERROR_SUCCESS if the cleanup was successful, or an appropriate error code if there was a failure.
 */
 int
-vscp_ws1_clearup();
+vscp_ws1_clearup(vscp_ws_connection_context_t *pctx, void *pdata);
 
 /*!
   Stock generate session id (sid). The sid is used as an IV for encrypting credentials and may

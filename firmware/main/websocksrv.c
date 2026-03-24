@@ -53,7 +53,7 @@
 #include <esp_vfs.h>
 #include <esp_spiffs.h>
 #include <esp_http_server.h>
-#include <wifi_provisioning/manager.h>
+//#include <wifi_provisioning/manager.h>
 #include "keep-alive.h"
 #include "sdkconfig.h"
 

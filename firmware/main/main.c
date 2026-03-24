@@ -51,7 +51,7 @@ extern void twai_transmit_task(void *arg);
 
 #include <driver/gpio.h>
 #include "esp_task_wdt.h"
-#include <driver/twai.h>
+#include <esp_twai.h>
 #include <esp_event.h>
 #include <esp_http_server.h>
 #include <esp_log.h>
@@ -64,14 +64,14 @@ extern void twai_transmit_task(void *arg);
 #include <lwip/ip4_addr.h>
 #include <nvs_flash.h>
 
-#include <wifi_provisioning/manager.h>
+#include <network_provisioning/manager.h>
 
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_BLE
-#include <wifi_provisioning/scheme_ble.h>
+#include <network_provisioning/scheme_ble.h>
 #endif /* CONFIG_WCANG_PROV_TRANSPORT_BLE */
 
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_SOFTAP
-#include <wifi_provisioning/scheme_softap.h>
+#include <network_provisioning/scheme_softap.h>
 #endif /* CONFIG_WCANG_PROV_TRANSPORT_SOFTAP */
 #include "qrcode.h"
 
@@ -1099,12 +1099,12 @@ event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *ev
 #ifdef CONFIG_WCANG_RESET_PROV_MGR_ON_FAILURE
   static int retries;
 #endif
-  if (event_base == WIFI_PROV_EVENT) {
+  if (event_base == NETWORK_PROV_EVENT) {
     switch (event_id) {
-      case WIFI_PROV_START:
+      case NETWORK_PROV_START:
         ESP_LOGI(TAG, "Provisioning started");
         break;
-      case WIFI_PROV_CRED_RECV: {
+      case NETWORK_PROV_WIFI_CRED_RECV: {
         wifi_sta_config_t *wifi_sta_cfg = (wifi_sta_config_t *) event_data;
         ESP_LOGI(TAG,
                  "Received Wi-Fi credentials"
@@ -1129,32 +1129,32 @@ event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *ev
         ESP_LOGI(TAG, "Saved provisioned credentials as primary WiFi");
         break;
       }
-      case WIFI_PROV_CRED_FAIL: {
-        wifi_prov_sta_fail_reason_t *reason = (wifi_prov_sta_fail_reason_t *) event_data;
+      case NETWORK_PROV_WIFI_CRED_FAIL: {
+        network_prov_wifi_sta_fail_reason_t *reason = (network_prov_wifi_sta_fail_reason_t *) event_data;
         ESP_LOGE(TAG,
                  "Provisioning failed!\n\tReason : %s"
                  "\n\tPlease reset to factory and retry provisioning",
-                 (*reason == WIFI_PROV_STA_AUTH_ERROR) ? "Wi-Fi station authentication failed"
-                                                       : "Wi-Fi access-point not found");
+                 (*reason == NETWORK_PROV_WIFI_STA_AUTH_ERROR) ? "Wi-Fi station authentication failed"
+                                                               : "Wi-Fi access-point not found");
 #ifdef CONFIG_WCANG_RESET_PROV_MGR_ON_FAILURE
         retries++;
         if (retries >= CONFIG_WCANG_PROV_MGR_MAX_RETRY_CNT) {
           ESP_LOGI(TAG, "Failed to connect with provisioned AP, reseting provisioned credentials");
-          wifi_prov_mgr_reset_sm_state_on_failure();
+          network_prov_mgr_reset_wifi_sm_state_on_failure();
           retries = 0;
         }
 #endif
         break;
       }
-      case WIFI_PROV_CRED_SUCCESS:
+      case NETWORK_PROV_WIFI_CRED_SUCCESS:
         ESP_LOGI(TAG, "Provisioning successful");
 #ifdef CONFIG_WCANG_RESET_PROV_MGR_ON_FAILURE
         retries = 0;
 #endif
         break;
-      case WIFI_PROV_END:
+      case NETWORK_PROV_END:
         /* De-initialize manager once provisioning is finished */
-        wifi_prov_mgr_deinit();
+        network_prov_mgr_deinit();
         break;
       default:
         break;
@@ -1617,7 +1617,7 @@ app_main(void)
   // ============================================================================
 
   // Register event handlers for WiFi provisioning, WiFi state, and IP events
-  ESP_ERROR_CHECK(esp_event_handler_register(WIFI_PROV_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
+  ESP_ERROR_CHECK(esp_event_handler_register(NETWORK_PROV_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
   ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
   ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL));
 
@@ -1655,27 +1655,27 @@ app_main(void)
    */
 
   // Configure provisioning manager
-  wifi_prov_mgr_config_t config = {
+  network_prov_mgr_config_t config = {
   // Select provisioning transport scheme (BLE or SoftAP)
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_BLE
-    .scheme = wifi_prov_scheme_ble,
+    .scheme = network_prov_scheme_ble,
 #endif
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_SOFTAP
-    .scheme = wifi_prov_scheme_softap,
+    .scheme = network_prov_scheme_softap,
 #endif
 
   /**
    * Event handler configuration:
-   * - BLE: WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM
+   * - BLE: NETWORK_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM
    *   Automatically releases BT/BLE memory after provisioning
-   * - SoftAP: WIFI_PROV_EVENT_HANDLER_NONE
+   * - SoftAP: NETWORK_PROV_EVENT_HANDLER_NONE
    *   No special memory management needed
    */
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_BLE
-    .scheme_event_handler = WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM
+    .scheme_event_handler = NETWORK_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM
 #endif
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_SOFTAP
-                              .scheme_event_handler = WIFI_PROV_EVENT_HANDLER_NONE
+                              .scheme_event_handler = NETWORK_PROV_EVENT_HANDLER_NONE
 #endif
   };
 
@@ -1683,14 +1683,14 @@ app_main(void)
    * Initialize provisioning manager with the
    * configuration parameters set above
    */
-  ESP_ERROR_CHECK(wifi_prov_mgr_init(config));
+  ESP_ERROR_CHECK(network_prov_mgr_init(config));
 
   bool provisioned = false;
 #ifdef CONFIG_WCANG_RESET_PROVISIONED
-  wifi_prov_mgr_reset_provisioning();
+  network_prov_mgr_reset_wifi_provisioning();
 #else
   /* Let's find out if the device is provisioned */
-  ESP_ERROR_CHECK(wifi_prov_mgr_is_provisioned(&provisioned));
+  ESP_ERROR_CHECK(network_prov_mgr_is_wifi_provisioned(&provisioned));
 
 #endif
 
@@ -1703,8 +1703,8 @@ app_main(void)
      * What is the Device Service Name that we want
      *
      * This translates to :
-     *     - Wi-Fi SSID when scheme is wifi_prov_scheme_softap
-     *     - device name when scheme is wifi_prov_scheme_ble
+     *     - Wi-Fi SSID when scheme is network_prov_scheme_softap
+     *     - device name when scheme is network_prov_scheme_ble
      */
     char service_name[12];
     get_device_service_name(service_name, sizeof(service_name));
@@ -1713,14 +1713,14 @@ app_main(void)
     /*
      * What is the security level that we want (0, 1, 2):
      *
-     *   - WIFI_PROV_SECURITY_0 is simply plain text communication.
-     *   - WIFI_PROV_SECURITY_1 is secure communication which consists of secure handshake
+     *   - NETWORK_PROV_SECURITY_0 is simply plain text communication.
+     *   - NETWORK_PROV_SECURITY_1 is secure communication which consists of secure handshake
      *      using X25519 key exchange and proof of possession (pop) and AES-CTR
      *      for encryption/decryption of messages.
-     *   - WIFI_PROV_SECURITY_2 SRP6a based authentication and key exchange
+     *   - NETWORK_PROV_SECURITY_2 SRP6a based authentication and key exchange
      *      + AES-GCM encryption/decryption of messages
      */
-    wifi_prov_security_t security = WIFI_PROV_SECURITY_1;
+    network_prov_security_t security = NETWORK_PROV_SECURITY_1;
 
     /*
      * Do we want a proof-of-possession (ignored if Security 0 is selected):
@@ -1731,7 +1731,7 @@ app_main(void)
     /*
      * If the pop is allocated dynamically, then it should be valid till
      * the provisioning process is running.
-     * it can be only freed when the WIFI_PROV_END event is triggered
+     * it can be only freed when the NETWORK_PROV_END event is triggered
      */
 
     /*
@@ -1739,12 +1739,12 @@ app_main(void)
      * for the protocomm security 1.
      * This does not need not be static i.e. could be dynamically allocated
      */
-    wifi_prov_security1_params_t *sec_params = pop;
+    network_prov_security1_params_t *sec_params = pop;
 
     const char *username = NULL;
 
 #elif CONFIG_WCANG_PROV_SECURITY_VERSION_2
-    wifi_prov_security_t security = WIFI_PROV_SECURITY_2;
+    network_prov_security_t security = NETWORK_PROV_SECURITY_2;
     // The username must be the same one, which has been used in the generation of salt and verifier
 
 #if CONFIG_WCANG_PROV_SEC2_DEV_MODE
@@ -1769,12 +1769,12 @@ app_main(void)
      * for the protocomm security 2.
      * This does not need not be static i.e. could be dynamically allocated
      */
-    wifi_prov_security2_params_t sec2_params = {};
+    network_prov_security2_params_t sec2_params = {};
 
     ESP_ERROR_CHECK(wcang_get_sec2_salt(&sec2_params.salt, &sec2_params.salt_len));
     ESP_ERROR_CHECK(wcang_get_sec2_verifier(&sec2_params.verifier, &sec2_params.verifier_len));
 
-    wifi_prov_security2_params_t *sec_params = &sec2_params;
+    network_prov_security2_params_t *sec_params = &sec2_params;
 #endif
 
     // Service key for provisioning (password for SoftAP, ignored for BLE)
@@ -1796,7 +1796,7 @@ app_main(void)
       0xb4, 0xdf, 0x5a, 0x1c, 0x3f, 0x6b, 0xf4, 0xbf, 0xea, 0x4a, 0x82, 0x03, 0x04, 0x90, 0x1a, 0x02,
     };
 
-    wifi_prov_scheme_ble_set_service_uuid(custom_service_uuid);
+    network_prov_scheme_ble_set_service_uuid(custom_service_uuid);
 #endif
 
     /**
@@ -1806,10 +1806,10 @@ app_main(void)
      * during provisioning (e.g., secondary WiFi credentials). Must be created
      * before starting provisioning.
      */
-    wifi_prov_mgr_endpoint_create("VSCP-WCANG");
+    network_prov_mgr_endpoint_create("VSCP-WCANG");
 
     // Start provisioning service with configured security and service name
-    ESP_ERROR_CHECK(wifi_prov_mgr_start_provisioning(security, (const void *) sec_params, service_name, service_key));
+    ESP_ERROR_CHECK(network_prov_mgr_start_provisioning(security, (const void *) sec_params, service_name, service_key));
 
     /**
      * Register handler for custom endpoint
@@ -1818,7 +1818,7 @@ app_main(void)
      * allowing configuration of secondary WiFi and other custom parameters.
      * Must be registered after starting provisioning.
      */
-    wifi_prov_mgr_endpoint_register("VSCP-WCANG", custom_prov_data_handler, NULL);
+    network_prov_mgr_endpoint_register("VSCP-WCANG", custom_prov_data_handler, NULL);
 
     // Display QR code for easy provisioning via mobile app
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_BLE
@@ -1832,7 +1832,7 @@ app_main(void)
     ESP_LOGI(TAG, "Already provisioned, starting Wi-Fi STA");
 
     // Release provisioning manager resources
-    wifi_prov_mgr_deinit();
+    network_prov_mgr_deinit();
 
     // Start WiFi in station mode with saved credentials
     wifi_init_sta();

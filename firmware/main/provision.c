@@ -14,5 +14,5 @@
 #include <esp_event.h>
 #include <nvs_flash.h>
 
-#include <wifi_provisioning/manager.h>
+#include <network_provisioning/manager.h>
 

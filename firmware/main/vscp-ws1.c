@@ -134,7 +134,7 @@ vscp_ws1_init(vscp_ws_connection_context_t *pctx, void *pdata)
 //
 
 int
-vscp_ws1_clearup(vscp_ws_connection_context_t *pctx)
+vscp_ws1_clearup(vscp_ws_connection_context_t *pctx, void *pdata)
 {
   int rv;
   if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_cleanup(pctx))) {

@@ -12,7 +12,7 @@
         "${workspaceFolder}/build/**"
       ],
       "defines": [],
-      "compilerPath": "/home/akhe/.espressif/tools/riscv32-esp-elf/esp-14.2.0_20251107/riscv32-esp-elf/bin/riscv32-esp-elf-gcc",
+      "compilerPath": "/home/akhe/.espressif/tools/riscv32-esp-elf/esp-15.2.0_20251204/riscv32-esp-elf/bin/riscv32-esp-elf-gcc",
       "cStandard": "c17",
       "cppStandard": "c++14",
       "intelliSenseMode": "linux-clang-x64",

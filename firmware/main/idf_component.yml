@@ -2,3 +2,5 @@ dependencies:
   qrcode: ^0.1.0
   espressif/button: =*
   espressif/led_indicator: ^2.1.1
+  espressif/network_provisioning: ^1.2.2
+  espressif/mqtt: ^1.0.0

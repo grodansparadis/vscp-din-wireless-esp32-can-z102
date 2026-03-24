@@ -1,0 +1,13 @@
+dependencies:
+  espressif/cjson:
+    rules:
+    - if: idf_version >= 6.0
+    version: ^1.7.19
+  idf: '>=5.1'
+description: Network provisioning component for Wi-Fi or Thread devices
+repository: git://github.com/espressif/idf-extra-components.git
+repository_info:
+  commit_sha: 5f80cb4a4cc94d78ac3727584f9a99ebfb96a01f
+  path: network_provisioning
+url: https://github.com/espressif/idf-extra-components/tree/master/network_provisioning
+version: 1.2.2
