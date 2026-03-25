@@ -66,15 +66,48 @@
 #define VSCP_BINARY_COMMAND_CODE_SETFILTER 0x0011 /* Set input filter for channel */
 #define VSCP_BINARY_COMMAND_CODE_SETMASK   0x0012 /* Set input mask for channel */
 #define VSCP_BINARY_COMMAND_CODE_INTERFACE 0x0013 /* List interfaces */
-#define VSCP_BINARY_COMMAND_CODE_TEST      0x0014 /* Run test */
-#define VSCP_BINARY_COMMAND_CODE_WCYD      0x0015 /* WCYD - What Can You Do */
-#define VSCP_BINARY_COMMAND_CODE_SHUTDOWN  0x0016 /* Shutdown device (privileged command) */
-#define VSCP_BINARY_COMMAND_CODE_RESTART   0x0017 /* Restart device (privileged command) */
+#define VSCP_BINARY_COMMAND_CODE_TEST      0x001E /* Run test */
+#define VSCP_BINARY_COMMAND_CODE_WCYD      0x001F /* WCYD - What Can You Do */
+#define VSCP_BINARY_COMMAND_CODE_SHUTDOWN  0x0020 /* Shutdown device (privileged command) */
+#define VSCP_BINARY_COMMAND_CODE_RESTART   0x0021 /* Restart device (privileged command) */
 
 #define VSCP_BINARY_COMMAND_CODE_USER_START 0xFF00 /* Start for user command range */
 
+  /*!
+    @brief Handle a binary command.
 
-///////////////////////////////////////////////////////////////////////////////
+    @param command The command code.
+    @param parg The null terminated command argument string.
+    @param len Length of the argument. If argument is string the terminating null is included in the length.
+    @param pctx Pointer to the context. Only the callbacks know what this is. It can be
+                used to store connection specific data for the callbacks.
+    @return VSCP_ERROR_SUCCESS if all is OK, errorcode otherwise.
+  */
+  int vscp_handle_binary_command(uint16_t command, const char *parg, size_t len, const void *pctx);
+
+  /*!
+    @brief Handle a binary event.
+
+    @param pEvent Pointer to the event structure.
+    @param pctx Pointer to the context. Only the callbacks know what this is. It can be
+                used to store connection specific data for the callbacks.
+    @return VSCP_ERROR_SUCCESS if all is OK, errorcode otherwise.
+  */
+  int vscp_handle_binary_event(vscpEvent * pEvent, const void *pctx);
+
+  /*!
+    @brief Handle a binary reply.
+
+    @param command The command code.
+    @param error The error code.
+    @param pReplyArg Pointer to the null terminated reply argument string.
+    @param pctx Pointer to the context. Only the callbacks know what this is. It can be
+                used to store connection specific data for the callbacks.
+    @return VSCP_ERROR_SUCCESS if all is OK, errorcode otherwise.
+  */
+  int vscp_handle_binary_reply(uint16_t command, uint16_t error, const char *preplyarg, const void *pctx);
+
+  ///////////////////////////////////////////////////////////////////////////////
   //                             Callbacks
   ///////////////////////////////////////////////////////////////////////////////
 
@@ -82,19 +115,21 @@
    * @name Callbacks for a VSCP link protocol implementation
    */
 
-  /**
-   * @fn vscp_binary_callback_welcome
-   * @brief This callback is executed after a new connection is made to welcome a user.
-   *
+  /*!
+   * @fn vscp_binary_callback_reply
+   * @brief This callback is executed when a reply should be sent to the client.
+   * 
    * @param pdata Pointer to user data
+   * @param command Command code for which this is a reply
+   * @param error Error code for the reply
+   * @param parg Null terminated string argument for the reply. Can be NULL if no argument.
+   * @param len Length of the argument string including the terminating null. Can be zero if no argument.
    * @return VSCP_ERROR_SUCCESS if all is OK, errorcode otherwise.
    *
-   * Send welcome message for a new connection containging the binary protocol version
-   * the interface supports.
+   * Send a reply frame to the client. The callback should send the data and return a positive response if it was
+   * successful in doing so and a negative response if not.
    */
-
-  int
-  vscp_binary_callback_welcome(const void* pdata);
+  int vscp_binary_callback_reply(const void *pdata, uint16_t command, uint16_t error, const uint8_t *parg, size_t len);
 
   /**
    * @fn vscp_binary_callback_quit
@@ -103,12 +138,11 @@
    * @param pdata Pointer to user data
    * @return VSCP_ERROR_SUCCESS if all is OK, errorcode otherwise.
    *
-   * The callback should shutdown the connection with client after sending
-   * the vscp_binary_MSG_GOODBY 
+   * The callback should shutdown the connection with the client and send a positive response if it was successful in
+   * doing so and a negative response if not.
    */
 
-  int
-  vscp_binary_callback_quit(const void* pdata);
+  int vscp_binary_callback_quit(const void *pdata);
 
   /**
    * @fn vscp_binary_callback_write_client
@@ -123,8 +157,7 @@
    * negative response if not.
    */
 
-  int
-  vscp_binary_callback_write_client(const void* pdata, const char* msg);
+  int vscp_binary_callback_write_client(const void *pdata, const char *msg);
 
   /**
    * @fn vscp_binary_callback_disconnect_client
@@ -134,10 +167,7 @@
    * @return VSCP_ERROR_SUCCESS if all is OK, errorcode otherwise.
    */
 
-  int
-  vscp_binary_callback_disconnect_client(const void* pdata);
-
-
+  int vscp_binary_callback_disconnect_client(const void *pdata);
 
   /**
    * @fn vscp_binary_callback_event_received
@@ -148,46 +178,9 @@
    * @return VSCP_ERROR_SUCCESS if all is OK, errorcode otherwise.
    */
 
-  int
-  vscp_binary_callback_event_received(const void* pdata, const vscpEvent* pev);
+  int vscp_binary_callback_event_received(const void *pdata, const vscpEvent *pev);
 
-  /**
-   * @fn vscp_binary_callback_get_interface_count
-   * @brief Get number of defined interfaces.
-   *
-   * @param pdata Pointer to user data.
-   * @return Number of interfaces is returned. If no interfaces are defined
-   *         zero is returned (as expected).
-   */
-
-  uint16_t vscp_binary_callback_get_interface_count(const void* pdata);
-
-  /**
-   * @fn vscp_binary_callback_get_interface
-   * @brief Get one interface GUID.
-   *
-   * @param pdata Pointer to user data.
-   * @param index Index of interface to get.
-   * @param pif Pointer to interface information structure that wil get data for the interface.
-   * @return VSCP_ERROR_SUCCESS if an interface is returned. If not VSCP_ERROR_UNKNOWN_ITEM
-   *         is returned.
-   */
-
-  int
-  vscp_binary_callback_get_interface(const void* pdata, uint16_t index, vscp_interface_info_t* pif);
-
-  /**
-   * @brief Close interface
-   * 
-   * @param pdata Pointer to user data
-   * @param user pguid Pointer to GUID for interface to close.
-   * 
-   * @return VSCP_ERROR_SUCCESS if the interface gest closed. 
-   *  VSCP_ERROR_NOT_SUPPORTED if not supported. Other error 
-   *  codes if an error occurs.
-   */
-  int
-  vscp_binary_callback_close_interface(const void* pdata, uint8_t *pguid);
+  
 
   /**
    * @fn vscp_binary_callback_check_user
@@ -206,8 +199,7 @@
    *     VSCP_ERROR_ERROR. In this case the connection will be closed.
    */
 
-  int
-  vscp_binary_callback_check_user(const void* pdata, const char* user);
+  int vscp_binary_callback_user(const void *pdata, const char *user);
 
   /**
    * @fn vscp_binary_callback_check_password
@@ -224,20 +216,18 @@
    * Write vscp_binary_MSG_PASSWORD_OK to client if logged in.
    */
 
-  int
-  vscp_binary_callback_check_password(const void* pdata, const char* user);
+  int vscp_binary_callback_password(const void *pdata, const char *password);
 
   /**
    * @fn vscp_binary_callback_challenge
    * @brief Dop challenge sequency
    *
    * @param pdata Pointer to user data
-   * @param password Password to check
    * @return Return VSCP_ERROR_SUCCESS if logged in error code else.
+   * 
    */
 
-  int
-  vscp_binary_callback_challenge(const void* pdata, const char* password);
+  int vscp_binary_callback_challenge(const void *pdata);
 
   /**
    * @fn vscp_binary_callback_check_authenticated
@@ -247,8 +237,7 @@
    * @return Return VSCP_ERROR_SUCCESS if validated.
    */
 
-  int
-  vscp_binary_callback_check_authenticated(const void* pdata);
+  int vscp_binary_callback_check_authenticated(const void *pdata);
 
   /**
    * @fn vscp_binary_callback_check_privilege
@@ -259,8 +248,7 @@
    * @return Return VSCP_ERROR_SUCCESS if privileged (>= priv).
    */
 
-  int
-  vscp_binary_callback_check_privilege(const void* pdata, uint8_t priv);
+  int vscp_binary_callback_check_privilege(const void *pdata, uint8_t priv);
 
   /**
    * @fn vscp_binary_callback_test
@@ -271,8 +259,7 @@
    *  @return Return VSCP_ERROR_SUCCESS if logged in error code else.
    */
 
-  int
-  vscp_binary_callback_test(const void* pdata, const char* arg);
+  int vscp_binary_callback_test(const void *pdata, const char *arg);
 
   /**
    * @fn vscp_binary_doCmdCheckData
@@ -283,8 +270,21 @@
    * @return VSCP_ERROR_SUCCESS if all is OK, errorcode otherwise.
    */
 
-  int
-  vscp_binary_doCmdCheckData(const void* pdata, const char* pcmd);
+  int vscp_binary_doCmdCheckData(const void *pdata, const char *pcmd);
+
+  /**
+   * @fn vscp_binary_callback_send
+   * @brief Send event ('send').
+   *
+   * @param pdata Pointer to user data
+   * @param pex Pointer to event ex to send. The callback should send the event and return a positive response if it was
+   *            successful in doing so and a negative response if not.
+   * @return Return VSCP_ERROR_SUCCESS if logged in error code else.
+   *
+   */
+
+  int vscp_binary_callback_send(const void *pdata, vscpEventEx *pex);
+
 
   /**
    * @fn vscp_binary_callback_retr
@@ -301,13 +301,11 @@
    * VSCP_ERROR_INVALID_PERMISSION - (msg=vscp_binary_MSG_LOW_PRIVILEGE_ERROR) is returned
    *    if the user is not allowed to use send
    * VSCP_ERROR_RCV_EMPTY - (msg=vscp_binary_MSG_NO_MSG) is returned if no event is available.
-   * 
+   *
    * On a node that can't send events asynchoniously this callback can be used to get events.
    */
 
-  int
-  vscp_binary_callback_retr(const void* pdata, vscpEvent** pev);
-
+  int vscp_binary_callback_retr(const void *pdata, vscpEvent **pev);
 
   /**
    * @fn vscp_binary_callback_clrAll
@@ -315,16 +313,15 @@
    *
    * @param pdata Pointer to user data
    * @return Return VSCP_ERROR_SUCCESS if logged in error code else.
-   * 
+   *
    * On a node that can't send events asynchoniously this callback can be used to clear
    * the events in the input queue.
    */
 
-  int
-  vscp_binary_callback_clrAll(const void* pdata);
+  int vscp_binary_callback_clrAll(const void *pdata);
 
   /**
-   * @fn vscp_binary_callback_get_channel_id
+   * @fn vscp_binary_callback_get_chid
    * @brief Get channel id
    *
    * @param pdata Pointer to user data
@@ -332,8 +329,7 @@
    * @return Return VSCP_ERROR_SUCCESS on success, else error code.
    */
 
-  int
-  vscp_binary_callback_get_channel_id(const void* pdata, uint16_t* pchid);
+  int vscp_binary_callback_get_channel_id(const void *pdata, uint32_t *pchid);
 
   /**
    * @fn vscp_binary_callback_set_guid
@@ -344,8 +340,7 @@
    * @return Return VSCP_ERROR_SUCCESS on success, else error code.
    */
 
-  int
-  vscp_binary_callback_set_guid(const void* pdata, uint8_t* pguid);
+  int vscp_binary_callback_set_guid(const void *pdata, uint8_t *pguid);
 
   /**
    * @fn vscp_binary_callback_get_guid
@@ -356,8 +351,7 @@
    * @return Return VSCP_ERROR_SUCCESS on success, else error code.
    */
 
-  int
-  vscp_binary_callback_get_guid(const void* pdata, uint8_t* pguid);
+  int vscp_binary_callback_get_guid(const void *pdata, uint8_t *pguid);
 
   /**
    * @fn vscp_binary_callback_get_version
@@ -368,8 +362,7 @@
    * @return Return VSCP_ERROR_SUCCESS on success, else error code.
    */
 
-  int
-  vscp_binary_callback_get_version(const void* pdata, uint8_t* pversion);
+  int vscp_binary_callback_get_version(const void *pdata, uint8_t *pversion);
 
   /**
    * @fn vscp_binary_callback_setFilter
@@ -380,8 +373,7 @@
    * @return Return VSCP_ERROR_SUCCESS on success, else error code.
    */
 
-  int
-  vscp_binary_callback_setFilter(const void* pdata, vscpEventFilter* pfilter);
+  int vscp_binary_callback_setFilter(const void *pdata, vscpEventFilter *pfilter);
 
   /**
    * @fn vscp_binary_callback_setMask
@@ -392,8 +384,7 @@
    * @return Return VSCP_ERROR_SUCCESS on success, else error code.
    */
 
-  int
-  vscp_binary_callback_setMask(const void* pdata, vscpEventFilter* pfilter);
+  int vscp_binary_callback_setMask(const void *pdata, vscpEventFilter *pfilter);
 
   /**
    * @fn vscp_binary_callback_statistics
@@ -404,8 +395,7 @@
    * @return Return VSCP_ERROR_SUCCESS on success, else error code.
    */
 
-  int
-  vscp_binary_callback_statistics(const void* pdata, VSCPStatistics* pStatistics);
+  int vscp_binary_callback_statistics(const void *pdata, VSCPStatistics *pStatistics);
 
   /**
    * @fn vscp_binary_callback_info
@@ -416,8 +406,43 @@
    * @return Return VSCP_ERROR_SUCCESS on success, else error code.
    */
 
-  int
-  vscp_binary_callback_info(const void* pdata, VSCPStatus* pstatus);
+  int vscp_binary_callback_info(const void *pdata, VSCPStatus *pstatus);
+
+  /**
+   * @fn vscp_binary_callback_get_interface_count
+   * @brief Get number of defined interfaces.
+   *
+   * @param pdata Pointer to user data.
+   * @return Number of interfaces is returned. If no interfaces are defined
+   *         zero is returned (as expected).
+   */
+
+  uint16_t vscp_binary_callback_get_interface_count(const void *pdata);
+
+  /**
+   * @fn vscp_binary_callback_get_interface
+   * @brief Get one interface GUID.
+   *
+   * @param pdata Pointer to user data.
+   * @param index Index of interface to get.
+   * @param pif Pointer to interface information structure that wil get data for the interface.
+   * @return VSCP_ERROR_SUCCESS if an interface is returned. If not VSCP_ERROR_UNKNOWN_ITEM
+   *         is returned.
+   */
+
+  int vscp_binary_callback_get_interface(const void *pdata, uint16_t index, vscp_interface_info_t *pif);
+
+  /**
+   * @brief Close interface
+   *
+   * @param pdata Pointer to user data
+   * @param user pguid Pointer to GUID for interface to close.
+   *
+   * @return VSCP_ERROR_SUCCESS if the interface gest closed.
+   *  VSCP_ERROR_NOT_SUPPORTED if not supported. Other error
+   *  codes if an error occurs.
+   */
+  int vscp_binary_callback_close_interface(const void *pdata, uint8_t *pguid);
 
   /**
    *
@@ -437,8 +462,7 @@
    * transmit fifo to the client and send a '+OK\r\n' response each second to the client.
    */
 
-  int
-  vscp_binary_callback_rcvloop(const void* pdata, vscpEvent** pev);
+  int vscp_binary_callback_rcvloop(const void *pdata, vscpEvent **pev);
 
   /**
    * @fn vscp_binary_callback_wcyd
@@ -449,8 +473,7 @@
    * @return Return VSCP_ERROR_SUCCESS on success, else error code.
    */
 
-  int
-  vscp_binary_callback_wcyd(const void* pdata, uint64_t* pwcyd);
+  int vscp_binary_callback_wcyd(const void *pdata, uint64_t *pwcyd);
 
   /**
    * @fn vscp_binary_callback_shutdown
@@ -463,8 +486,7 @@
    * probably don't want to implement it.
    */
 
-  int
-  vscp_binary_callback_shutdown(const void* pdata);
+  int vscp_binary_callback_shutdown(const void *pdata);
 
   /**
    * @fn vscp_binary_callback_restart
@@ -477,8 +499,7 @@
    * probably don't want to implement it.
    */
 
-  int
-  vscp_binary_callback_restart(const void* pdata);
+  int vscp_binary_callback_restart(const void *pdata);
 
   // --------------------------------------------------------------------------
   //                                 Binary
@@ -491,8 +512,7 @@
    * @param pdata Pointer to context
    * @return Return VSCP_ERROR_SUCCESS on success, else error code.
    */
-  int
-  vscp_binary_callback_bretr(const void* pdata);
+  int vscp_binary_callback_bretr(const void *pdata);
 
   /**
    * @fn vscp_binary_callback_bsend
@@ -501,8 +521,7 @@
    * @param pdata Pointer to context
    * @return Return VSCP_ERROR_SUCCESS on success, else error code.
    */
-  int
-  vscp_binary_callback_bsend(const void* pdata);
+  int vscp_binary_callback_bsend(const void *pdata);
 
   /**
    * @fn vscp_binary_callback_brcvloop
@@ -512,8 +531,7 @@
    * @return Return VSCP_ERROR_SUCCESS on success, else error code.
    */
 
-  int
-  vscp_binary_callback_brcvloop(const void* pdata);
+  int vscp_binary_callback_brcvloop(const void *pdata);
 
   /**
    * @fn vscp_binary_callback_sec
@@ -528,8 +546,7 @@
    * @return Return VSCP_ERROR_SUCCESS on success, else error code.
    */
 
-  int
-  vscp_binary_callback_sec(const void* pdata);
+  int vscp_binary_callback_sec(const void *pdata);
 
   /**
   @}

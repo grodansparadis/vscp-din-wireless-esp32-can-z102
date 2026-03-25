@@ -5736,7 +5736,7 @@ start_webserver(void)
   cfg.uri_match_fn = httpd_uri_match_wildcard;
 
   cfg.max_uri_handlers = 20;
-  cfg.max_open_sockets  = 12;
+  cfg.max_open_sockets  = 7; 
 
   // extern const unsigned char servercert_start[] asm("_binary_servercert_pem_start");
   // extern const unsigned char servercert_end[] asm("_binary_servercert_pem_end");

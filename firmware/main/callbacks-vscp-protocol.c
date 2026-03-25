@@ -76,7 +76,7 @@ extern struct _eeprom_ eeprom;
 int
 vscp_frmw2_callback_get_ms(void* const puserdata, uint32_t *ptime)
 {
-  if ((NULL == puserdata) || (NULL == ptime)) {
+  if (NULL == ptime) {
     return VSCP_ERROR_INVALID_POINTER;
   }
 

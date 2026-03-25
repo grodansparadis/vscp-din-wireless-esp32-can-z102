@@ -305,18 +305,18 @@ vscp_ws1_handle_binary_protocol_request(const uint8_t *pframe, uint16_t len, vsc
 
     uint16_t command = (uint16_t) pbuf[1] << 8 | (uint8_t) pbuf[2];
 
-    vscp_ws1_handle_binary_command(command, parg, pctx);
+    vscp_handle_binary_command(command, parg, pctx);
   }
   // Reply
   else if (0xf0 == (pbuf[0] & 0xf0)) {
     frame_type = VSCP_WS1_PKT_TYPE_POSITIVE_RESPONSE;
   }
-  // Received event
+  // Event
   else if (0x00 == (pbuf[0] & 0xf0)) {
     frame_type        = VSCP_WS1_PKT_TYPE_EVENT;
     vscpEvent *pEvent = NULL;
     // Parse event data from packet (p should be in the format "E;head;
-    vscp_ws1_callback_event(pEvent, pctx);
+    vscp_handle_binary_event(pEvent, pctx);
   }
   // Positive respone
   // else if (*p == '+') {

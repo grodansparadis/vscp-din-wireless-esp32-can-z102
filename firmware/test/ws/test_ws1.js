@@ -9,7 +9,7 @@
 WebSocket = require('ws');
 const crypto = require('crypto');
 
-const defaultUrl = 'ws://192.168.1.100:8884/ws1';
+const defaultUrl = 'ws://192.168.1.104:8884/ws1';
 const DEFAULT_USERNAME = 'vscp';
 const DEFAULT_PASSWORD = 'secret';
 const DEFAULT_KEY_HEX = 'A4A86F7D7E119BA3F0CD06881E371B98';
