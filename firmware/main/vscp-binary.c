@@ -79,7 +79,7 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
     if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_getEventExFromFrame(&ex, parg, len))) {
       return vscp_binary_callback_reply(pdata, command, rv, NULL, 0);
     }
-    return vscp_binary_callback_send(pdata, &ex);
+    return vscp_binary_callback_send_eventex(pdata, &ex);
   }
   else if (VSCP_BINARY_COMMAND_CODE_RETR == command) {
     uint16_t count = 1; // Default to retrieving one event
@@ -258,7 +258,7 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
       return rv;
     }
     // Send reply with GUID
-    return vscp_handle_binary_reply(pdata, command, VSCP_ERROR_SUCCESS, NULL, 0);
+    return vscp_binary_callback_reply(pdata, command, VSCP_ERROR_SUCCESS, NULL, 0);
   }
   else if (VSCP_BINARY_COMMAND_CODE_GETGUID == command) {
     uint8_t guid[16];
@@ -266,7 +266,7 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
       return vscp_binary_callback_reply(pdata, command, rv, NULL, 0);
     }
     // Send reply with GUID
-    return vscp_handle_binary_reply(pdata, command, VSCP_ERROR_SUCCESS, guid, 16);
+    return vscp_binary_callback_reply(pdata, command, VSCP_ERROR_SUCCESS, guid, 16);
   }
   else if (VSCP_BINARY_COMMAND_CODE_VERSION == command) {
     uint8_t version[6];
@@ -274,7 +274,7 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
       return vscp_binary_callback_reply(pdata, command, rv, NULL, 0);
     }
     // Send reply with version
-    return vscp_handle_binary_reply(pdata, command, VSCP_ERROR_SUCCESS, version, sizeof(version));
+    return vscp_binary_callback_reply(pdata, command, VSCP_ERROR_SUCCESS, version, sizeof(version));
   }
   else if (VSCP_BINARY_COMMAND_CODE_SETFILTER == command) {
     vscpEventFilter filter;
@@ -440,12 +440,3 @@ vscp_handle_binary_event(const void *pdata, vscpEvent *pEvent)
   return VSCP_ERROR_SUCCESS;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// vscp_handle_binary_reply
-//
-
-// int
-// vscp_handle_binary_reply(const void *pdata, uint16_t command, uint16_t error, const char *parg, size_t len)
-// {
-//   return VSCP_ERROR_SUCCESS;
-// }
