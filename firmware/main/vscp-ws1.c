@@ -4,7 +4,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2000-2026 Ake Hedman,
+ * Copyright (C) 2000-2026 Ake Hedman,
  * The VSCP Project <info@grodansparadis.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -41,8 +41,9 @@
 #include "vscp-compiler.h"
 #include "vscp-projdefs.h"
 
-#include "vscp.h"
+#include <vscp.h>
 
+#include <vscp-binary.h>
 #include "vscp-ws1.h"
 
 #define TAG __func__
@@ -173,7 +174,7 @@ vscp_ws1_generate_sid(uint8_t *sid, size_t size, vscp_ws_connection_context_t *p
 int
 vscp_ws1_handle_text_protocol_request(const char *pframe, uint16_t len, vscp_ws_connection_context_t *pctx)
 {
-  uint8_t frame_type = VSCP_WS1_PKT_TYPE_UNKNOWN;
+  //uint8_t frame_type = VSCP_WS1_PKT_TYPE_UNKNOWN;
   char frame_buf[VSCP_WS1_MAX_PACKET_SIZE];
   char *pCommand; // Pointer to command part of packet
 
@@ -189,7 +190,7 @@ vscp_ws1_handle_text_protocol_request(const char *pframe, uint16_t len, vscp_ws_
 
   // Command
   if (*p == 'C') {
-    frame_type = VSCP_WS1_PKT_TYPE_COMMAND;
+    //frame_type = VSCP_WS1_PKT_TYPE_COMMAND;
     p++;
     if (';' != *p) {
       // Malformed packet, command part must be separated by ';'
@@ -220,18 +221,18 @@ vscp_ws1_handle_text_protocol_request(const char *pframe, uint16_t len, vscp_ws_
   }
   // Received event
   else if (*p == 'E') {
-    frame_type        = VSCP_WS1_PKT_TYPE_EVENT;
+    //frame_type        = VSCP_WS1_PKT_TYPE_EVENT;
     vscpEvent *pEvent = NULL;
     // Parse event data from packet (p should be in the format "E;head;
     vscp_ws1_callback_event(pEvent, pctx);
   }
   // Positive respone
   else if (*p == '+') {
-    frame_type = VSCP_WS1_PKT_TYPE_POSITIVE_RESPONSE;
+    //frame_type = VSCP_WS1_PKT_TYPE_POSITIVE_RESPONSE;
   }
   // Negative response
   else if (*p == '-') {
-    frame_type = VSCP_WS1_PKT_TYPE_NEGATIVE_RESPONSE;
+    //frame_type = VSCP_WS1_PKT_TYPE_NEGATIVE_RESPONSE;
   }
   // Unknown packet type
   else {
@@ -253,7 +254,7 @@ int
 vscp_ws1_handle_binary_protocol_request(const uint8_t *pframe, uint16_t len, vscp_ws_connection_context_t *pctx)
 {
   int rv;
-  uint8_t frame_type = VSCP_WS1_PKT_TYPE_UNKNOWN;
+  //uint8_t frame_type = VSCP_WS1_PKT_TYPE_UNKNOWN;
   // char frame_buf[1 + VSCP_BINARY_PACKET0_HEADER_LENGTH + 2 +
   //                512]; // Buffer to hold the binary frame, size should be enough to hold the largest expected frame
 
@@ -299,24 +300,25 @@ vscp_ws1_handle_binary_protocol_request(const uint8_t *pframe, uint16_t len, vsc
 
   // Command
   if (0xe0 == (pbuf[0] & 0xf0)) {
-
+    
     const uint8_t *parg = pbuf + 3; // Point at argument part of packet (after header and command bytes)
-    frame_type = VSCP_WS1_PKT_TYPE_COMMAND;
+    //frame_type = VSCP_WS1_PKT_TYPE_COMMAND;
 
     uint16_t command = (uint16_t) pbuf[1] << 8 | (uint8_t) pbuf[2];
 
-    vscp_handle_binary_command(command, parg, pctx);
+    // Pass command and argument to command handler callback
+    vscp_handle_binary_command(pctx, command, parg, len - 3);
   }
   // Reply
   else if (0xf0 == (pbuf[0] & 0xf0)) {
-    frame_type = VSCP_WS1_PKT_TYPE_POSITIVE_RESPONSE;
+    //frame_type = VSCP_WS1_PKT_TYPE_POSITIVE_RESPONSE;
   }
   // Event
   else if (0x00 == (pbuf[0] & 0xf0)) {
-    frame_type        = VSCP_WS1_PKT_TYPE_EVENT;
+    //frame_type        = VSCP_WS1_PKT_TYPE_EVENT;
     vscpEvent *pEvent = NULL;
     // Parse event data from packet (p should be in the format "E;head;
-    vscp_handle_binary_event(pEvent, pctx);
+    vscp_handle_binary_event(pctx, pEvent);
   }
   // Positive respone
   // else if (*p == '+') {
@@ -584,7 +586,7 @@ vscp_ws1_handle_command(const char *pCommand, const char *parg, vscp_ws_connecti
     }
   }
   else if (strcmp(command_buf, "OPEN") == 0) {
-    char wrkbuf[80] = { 0 };
+    //char wrkbuf[80] = { 0 };
     if (VSCP_ERROR_SUCCESS != (rv = vscp_ws1_callback_open(pctx))) {
       ESP_LOGE(TAG, "Failed to open WS1 connection rv=%d", rv);
       sprintf(buf, "-;OPEN;%d,%s", VSCP_WS1_ERROR_GENERAL, VSCP_WS1_STR_ERROR_GENERAL);

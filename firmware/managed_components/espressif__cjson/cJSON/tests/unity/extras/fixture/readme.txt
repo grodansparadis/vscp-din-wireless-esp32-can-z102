@@ -1,7 +1,7 @@
-Copyright (c) 2010 James Grenning and Contributed to Unity Project
+Copyright (C) 2010 James Grenning and Contributed to Unity Project
 
 Unity Project - A Test Framework for C
-Copyright (c) 2007 Mike Karlesky, Mark VanderVoord, Greg Williams
+Copyright (C) 2007 Mike Karlesky, Mark VanderVoord, Greg Williams
 [Released under MIT License. Please refer to license.txt for details]
 
 This Framework is an optional add-on to Unity.  By including unity_framework.h in place of unity.h,

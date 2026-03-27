@@ -1,7 +1,7 @@
 /*
  * QR Code generator library (C)
  *
- * Copyright (c) Project Nayuki. (MIT License)
+ * Copyright (C) Project Nayuki. (MIT License)
  * https://www.nayuki.io/page/qr-code-generator-library
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of

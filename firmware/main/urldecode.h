@@ -1,7 +1,7 @@
 /*
 The MIT License (MIT)
 
-Copyright (c) 2016 Abe Fehr
+Copyright (C) 2016 Abe Fehr
 https://github.com/abejfehr/URLDecode
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated 

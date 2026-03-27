@@ -1,7 +1,7 @@
 #! python3
 # ==========================================
 #   Unity Project - A Test Framework for C
-#   Copyright (c) 2015 Alexander Mueller / XelaRellum@web.de
+#   Copyright (C) 2015 Alexander Mueller / XelaRellum@web.de
 #   [Released under MIT License. Please refer to license.txt for details]
 #   Based on the ruby script by  Mike Karlesky, Mark VanderVoord, Greg Williams
 # ==========================================
