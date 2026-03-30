@@ -418,6 +418,9 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
   else if (VSCP_BINARY_COMMAND_CODE_RESTART == command) {
     return vscp_binary_callback_restart(pdata);
   }
+  else if (VSCP_BINARY_COMMAND_CODE_TEXT == command) {
+    return vscp_binary_callback_text(pdata);
+  }
   else if (command >= VSCP_BINARY_COMMAND_CODE_USER_START) {
     // User defined command, pass to callback
     return vscp_binary_callback_user_command(pdata, command, parg, len);
@@ -437,6 +440,10 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
 int
 vscp_handle_binary_event(const void *pdata, vscpEvent *pEvent)
 {
-  return VSCP_ERROR_SUCCESS;
+  if (NULL == pEvent) {
+    return VSCP_ERROR_PARAMETER;
+  }
+
+  return vscp_binary_callback_event_received(pdata, pEvent);
 }
 

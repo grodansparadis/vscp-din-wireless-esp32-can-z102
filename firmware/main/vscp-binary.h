@@ -70,6 +70,7 @@
 #define VSCP_BINARY_COMMAND_CODE_WCYD      0x001F /* WCYD - What Can You Do */
 #define VSCP_BINARY_COMMAND_CODE_SHUTDOWN  0x0020 /* Shutdown device (privileged command) */
 #define VSCP_BINARY_COMMAND_CODE_RESTART   0x0021 /* Restart device (privileged command) */
+#define VSCP_BINARY_COMMAND_CODE_TEXT      0x0022 /* Return to text mode */
 
 #define VSCP_BINARY_COMMAND_CODE_USER_START 0xFF00 /* Start for user command range */
 
@@ -592,6 +593,21 @@
    */
 
   int vscp_binary_callback_restart(const void *pdata);
+
+
+  /*!
+    * @fn vscp_binary_callback_text
+    * @brief Return to text mode
+    *
+    * @param pdata Pointer to context
+    * @return Return VSCP_ERROR_SUCCESS on success, else error code.
+    *
+    * This callback is executed when the client sends the 'text' command. 
+    * The callback should switch the connection back to text mode and return 
+    * a positive response if the connection was successfully switched, or a 
+    * negative response if there was a failure.
+  */
+  int vscp_binary_callback_text(const void *pdata);
 
   /**
    * @fn vscp_binary_callback_retreive

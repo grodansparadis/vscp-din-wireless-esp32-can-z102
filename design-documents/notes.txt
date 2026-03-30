@@ -63,6 +63,12 @@ WIFI
 STATUS
 BUS_OFF (optional): Outputs a low logic level (0 V) when the TWAI controller enters the bus-off state. Otherwise, it remains at a high logic level (3.3 V).
 
+Input pins
+
+Switches
+========
+1 - REST
+2 - Contgrol
 
 {
 	"vscpHead":	96,

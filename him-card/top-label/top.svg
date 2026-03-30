@@ -1,0 +1,1414 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="40mm"
+   height="34mm"
+   viewBox="0 0 40 34"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4.2 (ebf0e940d0, 2025-05-08)"
+   sodipodi:docname="top.svg"
+   xml:space="preserve"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:ooo="http://xml.openoffice.org/svg/export"><title
+     id="title1">vscp-din-wireless-esp32-can-z102</title><sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     showgrid="true"
+     inkscape:zoom="7.3091146"
+     inkscape:cx="75.590551"
+     inkscape:cy="54.110521"
+     inkscape:window-width="1872"
+     inkscape:window-height="1011"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1"><inkscape:grid
+       id="grid1"
+       units="mm"
+       originx="0"
+       originy="0"
+       spacingx="0.26458333"
+       spacingy="0.26458333"
+       empcolor="#0099e5"
+       empopacity="0.30196078"
+       color="#0099e5"
+       opacity="0.14901961"
+       empspacing="5"
+       enabled="true"
+       visible="true" /></sodipodi:namedview><defs
+     id="defs1"><clipPath
+       id="presentation_clip_path"
+       clipPathUnits="userSpaceOnUse">
+   <rect
+   x="0"
+   y="0"
+   width="29700"
+   height="21000"
+   id="rect1-5" />
+  </clipPath><g
+       ooo:slide="id1"
+       ooo:id-list="id3 id4 id5 id6 id7 id8 id9 id10 id11 id12 id13 id14 id15 id16 id17 id18 id19 id20 id21 id22 id23 id24 id25 id26 id27 id28 id29 id30 id31 id32 id33 id34 id35 id36 id37 id38 id39 id40 id41 id42 id43 id44 id45 id46 id47 id48 id49 id50 id51 id52 id53"
+       id="g1" /><g
+       id="bullet-char-template(57356)"
+       transform="scale(0.00048828125,-0.00048828125)">
+   <path
+   d="M 580,1141 L 1163,571 580,0 -4,571 580,1141 Z"
+   id="path2" />
+  </g><g
+       id="bullet-char-template(57354)"
+       transform="scale(0.00048828125,-0.00048828125)">
+   <path
+   d="M 8,1128 L 1137,1128 1137,0 8,0 8,1128 Z"
+   id="path3" />
+  </g><g
+       id="bullet-char-template(10146)"
+       transform="scale(0.00048828125,-0.00048828125)">
+   <path
+   d="M 174,0 L 602,739 174,1481 1456,739 174,0 Z M 1358,739 L 309,1346 659,739 1358,739 Z"
+   id="path4" />
+  </g><g
+       id="bullet-char-template(10132)"
+       transform="scale(0.00048828125,-0.00048828125)">
+   <path
+   d="M 2015,739 L 1276,0 717,0 1260,543 174,543 174,936 1260,936 717,1481 1274,1481 2015,739 Z"
+   id="path5" />
+  </g><g
+       id="bullet-char-template(10007)"
+       transform="scale(0.00048828125,-0.00048828125)">
+   <path
+   d="M 0,-2 C -7,14 -16,27 -25,37 L 356,567 C 262,823 215,952 215,954 215,979 228,992 255,992 264,992 276,990 289,987 310,991 331,999 354,1012 L 381,999 492,748 772,1049 836,1024 860,1049 C 881,1039 901,1025 922,1006 886,937 835,863 770,784 769,783 710,716 594,584 L 774,223 C 774,196 753,168 711,139 L 727,119 C 717,90 699,76 672,76 641,76 570,178 457,381 L 164,-76 C 142,-110 111,-127 72,-127 30,-127 9,-110 8,-76 1,-67 -2,-52 -2,-32 -2,-23 -1,-13 0,-2 Z"
+   id="path6" />
+  </g><g
+       id="bullet-char-template(10004)"
+       transform="scale(0.00048828125,-0.00048828125)">
+   <path
+   d="M 285,-33 C 182,-33 111,30 74,156 52,228 41,333 41,471 41,549 55,616 82,672 116,743 169,778 240,778 293,778 328,747 346,684 L 369,508 C 377,444 397,411 428,410 L 1163,1116 C 1174,1127 1196,1133 1229,1133 1271,1133 1292,1118 1292,1087 L 1292,965 C 1292,929 1282,901 1262,881 L 442,47 C 390,-6 338,-33 285,-33 Z"
+   id="path7" />
+  </g><g
+       id="bullet-char-template(9679)"
+       transform="scale(0.00048828125,-0.00048828125)">
+   <path
+   d="M 813,0 C 632,0 489,54 383,161 276,268 223,411 223,592 223,773 276,916 383,1023 489,1130 632,1184 813,1184 992,1184 1136,1130 1245,1023 1353,916 1407,772 1407,592 1407,412 1353,268 1245,161 1136,54 992,0 813,0 Z"
+   id="path8" />
+  </g><g
+       id="bullet-char-template(8226)"
+       transform="scale(0.00048828125,-0.00048828125)">
+   <path
+   d="M 346,457 C 273,457 209,483 155,535 101,586 74,649 74,723 74,796 101,859 155,911 209,963 273,989 346,989 419,989 480,963 531,910 582,859 608,796 608,723 608,648 583,586 532,535 482,483 420,457 346,457 Z"
+   id="path9" />
+  </g><g
+       id="bullet-char-template(8211)"
+       transform="scale(0.00048828125,-0.00048828125)">
+   <path
+   d="M -4,459 L 1135,459 1135,606 -4,606 -4,459 Z"
+   id="path10" />
+  </g><mask
+       id="mask1">
+         <g
+   id="g14">
+          <defs
+   id="defs14">
+           <linearGradient
+   id="gradient1"
+   x1="13823"
+   y1="3377"
+   x2="13823"
+   y2="9687"
+   gradientUnits="userSpaceOnUse">
+            <stop
+   offset="0.5"
+   style="stop-color:rgb(217,217,217)"
+   id="stop11" />
+            <stop
+   offset="0.5"
+   style="stop-color:rgb(217,217,217)"
+   id="stop12" />
+            <stop
+   offset="1"
+   style="stop-color:rgb(217,217,217)"
+   id="stop13" />
+            <stop
+   offset="1"
+   style="stop-color:rgb(217,217,217)"
+   id="stop14" />
+           </linearGradient>
+          </defs>
+          <path
+   style="fill:url(#gradient1)"
+   d="M 12000,3377 L 15647,3377 15647,9687 12000,9687 12000,3377 Z"
+   id="path14" />
+         </g>
+        </mask><linearGradient
+       id="linearGradient4"
+       x1="13823"
+       y1="3377"
+       x2="13823"
+       y2="9687"
+       gradientUnits="userSpaceOnUse">
+            <stop
+   offset="0.5"
+   style="stop-color:rgb(217,217,217)"
+   id="stop1" />
+            <stop
+   offset="0.5"
+   style="stop-color:rgb(217,217,217)"
+   id="stop2" />
+            <stop
+   offset="1"
+   style="stop-color:rgb(217,217,217)"
+   id="stop3" />
+            <stop
+   offset="1"
+   style="stop-color:rgb(217,217,217)"
+   id="stop4" />
+           </linearGradient><linearGradient
+       id="gradient2"
+       x1="12912"
+       y1="3132"
+       x2="14734"
+       y2="9932"
+       gradientUnits="userSpaceOnUse">
+           <stop
+   offset="0"
+   style="stop-color:rgb(32,74,135)"
+   id="stop15" />
+           <stop
+   offset="1"
+   style="stop-color:rgb(114,159,207)"
+   id="stop16" />
+          </linearGradient><mask
+       id="mask2">
+         <g
+   id="g77">
+          <defs
+   id="defs77">
+           <linearGradient
+   id="gradient3"
+   x1="17208"
+   y1="4028"
+   x2="17208"
+   y2="10587"
+   gradientUnits="userSpaceOnUse">
+            <stop
+   offset="0.5"
+   style="stop-color:rgb(217,217,217)"
+   id="stop74" />
+            <stop
+   offset="0.5"
+   style="stop-color:rgb(217,217,217)"
+   id="stop75" />
+            <stop
+   offset="1"
+   style="stop-color:rgb(217,217,217)"
+   id="stop76" />
+            <stop
+   offset="1"
+   style="stop-color:rgb(217,217,217)"
+   id="stop77" />
+           </linearGradient>
+          </defs>
+          <path
+   style="fill:url(#gradient3)"
+   d="M 14400,4028 L 20017,4028 20017,10587 14400,10587 14400,4028 Z"
+   id="path77" />
+         </g>
+        </mask><linearGradient
+       id="linearGradient8"
+       x1="17208"
+       y1="4028"
+       x2="17208"
+       y2="10587"
+       gradientUnits="userSpaceOnUse">
+            <stop
+   offset="0.5"
+   style="stop-color:rgb(217,217,217)"
+   id="stop5" />
+            <stop
+   offset="0.5"
+   style="stop-color:rgb(217,217,217)"
+   id="stop6" />
+            <stop
+   offset="1"
+   style="stop-color:rgb(217,217,217)"
+   id="stop7" />
+            <stop
+   offset="1"
+   style="stop-color:rgb(217,217,217)"
+   id="stop8" />
+           </linearGradient><linearGradient
+       id="gradient4"
+       x1="16200"
+       y1="3546"
+       x2="18216"
+       y2="11069"
+       gradientUnits="userSpaceOnUse">
+           <stop
+   offset="0"
+   style="stop-color:rgb(32,74,135)"
+   id="stop78" />
+           <stop
+   offset="1"
+   style="stop-color:rgb(114,159,207)"
+   id="stop79" />
+          </linearGradient></defs><g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"><rect
+       style="fill:#000080;fill-opacity:0.979858;stroke:#030807;stroke-width:0.555625;stroke-opacity:0.00123225"
+       id="rect1"
+       width="40"
+       height="34"
+       x="0"
+       y="0"
+       inkscape:label="background"
+       sodipodi:insensitive="true" /><text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.70735px;font-family:Sans;-inkscape-font-specification:'Sans, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#d4aa00;fill-opacity:0.979858;stroke:#030807;stroke-width:0.112045;stroke-opacity:0.0025612"
+       x="3.4687927"
+       y="30.066452"
+       id="text108-3"
+       sodipodi:insensitive="true"><tspan
+         sodipodi:role="line"
+         id="tspan108-3"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.70735px;font-family:Sans;-inkscape-font-specification:'Sans, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#d4aa00;stroke:#030807;stroke-width:0.112045;stroke-opacity:0.0025612"
+         x="3.4687927"
+         y="30.066452">Control</tspan></text><text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.70735px;font-family:Sans;-inkscape-font-specification:'Sans, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#d4aa00;fill-opacity:0.979858;stroke:#030807;stroke-width:0.112045;stroke-opacity:0.0025612"
+       x="31.226562"
+       y="29.879194"
+       id="text108-4"
+       sodipodi:insensitive="true"><tspan
+         sodipodi:role="line"
+         id="tspan108-8"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.70735px;font-family:Sans;-inkscape-font-specification:'Sans, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#d4aa00;stroke:#030807;stroke-width:0.112045;stroke-opacity:0.0025612"
+         x="31.226562"
+         y="29.879194">Reset</tspan></text><text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.70735px;font-family:Sans;-inkscape-font-specification:'Sans, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#d4aa00;fill-opacity:0.979858;stroke:#030807;stroke-width:0.112045;stroke-opacity:0.0025612"
+       x="30.92691"
+       y="8.9831009"
+       id="text108-83"
+       sodipodi:insensitive="true"><tspan
+         sodipodi:role="line"
+         id="tspan108-1"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.70735px;font-family:Sans;-inkscape-font-specification:'Sans, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#d4aa00;stroke:#030807;stroke-width:0.112045;stroke-opacity:0.0025612"
+         x="30.92691"
+         y="8.9831009">Status</tspan></text><text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:2.8121px;font-family:Sans;-inkscape-font-specification:'Sans, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#d4aa00;fill-opacity:0.979858;stroke:#030807;stroke-width:0.915145;stroke-opacity:0.0025612"
+       x="1.5772362"
+       y="17.280451"
+       id="text109"
+       transform="scale(1.0920454,0.91571285)"><tspan
+         sodipodi:role="line"
+         id="tspan109"
+         style="stroke-width:0.915145;fill:#d4aa00"
+         x="1.5772362"
+         y="17.280451">CAN4VSCP wifi gateway</tspan></text><text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.70735px;font-family:Sans;-inkscape-font-specification:'Sans, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#d4aa00;fill-opacity:0.979858;stroke:#030807;stroke-width:0.555625;stroke-opacity:0.0025612"
+       x="2.171705"
+       y="13.490184"
+       id="text110"><tspan
+         sodipodi:role="line"
+         id="tspan110"
+         style="stroke-width:0.555625;fill:#d4aa00"
+         x="2.171705"
+         y="13.490184">Frankfurt</tspan></text><text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.70735px;font-family:Sans;-inkscape-font-specification:'Sans, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#d4aa00;fill-opacity:0.979858;stroke:#030807;stroke-width:0.555625;stroke-opacity:0.0025612"
+       x="20.867174"
+       y="18.537088"
+       id="text111"><tspan
+         sodipodi:role="line"
+         id="tspan111"
+         style="stroke-width:0.555625;fill:#d4aa00"
+         x="20.867174"
+         y="18.537088">Grodans Paradis AB</tspan></text></g><g
+     inkscape:groupmode="layer"
+     id="layer2"
+     inkscape:label="Layer 2"><circle
+       style="display:inline;fill:#02020b;fill-opacity:0.979858;stroke:#030807;stroke-width:0.555625;stroke-opacity:0.807843"
+       id="path1"
+       cx="9.6361303"
+       cy="4.9826035"
+       r="2"
+       inkscape:label="led1"
+       sodipodi:insensitive="true" /><circle
+       style="fill:#02020b;fill-opacity:0.979858;stroke:#030807;stroke-width:0.555625;stroke-opacity:0.807843"
+       id="path1-7"
+       cx="25.824104"
+       cy="4.9826035"
+       r="2"
+       inkscape:label="led2"
+       inkscape:transform-center-x="-2.0342466"
+       sodipodi:insensitive="true" /><circle
+       style="fill:#02020b;fill-opacity:0.979858;stroke:#030807;stroke-width:0.555625;stroke-opacity:0.807843"
+       id="path1-7-8"
+       cx="33.656109"
+       cy="4.9826035"
+       r="2"
+       inkscape:label="led3"
+       sodipodi:insensitive="true" /><circle
+       style="fill:#02020b;fill-opacity:0.979858;stroke:#030807;stroke-width:0.555625;stroke-opacity:0.807843"
+       id="path1-7-8-1"
+       cx="6.614583"
+       cy="25.781248"
+       r="2"
+       inkscape:label="switch1"
+       sodipodi:insensitive="true" /><circle
+       style="fill:#02020b;fill-opacity:0.979858;stroke:#030807;stroke-width:0.555625;stroke-opacity:0.807843"
+       id="path1-7-8-1-9"
+       cx="33.656109"
+       cy="25.781248"
+       r="2"
+       inkscape:label="switch2"
+       sodipodi:insensitive="true" /></g><g
+     inkscape:groupmode="layer"
+     id="layer3"
+     inkscape:label="Text"><text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.70735px;font-family:Sans;-inkscape-font-specification:'Sans, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#d4aa00;fill-opacity:0.979858;stroke:#030807;stroke-width:0.112045;stroke-opacity:0.0025612"
+       x="6.971314"
+       y="9.1828299"
+       id="text108"
+       sodipodi:insensitive="true"><tspan
+         sodipodi:role="line"
+         id="tspan108"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.70735px;font-family:Sans;-inkscape-font-specification:'Sans, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#d4aa00;stroke:#030807;stroke-width:0.112045;stroke-opacity:0.0025612"
+         x="6.971314"
+         y="9.1828299">Power</tspan></text><text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.70735px;font-family:Sans;-inkscape-font-specification:'Sans, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#d4aa00;fill-opacity:0.979858;stroke:#030807;stroke-width:0.112045;stroke-opacity:0.0025612"
+       x="24.069799"
+       y="9.0223675"
+       id="text108-8"
+       sodipodi:insensitive="true"><tspan
+         sodipodi:role="line"
+         id="tspan108-5"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.70735px;font-family:Sans;-inkscape-font-specification:'Sans, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#d4aa00;stroke:#030807;stroke-width:0.112045;stroke-opacity:0.0025612"
+         x="24.069799"
+         y="9.0223675">WiFi</tspan></text></g><g
+     inkscape:groupmode="layer"
+     id="layer4"
+     inkscape:label="Graphics"><g
+       style="fill-rule:evenodd;stroke-width:28.222;stroke-linejoin:round"
+       id="g108"
+       transform="matrix(3.3404083e-4,0,0,3.2744255e-4,15.473072,21.562491)"><g
+         id="g11">
+  <g
+   id="id2"
+   class="Master_Slide">
+   <g
+   id="bg-id2"
+   class="Background" />
+   <g
+   id="bo-id2"
+   class="BackgroundObjects" />
+  </g>
+ </g><g
+         class="SlideGroup"
+         id="g107">
+  <g
+   id="g106">
+   <g
+   id="id1"
+   class="Slide"
+   clip-path="url(#presentation_clip_path)">
+    <g
+   class="Page"
+   id="g105">
+     <g
+   class="com.sun.star.drawing.ClosedBezierShape"
+   id="g20">
+      <g
+   id="id3">
+       <defs
+   id="defs15">
+        <mask
+   id="mask18">
+         <g
+   id="g18">
+          <defs
+   id="defs18">
+           <linearGradient
+   id="linearGradient18"
+   x1="13823"
+   y1="3377"
+   x2="13823"
+   y2="9687"
+   gradientUnits="userSpaceOnUse">
+            <stop
+   offset="0.5"
+   style="stop-color:rgb(217,217,217)"
+   id="stop9" />
+            <stop
+   offset="0.5"
+   style="stop-color:rgb(217,217,217)"
+   id="stop10" />
+            <stop
+   offset="1"
+   style="stop-color:rgb(217,217,217)"
+   id="stop17" />
+            <stop
+   offset="1"
+   style="stop-color:rgb(217,217,217)"
+   id="stop18" />
+           </linearGradient>
+          </defs>
+          <path
+   style="fill:url(#gradient1)"
+   d="m 12000,3377 h 3647 v 6310 h -3647 z"
+   id="path18" />
+         </g>
+        </mask>
+       </defs>
+       <g
+   mask="url(#mask1)"
+   id="g17">
+        <g
+   id="g16">
+         <defs
+   id="defs16">
+          <linearGradient
+   id="linearGradient20"
+   x1="12912"
+   y1="3132"
+   x2="14734"
+   y2="9932"
+   gradientUnits="userSpaceOnUse">
+           <stop
+   offset="0"
+   style="stop-color:rgb(32,74,135)"
+   id="stop19" />
+           <stop
+   offset="1"
+   style="stop-color:rgb(114,159,207)"
+   id="stop20" />
+          </linearGradient>
+         </defs>
+         <path
+   style="fill:url(#gradient2)"
+   d="m 12700,9687 -145,-317 -133,-345 -119,-366 -103,-378 -84,-383 -63,-380 -39,-368 -14,-350 47,-497 13,-111 7,-37 8,-30 225,-525 178,-301 160,-235 140,-176 63,-68 59,-57 54,-47 49,-37 45,-28 40,-21 35,-15 30,-9 26,-5 21,-1 361,-383 336,-320 159,-134 153,-116 148,-96 143,-76 138,-55 134,-33 66,-8 64,-2 64,4 62,10 62,16 61,22 60,28 59,36 116,90 114,117 65,223 45,218 27,216 10,213 -5,212 -19,211 -73,426 -111,434 -136,452 -303,982 -500,2100 h -500 l -700,200 z"
+   id="path16" />
+        </g>
+       </g>
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 12700,9687 c -400,-800 -700,-1987 -700,-2887 100,-1000 0,-400 300,-1200 500,-900 800,-1000 900,-1000 1000,-1100 1700,-1600 2300,-900 400,1200 -100,2187 -500,3587 l -500,2100 h -500 l -700,200 z"
+   id="path17" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.CustomShape"
+   id="g21">
+      <g
+   id="id4">
+       <path
+   fill="#808080"
+   stroke="none"
+   d="m 15350,9600 c 3317,0 5850,1580 5850,3649 0,2069 -2533,3650 -5850,3650 -3317,0 -5850,-1581 -5850,-3650 0,-2069 2533,-3649 5850,-3649 z m -5850,0 z m 11701,7301 z"
+   id="path20" />
+       <path
+   fill="none"
+   stroke="#808080"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="m 15350,9600 c 3317,0 5850,1580 5850,3649 0,2069 -2533,3650 -5850,3650 -3317,0 -5850,-1581 -5850,-3650 0,-2069 2533,-3649 5850,-3649 z"
+   id="path19" />
+       <path
+   fill="#ffd320"
+   stroke="none"
+   d="m 15150,9400 c 3317,0 5850,1580 5850,3649 0,2069 -2533,3650 -5850,3650 -3317,0 -5850,-1581 -5850,-3650 0,-2069 2533,-3649 5850,-3649 z m -5850,0 z m 11701,7301 z"
+   id="path21" />
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="m 15150,9400 c 3317,0 5850,1580 5850,3649 0,2069 -2533,3650 -5850,3650 -3317,0 -5850,-1581 -5850,-3650 0,-2069 2533,-3649 5850,-3649 z"
+   id="path22" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.CustomShape"
+   id="g25">
+      <g
+   id="id5">
+       <path
+   fill="#808080"
+   stroke="none"
+   d="m 9564,8763 c 1758,-32 3101,1092 3101,2594 0,1502 -1343,2674 -3101,2705 -1758,32 -3100,-1093 -3100,-2595 0,-1502 1342,-2673 3100,-2704 z m -3100,55 z m 6202,5190 z"
+   id="path23" />
+       <path
+   fill="none"
+   stroke="#808080"
+   stroke-width="200"
+   stroke-linejoin="round"
+   d="m 9564,8763 c 1758,-32 3101,1092 3101,2594 0,1502 -1343,2674 -3101,2705 -1758,32 -3100,-1093 -3100,-2595 0,-1502 1342,-2673 3100,-2704 z"
+   id="path24" />
+       <path
+   fill="#ffd320"
+   stroke="none"
+   d="m 9364,8563 c 1758,-32 3101,1092 3101,2594 0,1502 -1343,2674 -3101,2705 -1758,32 -3100,-1093 -3100,-2595 0,-1502 1342,-2673 3100,-2704 z m -3100,55 z m 6202,5190 z"
+   id="path25" />
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="200"
+   stroke-linejoin="round"
+   d="m 9364,8563 c 1758,-32 3101,1092 3101,2594 0,1502 -1343,2674 -3101,2705 -1758,32 -3100,-1093 -3100,-2595 0,-1502 1342,-2673 3100,-2704 z"
+   id="path26" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.CustomShape"
+   id="g29">
+      <g
+   id="id6">
+       <path
+   fill="#ffffff"
+   stroke="none"
+   d="m 7842,7862 c 482,171 667,832 425,1525 -242,693 -796,1092 -1279,921 -482,-171 -667,-832 -425,-1525 242,-693 796,-1092 1279,-921 z m -852,-302 z m 851,3051 z"
+   id="path27" />
+       <path
+   fill="none"
+   stroke="#3465a4"
+   d="m 7842,7862 c 482,171 667,832 425,1525 -242,693 -796,1092 -1279,921 -482,-171 -667,-832 -425,-1525 242,-693 796,-1092 1279,-921 z"
+   id="path28" />
+       <path
+   fill="none"
+   stroke="#3465a4"
+   d="M 6990,7560 Z"
+   id="path29" />
+       <path
+   fill="none"
+   stroke="#3465a4"
+   d="M 7841,10611 Z"
+   id="path30" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.CustomShape"
+   id="g33">
+      <g
+   id="id7">
+       <path
+   fill="#ffffff"
+   stroke="none"
+   d="m 10183,7318 c 632,251 820,1187 432,2162 -387,975 -1166,1527 -1798,1276 -632,-251 -820,-1187 -432,-2162 387,-975 1166,-1527 1798,-1276 z M 9068,6875 Z m 865,4326 z"
+   id="path31" />
+       <path
+   fill="none"
+   stroke="#3465a4"
+   d="m 10183,7318 c 632,251 820,1187 432,2162 -387,975 -1166,1527 -1798,1276 -632,-251 -820,-1187 -432,-2162 387,-975 1166,-1527 1798,-1276 z"
+   id="path32" />
+       <path
+   fill="none"
+   stroke="#3465a4"
+   d="M 9068,6875 Z"
+   id="path33" />
+       <path
+   fill="none"
+   stroke="#3465a4"
+   d="M 9933,11201 Z"
+   id="path34" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.CustomShape"
+   id="g34">
+      <g
+   id="id8">
+       <path
+   fill="#000000"
+   stroke="none"
+   d="m 7350,8787 c 198,0 350,282 350,650 0,368 -152,650 -350,650 -198,0 -350,-282 -350,-650 0,-368 152,-650 350,-650 z m -350,0 z m 701,1301 z"
+   id="path35" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.CustomShape"
+   id="g35">
+      <g
+   id="id9">
+       <path
+   fill="#000000"
+   stroke="none"
+   d="m 9250,8787 c 312,0 550,325 550,750 0,425 -238,750 -550,750 -312,0 -550,-325 -550,-750 0,-425 238,-750 550,-750 z m -550,0 z m 1101,1501 z"
+   id="path36" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.OpenBezierShape"
+   id="g36">
+      <g
+   id="id10">
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="m 7300,11887 c 2600,1700 2300,-467 3500,-600"
+   id="path37" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.CustomShape"
+   id="g37">
+      <g
+   id="id11">
+       <path
+   fill="#ffffff"
+   stroke="none"
+   d="m 7650,8887 c 142,0 250,152 250,350 0,198 -108,350 -250,350 -142,0 -250,-152 -250,-350 0,-198 108,-350 250,-350 z m -250,0 z m 501,701 z"
+   id="path38" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.CustomShape"
+   id="g38">
+      <g
+   id="id12">
+       <path
+   fill="#ffffff"
+   stroke="none"
+   d="m 9550,8887 c 142,0 250,152 250,350 0,198 -108,350 -250,350 -142,0 -250,-152 -250,-350 0,-198 108,-350 250,-350 z m -250,0 z m 501,701 z"
+   id="path39" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.OpenBezierShape"
+   id="g39">
+      <g
+   id="id13">
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="m 10700,10987 c 200,200 267,267 300,500"
+   id="path40" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.OpenBezierShape"
+   id="g40">
+      <g
+   id="id14">
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="M 7700,7787 C 7500,6287 7500,5787 8400,4587"
+   id="path41" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.OpenBezierShape"
+   id="g41">
+      <g
+   id="id15">
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="M 10200,7287 C 9700,5587 11233,5687 11600,4587"
+   id="path42" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.CustomShape"
+   id="g43">
+      <g
+   id="id16">
+       <path
+   fill="#ff950e"
+   stroke="none"
+   d="m 8650,4087 c 198,0 350,130 350,300 0,170 -152,300 -350,300 -198,0 -350,-130 -350,-300 0,-170 152,-300 350,-300 z m -350,0 z m 701,601 z"
+   id="path43" />
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="m 8650,4087 c 198,0 350,130 350,300 0,170 -152,300 -350,300 -198,0 -350,-130 -350,-300 0,-170 152,-300 350,-300 z"
+   id="path44" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.CustomShape"
+   id="g45">
+      <g
+   id="id17">
+       <path
+   fill="#ff950e"
+   stroke="none"
+   d="m 11850,3887 c 255,0 450,152 450,350 0,198 -195,350 -450,350 -255,0 -450,-152 -450,-350 0,-198 195,-350 450,-350 z m -450,0 z m 901,701 z"
+   id="path45" />
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="m 11850,3887 c 255,0 450,152 450,350 0,198 -195,350 -450,350 -255,0 -450,-152 -450,-350 0,-198 195,-350 450,-350 z"
+   id="path46" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.ClosedBezierShape"
+   id="g47">
+      <g
+   id="id18">
+       <path
+   fill="#000000"
+   stroke="none"
+   d="m 11500,13187 c -700,500 -1333,633 -2000,800 600,1100 867,1033 1100,1400 z"
+   id="path47" />
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="m 11500,13187 c -700,500 -1333,633 -2000,800 600,1100 867,1033 1100,1400 z"
+   id="path48" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.ClosedBezierShape"
+   id="g49">
+      <g
+   id="id19">
+       <path
+   fill="#000000"
+   stroke="none"
+   d="m 11700,16043 c 625,-2317 1800,-4000 1700,-6500 311,195 1389,-251 1700,-56 195,2500 -1000,5056 -1700,7156 -311,-195 -1389,-405 -1700,-600 z"
+   id="path49" />
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="m 11700,16043 c 625,-2317 1800,-4000 1700,-6500 311,195 1389,-251 1700,-56 195,2500 -1000,5056 -1700,7156 -311,-195 -1389,-405 -1700,-600 z"
+   id="path50" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.ClosedBezierShape"
+   id="g51">
+      <g
+   id="id20">
+       <path
+   fill="#000000"
+   stroke="none"
+   d="m 15000,16587 c 625,-2317 1700,-4600 1600,-7100 311,195 1189,205 1500,400 195,2500 -700,4600 -1400,6700 -311,-195 -1389,195 -1700,0 z"
+   id="path51" />
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="m 15000,16587 c 625,-2317 1700,-4600 1600,-7100 311,195 1189,205 1500,400 195,2500 -700,4600 -1400,6700 -311,-195 -1389,195 -1700,0 z"
+   id="path52" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.ClosedBezierShape"
+   id="g53">
+      <g
+   id="id21">
+       <path
+   fill="#000000"
+   stroke="none"
+   d="m 17896,16264 c 625,-2317 1504,-3277 1404,-5777 311,195 900,500 1100,1000 -500,2400 -304,1977 -1004,4077 -296,123 -1196,623 -1500,700 z"
+   id="path53" />
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="m 17896,16264 c 625,-2317 1504,-3277 1404,-5777 311,195 900,500 1100,1000 -500,2400 -304,1977 -1004,4077 -296,123 -1196,623 -1500,700 z"
+   id="path54" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.ClosedBezierShape"
+   id="g55">
+      <g
+   id="id22">
+       <path
+   fill="#000000"
+   stroke="none"
+   d="m 21000,13287 c -100,400 -100,300 1000,300 200,-200 600,-200 700,-300 z"
+   id="path55" />
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="m 21000,13287 c -100,400 -100,300 1000,300 200,-200 600,-200 700,-300 z"
+   id="path56" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.PolyPolygonShape"
+   id="g57">
+      <g
+   id="id23">
+       <path
+   fill="#000000"
+   stroke="none"
+   d="m 20768,12697 33,-496 35,-3 -40,-8 34,4 2,5 -23,5 13,12 11,16 10,19 18,47 14,57 11,67 8,76 6,172 -4,193 58,264 -61,222 -30,96 -13,244 -75,108 31,50 -56,29 -4,8 -4,6 -3,4 -1,1 -2,1 -1,1 h -2 l -1,-1 59,-8 -71,53 46,40 -43,92 -67,88 -35,89 -88,80 -43,86 -19,44 -16,44 -14,45 -10,46 100,-600 100,-600 z"
+   id="path57" />
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="m 20768,12697 33,-496 35,-3 -40,-8 34,4 2,5 -23,5 13,12 11,16 10,19 18,47 14,57 11,67 8,76 6,172 -4,193 58,264 -61,222 -30,96 -13,244 -75,108 31,50 -56,29 -4,8 -4,6 -3,4 -1,1 -2,1 -1,1 h -2 l -1,-1 59,-8 -71,53 46,40 -43,92 -67,88 -35,89 -88,80 -43,86 -19,44 -16,44 -14,45 -10,46 100,-600 100,-600 z"
+   id="path58" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.LineShape"
+   id="g58">
+      <g
+   id="id24">
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="m 20900,13587 h 400"
+   id="path59" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.LineShape"
+   id="g59">
+      <g
+   id="id25">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="M 8100,4287 7600,4187"
+   id="path60" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.LineShape"
+   id="g60">
+      <g
+   id="id26">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="M 8400,3887 8200,3387"
+   id="path61" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.LineShape"
+   id="g61">
+      <g
+   id="id27">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 8900,3887 200,-700"
+   id="path62" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.LineShape"
+   id="g62">
+      <g
+   id="id28">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 9200,4187 700,-100"
+   id="path63" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.LineShape"
+   id="g63">
+      <g
+   id="id29">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 9100,4687 500,400"
+   id="path64" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.LineShape"
+   id="g64">
+      <g
+   id="id30">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 8700,4887 -100,500"
+   id="path65" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.LineShape"
+   id="g65">
+      <g
+   id="id31">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 11300,4487 -400,200"
+   id="path66" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.LineShape"
+   id="g66">
+      <g
+   id="id32">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 11300,3987 -600,-100"
+   id="path67" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.LineShape"
+   id="g67">
+      <g
+   id="id33">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 11500,3687 -200,-400"
+   id="path68" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.LineShape"
+   id="g68">
+      <g
+   id="id34">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 12000,3687 100,-500"
+   id="path69" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.LineShape"
+   id="g69">
+      <g
+   id="id35">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 12400,3987 500,-400"
+   id="path70" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.LineShape"
+   id="g70">
+      <g
+   id="id36">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 12500,4287 800,200"
+   id="path71" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.LineShape"
+   id="g71">
+      <g
+   id="id37">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 12300,4687 300,300"
+   id="path72" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.LineShape"
+   id="g72">
+      <g
+   id="id38">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 11900,4787 v 600"
+   id="path73" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.OpenBezierShape"
+   id="g73">
+      <g
+   id="id39">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 14200,9187 -200,-1000 c -100,-600 67,-733 100,-1100"
+   id="path74" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.OpenBezierShape"
+   id="g74">
+      <g
+   id="id40">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="M 13300,9287 C 13200,7987 12900,8287 12900,7387"
+   id="path75" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.ClosedBezierShape"
+   id="g81">
+      <g
+   id="id41">
+       <defs
+   id="defs78">
+        <mask
+   id="mask83">
+         <g
+   id="g83">
+          <defs
+   id="defs83">
+           <linearGradient
+   id="linearGradient83"
+   x1="17208"
+   y1="4028"
+   x2="17208"
+   y2="10587"
+   gradientUnits="userSpaceOnUse">
+            <stop
+   offset="0.5"
+   style="stop-color:rgb(217,217,217)"
+   id="stop80" />
+            <stop
+   offset="0.5"
+   style="stop-color:rgb(217,217,217)"
+   id="stop81" />
+            <stop
+   offset="1"
+   style="stop-color:rgb(217,217,217)"
+   id="stop82" />
+            <stop
+   offset="1"
+   style="stop-color:rgb(217,217,217)"
+   id="stop83" />
+           </linearGradient>
+          </defs>
+          <path
+   style="fill:url(#gradient3)"
+   d="m 14400,4028 h 5617 v 6559 h -5617 z"
+   id="path83" />
+         </g>
+        </mask>
+       </defs>
+       <g
+   mask="url(#mask2)"
+   id="g80">
+        <g
+   id="g79">
+         <defs
+   id="defs79">
+          <linearGradient
+   id="linearGradient85"
+   x1="16200"
+   y1="3546"
+   x2="18216"
+   y2="11069"
+   gradientUnits="userSpaceOnUse">
+           <stop
+   offset="0"
+   style="stop-color:rgb(32,74,135)"
+   id="stop84" />
+           <stop
+   offset="1"
+   style="stop-color:rgb(114,159,207)"
+   id="stop85" />
+          </linearGradient>
+         </defs>
+         <path
+   style="fill:url(#gradient4)"
+   d="m 14400,10587 1322,-3132 221,-566 43,-122 10,-32 4,-17 v -3 -1 0 -1 1 h -1 -1 l -1,3 -5,10 -4,11 -2,11 -1,4 1,2 v 1 l 1,1 h 1 2 l 2,-1 5,-4 6,-7 48,-66 91,-146 358,-633 281,-392 280,-351 276,-307 272,-261 267,-214 259,-164 250,-113 121,-37 119,-23 116,-10 112,5 110,18 105,34 103,48 98,62 94,79 90,93 86,109 81,126 148,299 127,365 105,434 17,821 -25,673 -65,542 -107,429 -68,177 -79,155 -89,135 -99,117 -109,102 -120,87 -129,76 -140,67 -309,114 -349,101 -818,232 -469,165 -508,221 -547,292 -587,381 z"
+   id="path79" />
+        </g>
+       </g>
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 14400,10587 c 2800,-6500 767,-2254 2100,-4687 1500,-2200 3000,-2700 3500,-200 200,4800 -1367,2587 -4600,4887 z"
+   id="path80" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.OpenBezierShape"
+   id="g82">
+      <g
+   id="id42">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 15400,10387 c 400,-1000 -100,-100 600,-1100 1100,-2400 733,-1367 1700,-2400"
+   id="path81" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.OpenBezierShape"
+   id="g85">
+      <g
+   id="id43">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 16100,9887 c 400,-1000 300,0 1000,-1000 1100,-2400 1000,-600 2300,-1500"
+   id="path82" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.OpenBezierShape"
+   id="g84">
+      <g
+   id="id44">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 13300,3200 c 500,-300 1100,-500 1100,-500 0,0 400,-600 1300,-700"
+   id="path85" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.OpenBezierShape"
+   id="g86">
+      <g
+   id="id45">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 12800,2900 c 700,-287 1400,-700 1400,-700 0,0 500,-600 1100,-700"
+   id="path84" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.OpenBezierShape"
+   id="g87">
+      <g
+   id="id46">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 20300,5100 c 0,-900 -300,-1000 -300,-1000 0,0 -200,-500 -1100,-600"
+   id="path86" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.OpenBezierShape"
+   id="g88">
+      <g
+   id="id47">
+       <path
+   fill="none"
+   stroke="#000000"
+   d="m 20900,4800 c 0,-900 -300,-1000 -300,-1000 0,0 -200,-500 -1100,-600"
+   id="path87" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.CustomShape"
+   id="g90">
+      <g
+   id="id48">
+       <path
+   fill="#808080"
+   stroke="none"
+   d="m 16199,17300 c 453,0 800,346 800,799 0,453 -347,800 -800,800 -453,0 -799,-347 -799,-800 0,-453 346,-799 799,-799 z m -799,0 z m 1601,1601 z"
+   id="path88" />
+       <path
+   fill="none"
+   stroke="#808080"
+   stroke-width="200"
+   stroke-linejoin="round"
+   d="m 16199,17300 c 453,0 800,346 800,799 0,453 -347,800 -800,800 -453,0 -799,-347 -799,-800 0,-453 346,-799 799,-799 z"
+   id="path89" />
+       <path
+   fill="#cc9966"
+   stroke="none"
+   d="m 15999,17100 c 453,0 800,346 800,799 0,453 -347,800 -800,800 -453,0 -799,-347 -799,-800 0,-453 346,-799 799,-799 z m -799,0 z m 1601,1601 z"
+   id="path90" />
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="200"
+   stroke-linejoin="round"
+   d="m 15999,17100 c 453,0 800,346 800,799 0,453 -347,800 -800,800 -453,0 -799,-347 -799,-800 0,-453 346,-799 799,-799 z"
+   id="path91" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.CustomShape"
+   id="g94">
+      <g
+   id="id49">
+       <path
+   fill="#808080"
+   stroke="none"
+   d="m 18750,17000 c 482,0 850,325 850,750 0,425 -368,750 -850,750 -482,0 -850,-325 -850,-750 0,-425 368,-750 850,-750 z m -850,0 z m 1701,1501 z"
+   id="path92" />
+       <path
+   fill="none"
+   stroke="#808080"
+   stroke-width="200"
+   stroke-linejoin="round"
+   d="m 18750,17000 c 482,0 850,325 850,750 0,425 -368,750 -850,750 -482,0 -850,-325 -850,-750 0,-425 368,-750 850,-750 z"
+   id="path93" />
+       <path
+   fill="#cc9966"
+   stroke="none"
+   d="m 18550,16800 c 482,0 850,325 850,750 0,425 -368,750 -850,750 -482,0 -850,-325 -850,-750 0,-425 368,-750 850,-750 z m -850,0 z m 1701,1501 z"
+   id="path94" />
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="200"
+   stroke-linejoin="round"
+   d="m 18550,16800 c 482,0 850,325 850,750 0,425 -368,750 -850,750 -482,0 -850,-325 -850,-750 0,-425 368,-750 850,-750 z"
+   id="path95" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.CustomShape"
+   id="g98">
+      <g
+   id="id50">
+       <path
+   fill="#808080"
+   stroke="none"
+   d="m 21150,15500 c 538,0 950,325 950,750 0,425 -412,750 -950,750 -538,0 -950,-325 -950,-750 0,-425 412,-750 950,-750 z m -950,0 z m 1901,1501 z"
+   id="path96" />
+       <path
+   fill="none"
+   stroke="#808080"
+   stroke-width="200"
+   stroke-linejoin="round"
+   d="m 21150,15500 c 538,0 950,325 950,750 0,425 -412,750 -950,750 -538,0 -950,-325 -950,-750 0,-425 412,-750 950,-750 z"
+   id="path97" />
+       <path
+   fill="#cc9966"
+   stroke="none"
+   d="m 20950,15300 c 538,0 950,325 950,750 0,425 -412,750 -950,750 -538,0 -950,-325 -950,-750 0,-425 412,-750 950,-750 z m -950,0 z m 1901,1501 z"
+   id="path98" />
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="200"
+   stroke-linejoin="round"
+   d="m 20950,15300 c 538,0 950,325 950,750 0,425 -412,750 -950,750 -538,0 -950,-325 -950,-750 0,-425 412,-750 950,-750 z"
+   id="path99" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.ClosedBezierShape"
+   id="g100">
+      <g
+   id="id51">
+       <path
+   fill="#ff950e"
+   stroke="none"
+   d="m 15700,17100 c 0,-600 727,-2689 800,-2900 -3,-2 -6,-5 -9,-7 l 109,107 200,300 c -400,500 -559,2165 -600,2400 z"
+   id="path100" />
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="m 15700,17100 c 0,-600 727,-2689 800,-2900 -3,-2 -6,-5 -9,-7 l 109,107 200,300 c -400,500 -559,2165 -600,2400 z"
+   id="path101" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.ClosedBezierShape"
+   id="g102">
+      <g
+   id="id52">
+       <path
+   fill="#ff950e"
+   stroke="none"
+   d="m 20200,15400 c -400,-500 -1073,-389 -1000,-600 -3,-2 3,-398 0,-400 h 200 l 200,100 c 100,500 1141,565 1100,800 z"
+   id="path102" />
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="m 20200,15400 c -400,-500 -1073,-389 -1000,-600 -3,-2 3,-398 0,-400 h 200 l 200,100 c 100,500 1141,565 1100,800 z"
+   id="path103" />
+      </g>
+     </g>
+     <g
+   class="com.sun.star.drawing.ClosedBezierShape"
+   id="g104">
+      <g
+   id="id53">
+       <path
+   fill="#ff950e"
+   stroke="none"
+   d="m 18100,16800 c 113,-579 -273,-1989 -200,-2200 -3,-2 -97,-198 -100,-200 h 300 l 100,200 c -100,500 441,1865 400,2100 z"
+   id="path104" />
+       <path
+   fill="none"
+   stroke="#000000"
+   stroke-width="100"
+   stroke-linejoin="round"
+   d="m 18100,16800 c 113,-579 -273,-1989 -200,-2200 -3,-2 -97,-198 -100,-200 h 300 l 100,200 c -100,500 441,1865 400,2100 z"
+   id="path105" />
+      </g>
+     </g>
+    </g>
+   </g>
+  </g>
+ </g></g></g><metadata
+     id="metadata1"><rdf:RDF><cc:Work
+         rdf:about=""><dc:title>vscp-din-wireless-esp32-can-z102</dc:title><dc:date>20206-03-30</dc:date><dc:creator><cc:Agent><dc:title>Åke Hedman</dc:title></cc:Agent></dc:creator><dc:publisher><cc:Agent><dc:title>Grodans Paradis AB</dc:title></cc:Agent></dc:publisher><cc:license
+           rdf:resource="http://creativecommons.org/licenses/by-sa/4.0/" /><dc:identifier>VSCP</dc:identifier><dc:rights><cc:Agent><dc:title>CC Share a like</dc:title></cc:Agent></dc:rights></cc:Work><cc:License
+         rdf:about="http://creativecommons.org/licenses/by-sa/4.0/"><cc:permits
+           rdf:resource="http://creativecommons.org/ns#Reproduction" /><cc:permits
+           rdf:resource="http://creativecommons.org/ns#Distribution" /><cc:requires
+           rdf:resource="http://creativecommons.org/ns#Notice" /><cc:requires
+           rdf:resource="http://creativecommons.org/ns#Attribution" /><cc:permits
+           rdf:resource="http://creativecommons.org/ns#DerivativeWorks" /><cc:requires
+           rdf:resource="http://creativecommons.org/ns#ShareAlike" /></cc:License></rdf:RDF></metadata></svg>

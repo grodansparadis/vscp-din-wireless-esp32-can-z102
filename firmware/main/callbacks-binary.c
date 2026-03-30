@@ -25,10 +25,9 @@
   This file contains callback implementations for the VSCP binary protocol.
 */
 
-
 /*!
   The abstraction of the binary interface is defined in vscp-binary.h and vscp-binary.c
-  This file moves the abstraction into the real world on a real device. 
+  This file moves the abstraction into the real world on a real device.
   The callbacks defined in vscp-binary.h are implemented here.
 */
 
@@ -67,9 +66,20 @@
 #include <vscp.h>
 #include <vscp-firmware-helper.h>
 #include "vscp-binary.h"
+#include "vscp-mesh.h"
 
+static bool g_vscp_mesh_initialized = false;
 
-
+static void
+vscp_binary_mesh_lazy_init(void)
+{
+  if (!g_vscp_mesh_initialized) {
+    vscp_mesh_config_t cfg;
+    vscp_mesh_default_config(&cfg);
+    (void) vscp_mesh_init(&cfg);
+    g_vscp_mesh_initialized = true;
+  }
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // vscp_binary_callback_reply
@@ -278,7 +288,17 @@ vscp_binary_callback_send_event(const void *pdata, const vscpEvent *pev)
 int
 vscp_binary_callback_send_eventex(const void *pdata, const vscpEventEx *pex)
 {
-  return VSCP_ERROR_SUCCESS;
+  (void) pdata;
+
+  vscp_binary_mesh_lazy_init();
+  int rv = vscp_mesh_send_eventex(pex, VSCP_MESH_ADDR_BROADCAST);
+
+  // Preserve existing callback behavior when no mesh TX backend is attached yet.
+  if (VSCP_ERROR_UNSUPPORTED == rv) {
+    return VSCP_ERROR_SUCCESS;
+  }
+
+  return rv;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -378,7 +398,27 @@ vscp_binary_callback_interface_close(const void *pdata, uint16_t idx)
 int
 vscp_binary_callback_event_received(const void *pdata, const vscpEvent *pev)
 {
-  return VSCP_ERROR_SUCCESS;
+  (void) pdata;
+
+  if (NULL == pev) {
+    return VSCP_ERROR_PARAMETER;
+  }
+
+  vscpEventEx ex;
+  int rv = vscp_fwhlp_convertEventToEventEx(&ex, pev);
+  if (VSCP_ERROR_SUCCESS != rv) {
+    return rv;
+  }
+
+  vscp_binary_mesh_lazy_init();
+  rv = vscp_mesh_send_eventex(&ex, VSCP_MESH_ADDR_BROADCAST);
+
+  // Preserve existing callback behavior when no mesh TX backend is attached yet.
+  if (VSCP_ERROR_UNSUPPORTED == rv) {
+    return VSCP_ERROR_SUCCESS;
+  }
+
+  return rv;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -438,6 +478,15 @@ vscp_binary_callback_restart(const void *pdata)
 
 int
 vscp_binary_callback_shutdown(const void *pdata)
+{
+  return VSCP_ERROR_SUCCESS;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// vscp_binary_callback_text
+//
+
+int vscp_binary_callback_text(const void *pdata)
 {
   return VSCP_ERROR_SUCCESS;
 }
