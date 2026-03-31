@@ -30,6 +30,8 @@ jobs:
           submodules: recursive
 
       - name: Build firmware (ESP32-C3)
+        env:
+          WS_INPUT: ${{ inputs.websocket || 'true' }}
         run: |
           . "$IDF_PATH/export.sh"
 
@@ -43,10 +45,7 @@ jobs:
             exit 1
           fi
 
-          ws_input="${{ github.event.inputs.websocket }}"
-          if [ -z "$ws_input" ]; then
-            ws_input="true"
-          fi
+          ws_input="$WS_INPUT"
 
           cp sdkconfig sdkconfig.ci
           sed -i -E '/^CONFIG_HTTPD_WS_SUPPORT=|^# CONFIG_HTTPD_WS_SUPPORT is not set$/d' sdkconfig.ci

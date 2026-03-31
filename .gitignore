@@ -1,3 +1,8 @@
+codacy-results*.sarif
+codacy-focused/
+.codacy/logs/
+firmware/.codacy/logs/
+firmware/main/certs/prvtkey.pem
 fp-info-cache
 kicad/.history
 kicad/vscp-din-esp32-can-z102-backups

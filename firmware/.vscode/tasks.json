@@ -154,6 +154,15 @@
       "problemMatcher": [
         "$gcc"
       ]
+    },
+    {
+      "label": "Tools: Codacy Focused",
+      "type": "shell",
+      "options": {
+        "cwd": "${workspaceRoot}"
+      },
+      "command": "cd .. && tools/run-codacy-focused.sh && tools/summarize-codacy-focused.py",
+      "problemMatcher": []
     }
   ],
   "version": "2.0.0"
