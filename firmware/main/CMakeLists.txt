@@ -24,4 +24,19 @@ idf_component_register(SRCS "main.c"
 
                     INCLUDE_DIRS "." 
                                   "../third_party/vscp-firmware/common/"
+                    REQUIRES mbedtls
+                             esp_driver_twai
+                             spi_flash
+                             esp_partition
+                             app_update
+                             nvs_flash
+                             esp_http_server
+                             esp_wifi
+                             esp_event
+                             esp_netif
+                             esp_timer
+                             esp-tls
+                             vfs
+                             spiffs
+                             mqtt
 )

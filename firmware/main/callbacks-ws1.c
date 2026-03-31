@@ -79,6 +79,7 @@ extern node_persistent_config_t g_persistent;
 int
 vscp_ws1_callback_init(vscp_ws_connection_context_t *pctx)
 {
+  pctx->encryption = 0; // No encryption
   return VSCP_ERROR_SUCCESS;
 }
 

@@ -123,10 +123,10 @@ typedef struct _ws_user {
 } ws_user_t;
 
 typedef struct _vscp_ws_connection_context {
-  uint8_t protocol;       // 0 == stringbased, 1 == JSON
+  uint8_t protocol;       // 0 == stringbased, 1 == JSON, 2=binary
   uint8_t sid[16];        // Session ID for authentication and encryption
-  bool bOpen;             // Flag for open/closed channel- True oif open
-  bool bMode;             // True if we are in binary mode, false (default) if we are in text mode.
+  bool bOpen;             // Flag for open/closed channel- True if open
+  uint8_t encryption;     // Encryption type used for the connection. 0 = no encryption, 1 = AES-128, etc.
   bool bAuthenticated;    // Whether the client is authenticated. True if authenticated
   vscpEventFilter filter; // Filter/mask for received VSCP events for this connection
   ws_user_t user;         // User information for athenticated user

@@ -86,7 +86,6 @@ vscp_ws1_init(vscp_ws_connection_context_t *pctx, void *pdata)
   pctx->pdata          = pdata; // Save the user data (request pointer)
   pctx->bAuthenticated = false; // Not authenticated until proven otherwise
   pctx->bOpen          = false; // Not open until authentication is successful
-  pctx->bMode          = false; // Text mode
   pctx->pdata          = pdata;
 
   // Clear the global VSCP filter

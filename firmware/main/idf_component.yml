@@ -4,3 +4,4 @@ dependencies:
   espressif/led_indicator: ^2.1.1
   espressif/network_provisioning: ^1.2.2
   espressif/mqtt: ^1.0.0
+  espressif/cjson: =*
