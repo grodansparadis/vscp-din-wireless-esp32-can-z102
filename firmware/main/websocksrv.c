@@ -776,7 +776,7 @@ ws1_get_handler(httpd_req_t *req)
       return rv;
     }
 
-    vscp_ws1_handle_text_protocol_request((char *) payload, ws_pkt.len, (vscp_ws_connection_context_t *) req->sess_ctx);
+    vscp_ws1_handle_text_protocol_request((vscp_ws_connection_context_t *) req->sess_ctx, (char *) payload, ws_pkt.len);
 
     free(payload);
   }
@@ -797,7 +797,7 @@ ws1_get_handler(httpd_req_t *req)
       return rv;
     }
 
-    vscp_ws1_handle_binary_protocol_request(payload, ws_pkt.len, (vscp_ws_connection_context_t *) req->sess_ctx);
+    vscp_ws1_handle_binary_protocol_request((vscp_ws_connection_context_t *) req->sess_ctx, payload, ws_pkt.len);
 
     free(payload);
   }

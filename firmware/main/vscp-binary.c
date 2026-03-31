@@ -400,6 +400,10 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
   else if (VSCP_BINARY_COMMAND_CODE_TEST == command) {
     return vscp_binary_callback_test(pdata, parg, len);
   }
+  else if (VSCP_BINARY_COMMAND_CODE_TEXT == command) {
+    // We normally do nothing here except resetting binary flag
+    return vscp_binary_callback_text(pdata);
+  }
   else if (VSCP_BINARY_COMMAND_CODE_WCYD == command) {
     uint64_t capabilities = 0;
     if (VSCP_ERROR_SUCCESS != (rv = vscp_binary_callback_wcyd(pdata, &capabilities))) {

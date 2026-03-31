@@ -54,7 +54,7 @@
 
 #include "vscp-ws-common.h"
 
-// ws1 is 0 and ws2 is 1, this is used in the session context to determine which protocol 
+// ws1 is 0 and ws2 is 1, this is used in the session context to determine which protocol
 // is being used for a given connection
 #define VSCP_WS1_PROTOCOL 0
 
@@ -106,8 +106,6 @@
 #define VSCP_WS1_STR_ERROR_UNKNOWN_TYPE              "Unknown type, only know 'COMMAND' and 'EVENT'."
 #define VSCP_WS1_STR_ERROR_GENERAL                   "Exception or other general error."
 
-
-
 /*!
   Initialize the WS1 protocol handler. This function should be called before any other functions
   in this module are used.
@@ -133,55 +131,56 @@ vscp_ws1_clearup(vscp_ws_connection_context_t *pctx, void *pdata);
   also be used as a session identifier for the connection. The sid value is set in the
   vscp_ws1_callback_generate_sid callback which in turn often calls this function to generate
   the sid.
-  @param sid Pointer to a 16-byte buffer that will be populated with the session id.
-  @param size The size of the buffer (16). This should be at least 16 bytes to hold the 128 bit session id.
   @param pctx Pointer to the connection context for this command. This will contain information about the connection
   and can be used to store connection-specific data as needed.
+  @param sid Pointer to a 16-byte buffer that will be populated with the session id.
+  @param size The size of the buffer (16). This should be at least 16 bytes to hold the 128 bit session id.
   @return Returns VSCP_ERROR_SUCCESS if the command was successfully processed, or an appropriate error code if there
   was a failure.
 */
 int
-vscp_ws1_generate_sid(uint8_t *sid, size_t size, vscp_ws_connection_context_t *pctx);
+vscp_ws1_generate_sid(vscp_ws_connection_context_t *pctx, uint8_t *sid, size_t size);
 
 /*!
   Handle a text received WS1 protocol packet. This function should be called when a packet is received from the client.
   The function will parse the packet, determine the type of packet (command, event, etc.), and call the appropriate
   callback function to handle the packet.
-  @param packet The received packet as a null-terminated string.
-  @param len The length of the received packet.
   @param pctx Pointer to the connection context for this command. This will contain information about the connection
   and can be used to store connection-specific data as needed.
+  @param packet The received packet as a null-terminated string.
+  @param len The length of the received packet.
   @return Returns VSCP_ERROR_SUCCESS if the packet was successfully processed, or an appropriate error code if there was
   a failure.
 */
 int
-vscp_ws1_handle_text_protocol_request(const char *packet, uint16_t len, vscp_ws_connection_context_t *pctx);
+vscp_ws1_handle_text_protocol_request(vscp_ws_connection_context_t *pctx, const char *packet, uint16_t len);
 
 /*!
-  Handle a binray received WS1 protocol packet. This function should be called when a packet is received from the client.
-  The function will parse the packet, determine the type of packet (command, event, etc.), and call the appropriate
-  callback function to handle the packet.
-  @param packet The received packet as a null-terminated string.
-  @param len The length of the received packet.
+  Handle a binray received WS1 protocol packet. This function should be called when a packet is received from the
+  client. The function will parse the packet, determine the type of packet (command, event, etc.), and call the
+  appropriate callback function to handle the packet.
   @param pctx Pointer to the connection context for this command. This will contain information about the connection
   and can be used to store connection-specific data as needed.
+  @param packet The received packet as a null-terminated string.
+  @param len The length of the received packet.
   @return Returns VSCP_ERROR_SUCCESS if the packet was successfully processed, or an appropriate error code if there was
   a failure.
 */
 
 int
-vscp_ws1_handle_binary_protocol_request(const uint8_t *packet, uint16_t len, vscp_ws_connection_context_t *pctx);
-
+vscp_ws1_handle_binary_protocol_request(vscp_ws_connection_context_t *pctx, const uint8_t *packet, uint16_t len);
 
 /*!
   Function called when a command is received via the WS1 protocol.
   The callback should process the command and send an appropriate reply using the
   vscp_ws1_callback_reply function.
   @fn vscp_ws1_callback_command
+
+  @param pctx Pointer to the connection context for this command. This will contain information about
+  the connection and can be used to store connection-specific data as needed.
   @param command The command that was received. This will be a null-terminated string.
   @param parg The argument part of the command, if any. This will be a null-terminated string or NULL if there is no
   argument.
-  @param pctx Pointer to the connection context for this command. This will contain information about
   @return Returns VSCP_ERROR_SUCCESS if the command was successfully processed,
   or an appropriate error code if there was a failure.
 */
@@ -200,7 +199,8 @@ vscp_ws1_handle_command(const char *command, const char *parg, vscp_ws_connectio
   @return Returns VSCP_ERROR_SUCCESS if the command was successfully processed,
   or an appropriate error code if there was a failure.
 */
-int vscp_ws1_handle_binary_command(uint16_t command, const uint8_t *parg, vscp_ws_connection_context_t *pctx);
+int
+vscp_ws1_handle_binary_command(vscp_ws_connection_context_t *pctx, uint16_t command, const uint8_t *parg);
 
 ///////////////////////////////////////////////////////////////////////////////
 //                               CALLBACKS
@@ -232,6 +232,8 @@ vscp_ws1_callback_cleanup(vscp_ws_connection_context_t *pctx);
   Function called when a session id is needed to be generated for a new connection.
   The callback should generate a random session id and populate the provided buffer
   with the session id.
+  @param pctx Pointer to the connection context for this command. This will contain information about the connection and
+  can be used to store connection-specific data as needed.
   @param sid Pointer to a buffer that will be populated with the session id.
   @param size The size of the buffer. This should be at least 16 bytes to hold the
   128 bit session id.
@@ -239,12 +241,13 @@ vscp_ws1_callback_cleanup(vscp_ws_connection_context_t *pctx);
   or an appropriate error code if there was a failure.
 */
 int
-vscp_ws1_callback_generate_sid(uint8_t *sid, size_t size, vscp_ws_connection_context_t *pctx);
+vscp_ws1_callback_generate_sid(vscp_ws_connection_context_t *pctx, uint8_t *sid, size_t size);
 
 /*!
   @fn vscp_ws1_callback_get_key
   @brief Callback function to get the 128 bit encryption key for a given session.
-  @param pdata Pointer to user data that can be used to store connection-specific information.
+  @param pctx Pointer to the connection context for this command. This will contain information about the connection and
+  can be used to store connection-specific data as needed.
   @return A pointer to a 128 bit encryption key is returned here. NULL on err
 */
 const uint8_t *
@@ -266,11 +269,11 @@ vscp_ws1_callback_get_primary_key(vscp_ws_connection_context_t *pctx);
   information about the authenticated user to the connection context. This information can then be
   used by other callbacks to determine what the user is allowed to do and not do.
 
+  @param pctx Pointer to the connection context.
   @param pcrypto A pointer to the encrypted credentials provided by the client for authentication.
   This should be a binary buffer containing the AES-128 encrypted credentials over "user:password".
   @param psid A pointer to a buffer holding a 128 bit session ID in binary form  that is used
-  as the IV.
-  @param pctx Pointer to the connection context.
+  as the IV. The session ID is unique for each connection and can be used to decrypt the credentials.
   @return Returns VSCP_ERROR_SUCCESS if authentication was successful, or an appropriate error code if there was a
   failure.
 
@@ -291,66 +294,71 @@ vscp_ws1_callback_get_primary_key(vscp_ws_connection_context_t *pctx);
 */
 
 int
-vscp_ws1_callback_validate_user(const uint8_t *pcrypto,
+vscp_ws1_callback_validate_user(vscp_ws_connection_context_t *pctx,
+                                const uint8_t *pcrypto,
                                 uint8_t crypto_len,
-                                const uint8_t *psid,
-                                vscp_ws_connection_context_t *pctx);
+                                const uint8_t *psid);
 
 /*!
   Return VSCP_ERROR_SUCCESS if the user is allowed to send the event based on  user's permissions. Just return
   VSCP_ERROR_SUCCESS if all events are allowed.
-  @param pEvent Pointer to the VSCP event that is being evaluated for sending to the client.
   @param pctx Pointer to the connection context for this command. This will contain information about the connection and
   can be used to store connection-specific data as needed.
+  @param pEvent Pointer to the VSCP event that is being evaluated for sending to the client.
   @return Returns VSCP_ERROR_SUCCESS if the user is allowed to send the event, or an appropriate error code if not.
 */
 int
-vscp_ws1_callback_is_allowed_event(vscpEvent *pEvent, vscp_ws_connection_context_t *pctx);
+vscp_ws1_callback_is_allowed_event(vscp_ws_connection_context_t *pctx, vscpEvent *pEvent);
 
 /*!
   @fn vscp_ws1_callback_is_allowed_connection
   @brief Callback function to check if a connection from a given IP address is allowed. This function should
   check the provided IP address against the allowed remote hosts for the authenticated user and return
   an appropriate response. Just return VSCP_ERROR_SUCCESS if all connections are allowed.
-  @param pip The IP address of the incoming connection, represented as a null-terminated string (e.g. "192.168.1.100").
   @param pctx Pointer to the connection context for this command. This will contain information about the connection and
   can be used to store connection-specific data as needed.
+  @param pip The IP address of the incoming connection, represented as a null-terminated string (e.g. "192.168.1.100").
   @return Returns VSCP_ERROR_SUCCESS if the connection from the given IP address is allowed, or an appropriate error
   code if there was a failure (e.g. connection not allowed).
 */
 int
-vscp_ws1_callback_is_allowed_connection(const char *pip, vscp_ws_connection_context_t *pctx);
+vscp_ws1_callback_is_allowed_connection(vscp_ws_connection_context_t *pctx, const char *pip);
 
 /*!
   Send a reply to a command received via the WS1 protocol. The reply will be sent
   asynchronously and the caller will not be blocked while waiting for the reply to be sent.
   @param response The response to send. This should be a null-terminated string.
-  @param pdata Pointer to user data that can be used to store connection-specific information.
+  @param pctx Pointer to the connection context for this command. This will contain information about the connection and
+  can be used to store connection-specific data as needed.
   @note The response should not include the leading '+' or '-' character, as this
   will be added automatically based on the success or failure of the command.
   @return Returns VSCP_ERROR_SUCCESS if the reply was successfully queued for sending,
   or an appropriate error code if there was a failure.
 */
 int
-vscp_ws1_callback_reply(const char *response, vscp_ws_connection_context_t *pctx);
+vscp_ws1_callback_reply(vscp_ws_connection_context_t *pctx, const char *response);
 
 /*!
   @fn vscp_ws1_callback_event
   @brief Callback function that is called when an event is received. The callback
   should process the event and respond appropriately.
+  @param pctx Pointer to the connection context for this command. This will contain information about the connection and
+  can be used to store connection-specific data as needed. The callback can use this context to determine if the event
+  should be sent to the client based on the user's permissions and event filters, and to store
   @param pEvent Pointer to the VSCP event that was received.
   @return Returns VSCP_ERROR_SUCCESS if the event was successfully processed and sent,
   or an appropriate error code if there was a failure.
 */
 int
-vscp_ws1_callback_event(vscpEvent *pEvent, vscp_ws_connection_context_t *pctx);
+vscp_ws1_callback_event(vscp_ws_connection_context_t *pctx, vscpEvent *pEvent);
 
 /*!
   @fn vscp_ws1_callback_copyright
   @brief Callback function for the COPYRIGHT command. This command should return the copyright
   information for the VSCP firmware running on the device as something like
   "+;COPYRIGHT;Copyright (C) 2027 Company Name. All rights reserved.".
-  @param pdata Pointer to user data that can be used to store connection-specific information.
+  @param pctx Pointer to the connection context for this command. This will contain information about the connection and
+  can be used to store connection-specific data as needed.
   @return Returns VSCP_ERROR_SUCCESS if the copyright information was successfully sent,
   or an appropriate error code if there was a failure.
 */
@@ -362,7 +370,8 @@ vscp_ws1_callback_copyright(vscp_ws_connection_context_t *pctx);
   @brief Callback function for the OPEN command. This command should open the connection for receiving
   events and return a positive reply if the connection was successfully opened, or a negative reply if
   there was a failure.
-    @param pdata Pointer to user data that can be used to store connection-specific information.
+    @param pctx Pointer to the connection context for this command. This will contain information about the connection and
+    can be used to store connection-specific data as needed.
     @note When the connection is opened, the server should start sending events to the client based on the
     event filter that has been set for the connection. The server should also be prepared to receive commands
     from the client and respond to them appropriately while the connection is open.
@@ -377,7 +386,8 @@ vscp_ws1_callback_open(vscp_ws_connection_context_t *pctx);
   @brief Callback function for the CLOSE command. This command should close the connection for receiving
   events and return a positive reply if the connection was successfully closed, or a negative reply if there was a
   failure.
-    @param pdata Pointer to user data that can be used to store connection-specific information.
+    @param pctx Pointer to the connection context for this command. This will contain information about the connection and
+    can be used to store connection-specific data as needed.
     @note When the connection is closed, the server should stop sending events to the client and should not
     expect to receive any more commands from the client until a new connection is opened. The server should also
     clean up any resources associated with the connection as needed.
@@ -391,20 +401,22 @@ vscp_ws1_callback_close(vscp_ws_connection_context_t *pctx);
   @fn vscp_ws1_callback_setfilter
   @brief Callback function for the SETFILTER command. This command should set the event filter based on the provided
   data and return a positive reply if the filter was successfully set, or a negative reply if there was a failure.
+  @param pctx Pointer to the connection context for this command. This will contain information about the connection and
+  can be used to store connection-specific data as needed.
   @param pfilter The filter data provided by the client for setting the event filter. This will be a null-terminated
   string and may contain additional data separated by semicolons.
-  @param pdata Pointer to user data that can be used to store connection-specific information.
   @return Returns VSCP_ERROR_SUCCESS if the event filter was successfully set, or an appropriate error code if there was
   a failure.
 */
 int
-vscp_ws1_callback_setfilter(const vscpEventFilter *pfilter, vscp_ws_connection_context_t *pctx);
+vscp_ws1_callback_setfilter(vscp_ws_connection_context_t *pctx, const vscpEventFilter *pfilter);
 
 /*!
   @fn vscp_ws1_callback_clrqueue
   @brief Callback function for the CLRQUEUE command. This command should clear the event queue and return a positive
   reply if the queue was successfully cleared, or a negative reply if there was a failure.
-    @param pdata Pointer to user data that can be used to store connection-specific information.
+    @param pctx Pointer to the connection context for this command. This will contain information about the connection and
+    can be used to store connection-specific data as needed.
     @note When the event queue is cleared, any events that were queued for sending to the client should be discarded,
     and the server should not send those events to the client. The server should also ensure that any resources
     associated with the queued events are properly cleaned up.

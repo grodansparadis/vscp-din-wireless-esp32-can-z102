@@ -67,6 +67,7 @@
 #include <vscp-firmware-helper.h>
 #include "vscp-binary.h"
 #include "vscp-mesh.h"
+#include "vscp-ws-common.h"
 
 static bool g_vscp_mesh_initialized = false;
 
@@ -88,6 +89,7 @@ vscp_binary_mesh_lazy_init(void)
 int
 vscp_binary_callback_reply(const void *pdata, uint16_t command, uint16_t error, const uint8_t *parg, size_t len)
 {
+  
   return VSCP_ERROR_SUCCESS;
 }
 
@@ -482,11 +484,24 @@ vscp_binary_callback_shutdown(const void *pdata)
   return VSCP_ERROR_SUCCESS;
 }
 
+
 ///////////////////////////////////////////////////////////////////////////////
 // vscp_binary_callback_text
 //
 
 int vscp_binary_callback_text(const void *pdata)
 {
+  // We do noting except resetting the binary flag in the context.
+
+  // Check pointer
+  if (NULL == pdata) {
+    return VSCP_ERROR_PARAMETER;
+  }
+
+  // Set the binary flag in the context
+  vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
+  pctx->bMode = false;
+
+
   return VSCP_ERROR_SUCCESS;
 }

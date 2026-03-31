@@ -28,16 +28,16 @@
  *  This file is part of VSCP - Very Simple Control Protocol
  *  http://www.vscp.org
  *
- *  This file contains common definitions and functions for the VSCP Websocket Server (WS1 and WS2) 
+ *  This file contains common definitions and functions for the VSCP Websocket Server (WS1 and WS2)
  *  protocol implementations.
- * 
+ *
  * ******************************************************************************
  */
 
 #ifndef __VSCP_WS_COMMON_H__
 #define __VSCP_WS_COMMON_H__
 
-// ws1 is 0 and ws2 is 1, this is used in the session context to determine which protocol 
+// ws1 is 0 and ws2 is 1, this is used in the session context to determine which protocol
 // is being used for a given connection
 #define VSCP_WS1_PROTOCOL 0
 #define VSCP_WS2_PROTOCOL 1
@@ -57,10 +57,10 @@
   - password: The password of the user (this should be encrypted or hashed in a secure manner).
   - fullname: The full name of the user.
   - filtermask: The filter mask for the user.
-  - rights: The rights or permissions of the user. This can hold bits for rights this user has.
+  - rights:  The rights or permissions of the user. This can hold bits for rights this user has.
   - remotes: The remote access information for the user. This can be a comma-separated list of IP addresses or hostnames
-  that the user is allowed to connect from.
-  - events: The events associated with the user. This can be a comma-separated list of event types or IDs that the user
+             that the user is allowed to connect from.
+  - events:  The events associated with the user. This can be a comma-separated list of event types or IDs that the user
   is allowed to receive.
   - note: Any additional notes about the user.
 */
@@ -119,15 +119,17 @@ typedef struct _ws_user {
 #ifndef VSCP_WS1_DISABLE_USER_NOTES
   char note[256];
 #endif
+
 } ws_user_t;
 
 typedef struct _vscp_ws_connection_context {
   uint8_t protocol;       // 0 == stringbased, 1 == JSON
   uint8_t sid[16];        // Session ID for authentication and encryption
   bool bOpen;             // Flag for open/closed channel- True oif open
+  bool bMode;             // True if we are in binary mode, false (default) if we are in text mode.
   bool bAuthenticated;    // Whether the client is authenticated. True if authenticated
   vscpEventFilter filter; // Filter/mask for received VSCP events for this connection
-  ws_user_t user;        // User information for athenticated user
+  ws_user_t user;         // User information for athenticated user
   void *pdata;            // Pointer to user data that can be used to store connection-specific information
 } vscp_ws_connection_context_t;
 
