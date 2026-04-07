@@ -64,12 +64,20 @@
 #include "vscp-projdefs.h"
 
 #include <vscp.h>
+#include <vscp-class.h>
 #include <crc.h>
 #include <vscp-firmware-helper.h>
+
+#include "main.h"
+
 #include "vscp-binary.h"
 #include "vscp-mesh.h"
 #include "vscp-ws1.h"
 #include "vscp-ws-common.h"
+
+extern node_persistent_config_t g_persistent;
+
+#define TAG __func__
 
 static bool g_vscp_mesh_initialized = false;
 
@@ -120,7 +128,7 @@ vscp_binary_callback_reply(const void *pdata, uint16_t command, uint16_t error, 
   }
 
   // CRC is over command + error + argument (skip type byte and crc bytes).
-  uint16_t crc  = crcFast(plain + 1, 4 + len);
+  uint16_t crc   = crcFast(plain + 1, 4 + len);
   plain[5 + len] = (crc >> 8) & 0xFF;
   plain[6 + len] = crc & 0xFF;
 
@@ -178,12 +186,13 @@ vscp_binary_callback_challenge(const void *pdata)
     return VSCP_ERROR_PARAMETER;
   }
 
-  // Generate a random 16-byte challenge
-  uint8_t challenge[16];
-  esp_fill_random(challenge, sizeof(challenge));
+  vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
+
+  // Generate a new random 16-byte sid (session ID) for authentication and encryption
+  esp_fill_random(pctx->sid, sizeof(pctx->sid));
 
   // Send challenge as binary reply with command 0 and error 0
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, challenge, sizeof(challenge));
+  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, pctx->sid, sizeof(pctx->sid));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -199,18 +208,9 @@ vscp_binary_callback_get_chid(const void *pdata, uint32_t *pchid)
 
   // Generate a unique channel ID from session ID bytes
   vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
-  uint32_t chid                       = (pctx->sid[0] << 24) | (pctx->sid[1] << 16) | (pctx->sid[2] << 8) | pctx->sid[3];
-  *pchid                             = chid;
+  *pchid                             = pctx->chid;
 
-  // Convert to big-endian bytes for reply
-  uint8_t arg[4];
-  arg[0] = (chid >> 24) & 0xFF;
-  arg[1] = (chid >> 16) & 0xFF;
-  arg[2] = (chid >> 8) & 0xFF;
-  arg[3] = chid & 0xFF;
-
-  // Send reply with channel ID
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, arg, sizeof(arg));
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -224,8 +224,11 @@ vscp_binary_callback_set_guid(const void *pdata, uint8_t *pguid)
     return VSCP_ERROR_PARAMETER;
   }
 
-  // Send reply confirming GUID set
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  // Set the GUID in the connection context
+  vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
+  memcpy(pctx->guid, pguid, 16);
+
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -239,12 +242,11 @@ vscp_binary_callback_get_guid(const void *pdata, uint8_t *pguid)
     return VSCP_ERROR_PARAMETER;
   }
 
-  // Use session ID as GUID (16 bytes)
+  // Return GUID from connection context
   vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
-  memcpy(pguid, pctx->sid, 16);
+  pguid                              = pctx->guid;
 
-  // Send reply with GUID (16 bytes)
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, pctx->sid, 16);
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -259,10 +261,14 @@ vscp_binary_callback_setfilter(const void *pdata, const vscpEventFilter *pfilter
   }
 
   vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
-  memcpy(&pctx->filter, pfilter, sizeof(vscpEventFilter));
+
+  pctx->filter.filter_priority = pfilter->filter_priority;
+  pctx->filter.filter_class    = pfilter->filter_class;
+  pctx->filter.filter_type     = pfilter->filter_type;
+  memcpy(pctx->filter.filter_GUID, pfilter->filter_GUID, 16);
 
   // Send reply confirming filter set
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -276,14 +282,15 @@ vscp_binary_callback_setmask(const void *pdata, const vscpEventFilter *pfilter)
     return VSCP_ERROR_PARAMETER;
   }
 
-  // For simplicity, we store mask in the same filter structure
-  // In a real implementation, you might want a separate mask field
   vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
-  // Mask is typically combined with filter; store it separately if needed
-  (void) pctx;
+
+  pctx->filter.mask_priority = pfilter->mask_priority;
+  pctx->filter.mask_class    = pfilter->mask_class;
+  pctx->filter.mask_type     = pfilter->mask_type;
+  memcpy(pctx->filter.mask_GUID, pfilter->mask_GUID, 16);
 
   // Send reply confirming mask set
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -293,12 +300,67 @@ vscp_binary_callback_setmask(const void *pdata, const vscpEventFilter *pfilter)
 int
 vscp_binary_callback_get_version(const void *pdata, uint8_t *pversion)
 {
+  uint16_t major = 0;
+  uint16_t minor = 0;
+  uint16_t patch = 0;
+  uint32_t build = 0;
+
   if (NULL == pdata || NULL == pversion) {
     return VSCP_ERROR_PARAMETER;
   }
 
+  const esp_app_desc_t *appDescr = esp_app_get_description();
+  char strversion[32];
+
+  // Version string from app description (e.g. "1.0.0" or "1.0.0-rc1")
+  strncpy(strversion, appDescr->version, sizeof(strversion) - 1);
+  strversion[sizeof(strversion) - 1] = '\0';
+  char *pstrversion                  = strversion;
+
+  major = strtoul((const char *) pstrversion, &pstrversion, 10); // Major version
+  pstrversion++;                                                 // Skip dot
+  if (*pstrversion == '\0') {
+    goto DONE;
+  }
+
+  minor = strtoul(pstrversion, &pstrversion, 10); // Minor version
+  pstrversion++;                                  // Skip dot
+  if (*pversion == '\0') {
+    goto DONE;
+  }
+
+  patch = strtoul((const char *) pstrversion, &pstrversion, 10); // Patch version
+  pversion++;                                                    // Skip dot
+  if (*pstrversion == '\0') {
+    goto DONE;
+  }
+
+  build = strtoul((const char *) pversion,
+                  &pstrversion,
+                  10); // Build number (not used in this example, but could be extracted from version string if needed)
+
+DONE:
+
+  memcpy(pversion, &major, 2);
+  memcpy(pversion + 2, &minor, 2);
+  memcpy(pversion + 4, &patch, 2);
+  memcpy(pversion + 6, &build, 4);
+
+  /*
+    Return version information (6 bytes: major, minor, patch, build, reserved, reserved)
+    Note: ESP32C3 is little-endian and we want to return big-endian in the version bytes for consistency with other
+    platforms.
+  */
+
+  // if (vscp_fwhlp_isLittleEndian()) {
+  major = VSCP_UINT16_SWAP_ON_LE(major);
+  minor = VSCP_UINT16_SWAP_ON_LE(minor);
+  patch = VSCP_UINT16_SWAP_ON_LE(patch);
+  build = VSCP_UINT32_SWAP_ON_LE(build);
+  //}
+
   // Send reply with version byte
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, pversion, 1);
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -308,7 +370,12 @@ vscp_binary_callback_get_version(const void *pdata, uint8_t *pversion)
 bool
 vscp_binary_callback_is_open(const void *pdata)
 {
-  return true;
+  if (NULL == pdata) {
+    return false;
+  }
+
+  vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
+  return pctx->bOpen;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -326,7 +393,7 @@ vscp_binary_callback_open(const void *pdata)
   pctx->bOpen                        = true;
 
   // Send reply confirming opened
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -344,7 +411,7 @@ vscp_binary_callback_close(const void *pdata)
   pctx->bOpen                        = false;
 
   // Send reply confirming closed
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -357,13 +424,20 @@ vscp_binary_callback_user(const void *pdata, const char *user)
   if (NULL == pdata || NULL == user) {
     return VSCP_ERROR_PARAMETER;
   }
+  // We just save the username in this stage (even if username is invalid)
+  vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
+  pctx->bAuthenticated               = false; // Reset authentication status when username changes
 
-  // Note: user field is a ws_user_t structure, not a simple string
-  // In a real implementation, extract user info from user string
-  (void) user;
+  // trim password
+  const char *p = user;
+  while (*p && isspace((unsigned char) *p)) {
+    p++;
+  }
 
-  // Send reply confirming user set
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  strncpy(pctx->user.username, p, sizeof(pctx->user.username) - 1);
+  pctx->user.username[sizeof(pctx->user.username) - 1] = '\0';
+
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -373,12 +447,42 @@ vscp_binary_callback_user(const void *pdata, const char *user)
 int
 vscp_binary_callback_password(const void *pdata, const char *password)
 {
+  // char buf[VSCP_BINARY_MAX_USERNAME_LENGTH + VSCP_BINARY_MAX_PASSWORD_LENGTH + 1 + 1] = { 0 }; // "user:password\0"
   if (NULL == pdata || NULL == password) {
     return VSCP_ERROR_PARAMETER;
   }
 
+  vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
+
+  // Must have a username before a password
+  if (!strlen(pctx->user.username)) {
+    ESP_LOGE(TAG, "Password: No username yet\n");
+    return VSCP_ERROR_ERROR;
+  }
+
+  // trim password
+  const char *p = password;
+  while (*p && isspace((unsigned char) *p)) {
+    p++;
+  }
+
+  ESP_LOGI(TAG, "Username:'%s'\n", pctx->user);
+  ESP_LOGI(TAG, "Password '%s'\n", p);
+
+  if (validate_user(pctx->user.username, p)) {
+    pctx->bAuthenticated = true;
+    pctx->user.privlevel = 15;
+  }
+  else {
+    memset(pctx->user.username, 0, sizeof(pctx->user.username)); // Clear username on failed authentication
+    pctx->bAuthenticated = false;
+    pctx->user.privlevel = 0;
+    ESP_LOGE(TAG, "Credentials: Invalid\n");
+    return VSCP_ERROR_ERROR;
+  }
+
   // Send reply confirming password set (don't store password in context)
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -393,30 +497,33 @@ vscp_binary_callback_check_authenticated(const void *pdata)
   }
 
   vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
-  uint8_t auth_status                = pctx->bAuthenticated ? 1 : 0;
+
+  if (!pctx->bAuthenticated) {
+    return VSCP_ERROR_ERROR;
+  }
 
   // Send reply with authentication status
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, &auth_status, 1);
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // vscp_binary_callback_check_privilege
 //
 
-int
-vscp_binary_callback_check_privilege(const void *pdata, uint8_t priv)
-{
-  if (NULL == pdata) {
-    return VSCP_ERROR_PARAMETER;
-  }
+// int
+// vscp_binary_callback_check_privilege(const void *pdata, uint8_t priv)
+// {
+//   if (NULL == pdata) {
+//     return VSCP_ERROR_PARAMETER;
+//   }
 
-  // Check if authenticated (simple privilege check)
-  vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
-  uint8_t has_priv                   = pctx->bAuthenticated ? 1 : 0;
+//   // Check if authenticated (simple privilege check)
+//   vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
+//   uint8_t has_priv                   = pctx->bAuthenticated ? 1 : 0;
 
-  // Send reply with privilege status
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, &has_priv, 1);
-}
+//   // Send reply with privilege status
+//   return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, &has_priv, 1);
+// }
 
 ///////////////////////////////////////////////////////////////////////////////
 // vscp_binary_callback_test
@@ -430,7 +537,7 @@ vscp_binary_callback_test(const void *pdata, const uint8_t *arg, size_t len)
   }
 
   // Echo back the test data as reply
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, arg, len);
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -445,17 +552,16 @@ vscp_binary_callback_wcyd(const void *pdata, uint64_t *pwcyd)
   }
 
   // Send reply with WCYD (What Can You Do) info - 8 bytes, big-endian
-  uint8_t wcyd_bytes[8];
-  wcyd_bytes[0] = (*pwcyd >> 56) & 0xFF;
-  wcyd_bytes[1] = (*pwcyd >> 48) & 0xFF;
-  wcyd_bytes[2] = (*pwcyd >> 40) & 0xFF;
-  wcyd_bytes[3] = (*pwcyd >> 32) & 0xFF;
-  wcyd_bytes[4] = (*pwcyd >> 24) & 0xFF;
-  wcyd_bytes[5] = (*pwcyd >> 16) & 0xFF;
-  wcyd_bytes[6] = (*pwcyd >> 8) & 0xFF;
-  wcyd_bytes[7] = *pwcyd & 0xFF;
+  pwcyd[0] = 0x00; // Reserved for future use, set to 0 for now
+  pwcyd[1] = 0x00; // Reserved for future use, set to 0 for now
+  pwcyd[2] = 0x00; // Reserved for future use, set to 0 for now
+  pwcyd[3] = 0x00; // Reserved for future use, set to 0 for now
+  pwcyd[4] = 0x00; // Reserved for future use, set to 0 for now
+  pwcyd[5] = 0x00; // Reserved for future use, set to 0 for now
+  pwcyd[6] = 0x00; // Reserved for future use, set to 0 for now
+  pwcyd[7] = 0x00; // Reserved for future use, set to 0 for now
 
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, wcyd_bytes, sizeof(wcyd_bytes));
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -469,14 +575,8 @@ vscp_binary_callback_check_data(const void *pdata, uint32_t *pcount)
     return VSCP_ERROR_PARAMETER;
   }
 
-  // Send reply with data count (4 bytes, big-endian)
-  uint8_t count_bytes[4];
-  count_bytes[0] = (*pcount >> 24) & 0xFF;
-  count_bytes[1] = (*pcount >> 16) & 0xFF;
-  count_bytes[2] = (*pcount >> 8) & 0xFF;
-  count_bytes[3] = *pcount & 0xFF;
-
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, count_bytes, sizeof(count_bytes));
+  *pcount = 0; // For this example, we have no events ready to be received
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -490,8 +590,10 @@ vscp_binary_callback_clrall(const void *pdata)
     return VSCP_ERROR_PARAMETER;
   }
 
+  // No input queue to clear
+
   // Send reply confirming all cleared
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -505,8 +607,73 @@ vscp_binary_callback_send_event(const void *pdata, const vscpEvent *pev)
     return VSCP_ERROR_PARAMETER;
   }
 
+  vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
+
+  // Filter
+  // if (!vscp_fwhlp_doLevel2FilterEx(pex, &pctx->filter)) {
+  //   return VSCP_ERROR_SUCCESS; // Filter out == OK
+  // }
+
+  // Update send statistics
+  pctx->stats.cntTransmitFrames++;
+  pctx->stats.cntTransmitData += pev->sizeData;
+
+  // Mark this event as coming from this interface
+  // TODO pev->obid = pctx->sock;
+
+  // Check for Level II event
+  if (pev->vscp_class > 1024) {
+    // can not send level II events on TWAI, so we just drop them in this example
+  }
+  // Check for proxy event
+  else if (pev->vscp_class > 512) {
+    ;
+  }
+  /* 
+    Level I event. If addressed to nodeid = 0
+    and VSCP_CLASS1_PROTOCOL it is addressed to us
+    and we should handle it. If not send event
+    on the TWAI interface.
+  */ 
+  else {
+    if ((VSCP_CLASS1_PROTOCOL == pev->vscp_class) && (0 == pev->GUID[15])) {
+      ;
+    }
+    else {
+      can4vscp_frame_t tx_msg;
+      tx_msg.data_length_code = pev->sizeData;
+      tx_msg.extd             = 1;
+      tx_msg.identifier =
+        pev->GUID[0] + (pev->vscp_type << 8) + (pev->vscp_class << 16) + (((pev->head >> 5) & 7) << 26);
+      can4vscp_send(&tx_msg, portMAX_DELAY);
+      ESP_LOGI(TAG, "Transmitted start command");
+    }
+  }
+
+
+
+  // Write to send buffer of other interfaces
+  for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
+    // if (pctx->sock != i) {
+    //   vscpEventEx *pnew = vscp_fwhlp_mkEventCopy(pex);
+    //   if (NULL == pnew) {
+    //     vscp_fwhlp_deleteEvent(&pnew);
+    //     vscp_fwhlp_deleteEvent(&pex);
+    //     return VSCP_ERROR_MEMORY;
+    //   }
+    //   else {
+    //     if (!vscp_fifo_write(&gctx[i].fifoEventsOut, pnew)) {
+    //       vscp_fwhlp_deleteEvent(&pnew);
+    //       vscp_fwhlp_deleteEvent(&pex);
+    //       gctx[i].statistics.cntOverruns++;
+    //       return VSCP_ERROR_TRM_FULL;
+    //     }
+    //   }
+    // }
+  }
+
   // Send reply confirming event sent
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -602,7 +769,7 @@ vscp_binary_callback_write_client(const void *pdata, const char *msg)
 
   // Send reply with message echoed back
   size_t len = strlen(msg);
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, (const uint8_t *)msg, len);
+  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, (const uint8_t *) msg, len);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -719,7 +886,7 @@ vscp_binary_callback_disconnect_client(const void *pdata)
 //
 
 int
-vscp_binary_callback_statistics(const void *pdata, VSCPStatistics *pStatistics)
+vscp_binary_callback_statistics(const void *pdata, vscp_statistics_t *pStatistics)
 {
   if (NULL == pdata || NULL == pStatistics) {
     return VSCP_ERROR_PARAMETER;
@@ -734,7 +901,7 @@ vscp_binary_callback_statistics(const void *pdata, VSCPStatistics *pStatistics)
 //
 
 int
-vscp_binary_callback_info(const void *pdata, VSCPStatus *pstatus)
+vscp_binary_callback_info(const void *pdata, vscp_status_t *pstatus)
 {
   if (NULL == pdata || NULL == pstatus) {
     return VSCP_ERROR_PARAMETER;
@@ -813,7 +980,7 @@ vscp_binary_callback_text(const void *pdata)
 
   // Set the binary flag in the context
   vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
-  (void) pctx;
+  pctx->bBinary                      = false;
 
   return VSCP_ERROR_SUCCESS;
 }

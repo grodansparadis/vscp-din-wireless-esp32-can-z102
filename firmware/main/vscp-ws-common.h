@@ -74,6 +74,9 @@ typedef struct _ws_user {
   char fullname[64];
 #endif
 
+  // Privileges 0-15 (0 = no privileges, 15 = all privileges)
+  uint8_t privlevel;
+
   /*
     Default filter mask for the user. Set after authentication. The user is allowed to change the
     filter mask after authentication if he/she has the right to do so.
@@ -88,6 +91,7 @@ typedef struct _ws_user {
   /*
     Bitfield for user rights/permissions, see vscp.h for defined rights.
     This field is used to determine what the user is allowed to do and not to do.
+    Alternative to the privlevel field, or can be used in combination with it for more fine-grained control.
   */
   uint64_t rights;
 
@@ -123,13 +127,18 @@ typedef struct _ws_user {
 } ws_user_t;
 
 typedef struct _vscp_ws_connection_context {
-  uint8_t protocol;       // 0 == stringbased, 1 == JSON, 2=binary
-  uint8_t sid[16];        // Session ID for authentication and encryption
-  bool bOpen;             // Flag for open/closed channel- True if open
+  uint8_t protocol; // 0 == stringbased, 1 == JSON
+  uint8_t guid[16]; // GUID for the connection (defaults to module GUID)
+  uint8_t sid[16];  // Session ID for authentication and encryption
+  uint32_t chid;    // Channel ID for the connection, used for multiplexing multiple connections over the same websocket
+  bool bOpen;       // Flag for open/closed channel- True if open
+  bool bBinary;     // True if this is a binary protocol connection, false if text-based protocol
   uint8_t encryption;     // Encryption type used for the connection. 0 = no encryption, 1 = AES-128, etc.
-  bool bAuthenticated;    // Whether the client is authenticated. True if authenticated
   vscpEventFilter filter; // Filter/mask for received VSCP events for this connection
+  bool bAuthenticated;    // Whether the client is authenticated. True if authenticated
   ws_user_t user;         // User information for athenticated user
+  vscp_statistics_t stats; // Statistics for the connection
+  vscp_status_t status;    // Status information for the connection
   void *pdata;            // Pointer to user data that can be used to store connection-specific information
 } vscp_ws_connection_context_t;
 

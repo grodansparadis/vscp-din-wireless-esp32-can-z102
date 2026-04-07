@@ -78,15 +78,21 @@ vscp_ws1_is_hex_string(const char *str)
 int
 vscp_ws1_init(vscp_ws_connection_context_t *pctx, void *pdata)
 {
+  // Check pointer (pdata may be NULL)
+  if (NULL == pctx) {
+    return VSCP_ERROR_INVALID_POINTER;
+  }
+
   int rv;
   char buf[VSCP_WS1_MAX_PACKET_SIZE] = { 0 };
 
   // Initialize the connection context
   memset(pctx, 0, sizeof(vscp_ws_connection_context_t));
-  pctx->pdata          = pdata; // Save the user data (request pointer)
-  pctx->bAuthenticated = false; // Not authenticated until proven otherwise
-  pctx->bOpen          = false; // Not open until authentication is successful
-  pctx->pdata          = pdata;
+  pctx->pdata          = pdata;              // Save the user data (request pointer)
+  pctx->bAuthenticated = false;              // Not authenticated until proven otherwise
+  pctx->bOpen          = false;              // Not open until authentication is successful
+  pctx->pdata          = pdata;              // Save the user data (request pointer)
+  
 
   // Clear the global VSCP filter
   memset(&pctx->filter, 0, sizeof(pctx->filter));

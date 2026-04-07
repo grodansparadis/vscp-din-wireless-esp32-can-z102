@@ -74,8 +74,8 @@ typedef struct _ctx {
   uint8_t privLevel;                            // User privilege level 0-15
   int bRcvLoop;                                 // Receive loop is enabled if non zero
   vscpEventFilter filter;                       // Filter for events
-  VSCPStatistics statistics;                    // VSCP Statistics
-  VSCPStatus status;                            // VSCP status
+  vscp_statistics_t statistics;                    // VSCP Statistics
+  vscp_status_t status;                            // VSCP status
   uint32_t last_rcvloop_time;                   // Time of last received event
 } ctx_t;
 

@@ -45,6 +45,9 @@
 {
 #endif
 
+#define VSCP_BINARY_MAX_USERNAME_LENGTH 32
+#define VSCP_BINARY_MAX_PASSWORD_LENGTH 32
+
 // Binary command codes
 #define VSCP_BINARY_COMMAND_CODE_NOOP      0x0000 /* No operation command */
 #define VSCP_BINARY_COMMAND_CODE_QUIT      0x0001 /* Quit connection */
@@ -95,7 +98,6 @@
     @return VSCP_ERROR_SUCCESS if all is OK, errorcode otherwise.
   */
   int vscp_handle_binary_event(const void *pdata, vscpEvent *pEvent);
-
 
   ///////////////////////////////////////////////////////////////////////////////
   //                             Callbacks
@@ -236,7 +238,7 @@
    * @return Return VSCP_ERROR_SUCCESS if privileged (>= priv).
    */
 
-  int vscp_binary_callback_check_privilege(const void *pdata, uint8_t priv);
+  //int vscp_binary_callback_check_privilege(const void *pdata, uint8_t priv);
 
   /**
    * @fn vscp_binary_callback_test
@@ -476,7 +478,7 @@
    * @return Return VSCP_ERROR_SUCCESS on success, else error code.
    */
 
-  int vscp_binary_callback_statistics(const void *pdata, VSCPStatistics *pStatistics);
+  int vscp_binary_callback_statistics(const void *pdata, vscp_statistics_t *pStatistics);
 
   /**
    * @fn vscp_binary_callback_info
@@ -487,7 +489,7 @@
    * @return Return VSCP_ERROR_SUCCESS on success, else error code.
    */
 
-  int vscp_binary_callback_info(const void *pdata, VSCPStatus *pstatus);
+  int vscp_binary_callback_info(const void *pdata, vscp_status_t *pstatus);
 
   /**
    * @fn vscp_binary_callback_get_interface_count
@@ -594,19 +596,18 @@
 
   int vscp_binary_callback_restart(const void *pdata);
 
-
   /*!
-    * @fn vscp_binary_callback_text
-    * @brief Return to text mode
-    *
-    * @param pdata Pointer to context
-    * @return Return VSCP_ERROR_SUCCESS on success, else error code.
-    *
-    * This callback is executed when the client sends the 'text' command. 
-    * The callback should switch the connection back to text mode and return 
-    * a positive response if the connection was successfully switched, or a 
-    * negative response if there was a failure.
-  */
+   * @fn vscp_binary_callback_text
+   * @brief Return to text mode
+   *
+   * @param pdata Pointer to context
+   * @return Return VSCP_ERROR_SUCCESS on success, else error code.
+   *
+   * This callback is executed when the client sends the 'text' command.
+   * The callback should switch the connection back to text mode and return
+   * a positive response if the connection was successfully switched, or a
+   * negative response if there was a failure.
+   */
   int vscp_binary_callback_text(const void *pdata);
 
   /**

@@ -446,13 +446,16 @@ vscp_link_callback_send(const void *pdata, vscpEvent *pev)
   if (pev->vscp_class > 1024) {}
   // Check for proxy event
   else if (pev->vscp_class > 512) {
+    ;
   }
   // Level I event. If addressed to nodeid = 0
   // and VSCP_CLASS1_PROTOCOL it is addressed to us
   // and we should handle it. If not send event
   // on the TWAI interface.
   else {
-    if ((VSCP_CLASS1_PROTOCOL == pev->vscp_class) && (0 == pev->GUID[15])) {}
+    if ((VSCP_CLASS1_PROTOCOL == pev->vscp_class) && (0 == pev->GUID[15])) {
+      ;
+    }
     else {
       can4vscp_frame_t tx_msg;
       tx_msg.data_length_code = pev->sizeData;
@@ -795,7 +798,7 @@ vscp_link_callback_setMask(const void *pdata, vscpEventFilter *pfilter)
 //
 
 int
-vscp_link_callback_statistics(const void *pdata, VSCPStatistics *pStatistics)
+vscp_link_callback_statistics(const void *pdata, vscp_statistics_t *pStatistics)
 {
   if ((NULL == pdata) || (NULL == pStatistics)) {
     return VSCP_ERROR_INVALID_POINTER;
@@ -804,7 +807,7 @@ vscp_link_callback_statistics(const void *pdata, VSCPStatistics *pStatistics)
   // Get pointer to context
   ctx_t *pctx = (ctx_t *) pdata;
 
-  memcpy(pStatistics, &pctx->statistics, sizeof(VSCPStatistics));
+  memcpy(pStatistics, &pctx->statistics, sizeof(vscp_statistics_t));
 
   return VSCP_ERROR_SUCCESS;
 }
@@ -814,7 +817,7 @@ vscp_link_callback_statistics(const void *pdata, VSCPStatistics *pStatistics)
 //
 
 int
-vscp_link_callback_info(const void *pdata, VSCPStatus *pstatus)
+vscp_link_callback_info(const void *pdata, vscp_status_t *pstatus)
 {
   if ((NULL == pdata) || (NULL == pstatus)) {
     return VSCP_ERROR_INVALID_POINTER;
@@ -823,7 +826,7 @@ vscp_link_callback_info(const void *pdata, VSCPStatus *pstatus)
   // Get pointer to context
   ctx_t *pctx = (ctx_t *) pdata;
 
-  memcpy(pstatus, &pctx->status, sizeof(VSCPStatus));
+  memcpy(pstatus, &pctx->status, sizeof(vscp_status_t));
 
   return VSCP_ERROR_SUCCESS;
 }

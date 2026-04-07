@@ -163,7 +163,7 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
     return vscp_binary_callback_clrall(pdata);
   }
   else if (VSCP_BINARY_COMMAND_CODE_STAT == command) {
-    VSCPStatistics statistics;
+    vscp_statistics_t statistics;
     if (VSCP_ERROR_SUCCESS != (rv = vscp_binary_callback_statistics(pdata, &statistics))) {
       return vscp_binary_callback_reply(pdata, command, rv, NULL, 0);
     }
@@ -210,7 +210,7 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
     }
   }
   else if (VSCP_BINARY_COMMAND_CODE_INFO == command) {
-    VSCPStatus status;
+    vscp_status_t status;
     if (VSCP_ERROR_SUCCESS != (rv = vscp_binary_callback_info(pdata, &status))) {
       return vscp_binary_callback_reply(pdata, command, rv, NULL, 0);
     }
@@ -269,9 +269,9 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
     return vscp_binary_callback_reply(pdata, command, VSCP_ERROR_SUCCESS, guid, 16);
   }
   else if (VSCP_BINARY_COMMAND_CODE_VERSION == command) {
-    uint8_t version[6];
+    uint8_t version[10]; // 2 + 2 + 2 + 4
     if (VSCP_ERROR_SUCCESS != (rv = vscp_binary_callback_get_version(pdata, version))) {
-      return vscp_binary_callback_reply(pdata, command, rv, NULL, 0);
+      return vscp_binary_callback_reply(pdata, command, rv, version, sizeof(version));
     }
     // Send reply with version
     return vscp_binary_callback_reply(pdata, command, VSCP_ERROR_SUCCESS, version, sizeof(version));

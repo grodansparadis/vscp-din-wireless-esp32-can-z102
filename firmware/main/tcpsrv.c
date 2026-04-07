@@ -106,8 +106,8 @@ setContextDefaults(ctx_t *pctx)
   memset(pctx->user, 0, VSCP_LINK_MAX_USER_NAME_LENGTH);
   // Filter: All events received
   memset(&pctx->filter, 0, sizeof(vscpEventFilter));
-  memset(&pctx->statistics, 0, sizeof(VSCPStatistics));
-  memset(&pctx->status, 0, sizeof(VSCPStatus));
+  memset(&pctx->statistics, 0, sizeof(vscp_statistics_t));
+  memset(&pctx->status, 0, sizeof(vscp_status_t));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -169,8 +169,8 @@ client_task(void *pvParameters)
   memset(ctx.user, 0, VSCP_LINK_MAX_USER_NAME_LENGTH);
   // Filter: All events received
   memset(&ctx.filter, 0, sizeof(vscpEventFilter));
-  memset(&ctx.statistics, 0, sizeof(VSCPStatistics));
-  memset(&ctx.status, 0, sizeof(VSCPStatus));
+  memset(&ctx.statistics, 0, sizeof(vscp_statistics_t));
+  memset(&ctx.status, 0, sizeof(vscp_status_t));
 
   // int sock = (int)*((int *)pvParameters);
   ctx.sock = *((int *) pvParameters);

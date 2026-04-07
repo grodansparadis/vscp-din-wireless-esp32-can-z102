@@ -229,7 +229,7 @@
       "internal_id": "",
       "mfg": "",
       "mpn": "",
-      "sch_revision": ""
+      "sch_revision": "C"
     },
     "layer_pairs": [],
     "layer_presets": [],
@@ -516,7 +516,7 @@
       "gencad": "",
       "idf": "",
       "netlist": "",
-      "plot": "",
+      "plot": "/home/akhe/Downloads/",
       "pos_files": "",
       "specctra_dsn": "",
       "step": "",
@@ -646,7 +646,7 @@
       {
         "filename": "vscp-din-esp32-can-z102.kicad_sch",
         "name": "vscp-din-esp32-can-z102",
-        "uuid": "00000000-0000-0000-0000-000000000000"
+        "uuid": "a1545928-1195-40b9-b3c4-78f837012afb"
       }
     ],
     "used_designators": "",
@@ -655,7 +655,7 @@
   "sheets": [
     [
       "a1545928-1195-40b9-b3c4-78f837012afb",
-      "Root"
+      "vscp-din-esp32-can-z102"
     ]
   ],
   "text_variables": {},
