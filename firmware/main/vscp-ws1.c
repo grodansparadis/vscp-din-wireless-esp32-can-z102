@@ -37,11 +37,13 @@
 #include <stdlib.h>
 
 #include <esp_log.h>
+#include "esp_log_buffer.h"
 
 #include "vscp-compiler.h"
 #include "vscp-projdefs.h"
 
 #include <vscp.h>
+#include <crc.h>
 
 #include <vscp-binary.h>
 #include "vscp-ws1.h"
@@ -71,6 +73,71 @@ vscp_ws1_is_hex_string(const char *str)
   return true;
 }
 
+static bool
+vscp_ws1_is_zero_padding(const uint8_t *buf, size_t start, size_t end)
+{
+  if (NULL == buf) {
+    return false;
+  }
+
+  for (size_t idx = start; idx < end; ++idx) {
+    if (0 != buf[idx]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static size_t
+vscp_ws1_get_decrypted_binary_frame_len(const uint8_t *buf, size_t max_len)
+{
+  if ((NULL == buf) || (0 == max_len)) {
+    return 0;
+  }
+
+  const uint8_t frame_type = buf[0] & 0xF0;
+
+  if ((0xE0 == frame_type) || (0xF0 == frame_type)) {
+    const size_t min_len = (0xE0 == frame_type) ? 5 : 7;
+    for (size_t candidate = min_len; candidate <= max_len; ++candidate) {
+      if (!vscp_ws1_is_zero_padding(buf, candidate, max_len)) {
+        continue;
+      }
+
+      if (0 == crcFast((unsigned char const *) buf + 1, candidate - 1)) {
+        return candidate;
+      }
+    }
+
+    return 0;
+  }
+
+  if (0x00 == frame_type) {
+    const size_t calc_frame_size = 1 +
+                                   VSCP_BINARY_PACKET_FRAME0_HEADER_LENGTH +
+                                   2 +
+                                   ((uint16_t) buf[VSCP_BINARY_PACKET_FRAME0_POS_SIZE_MSB] << 8) +
+                                   buf[VSCP_BINARY_PACKET_FRAME0_POS_SIZE_LSB];
+
+    if ((calc_frame_size > max_len) || !vscp_ws1_is_zero_padding(buf, calc_frame_size, max_len)) {
+      return 0;
+    }
+
+    crc crc_frame = ((uint16_t) buf[calc_frame_size - 2] << 8) + buf[calc_frame_size - 1];
+    if ((buf[VSCP_BINARY_PACKET_FRAME0_POS_HEAD_LSB] & VSCP_HEADER_NO_CRC) &&
+        (VSCP_NOCRC_CALC_DUMMY_CRC == crc_frame)) {
+      return calc_frame_size;
+    }
+
+    if (0 == crcFast((unsigned char const *) buf + 1, calc_frame_size - 1)) {
+      return calc_frame_size;
+    }
+  }
+
+  return 0;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // vscp_ws1_init
 //
@@ -88,11 +155,10 @@ vscp_ws1_init(vscp_ws_connection_context_t *pctx, void *pdata)
 
   // Initialize the connection context
   memset(pctx, 0, sizeof(vscp_ws_connection_context_t));
-  pctx->pdata          = pdata;              // Save the user data (request pointer)
-  pctx->bAuthenticated = false;              // Not authenticated until proven otherwise
-  pctx->bOpen          = false;              // Not open until authentication is successful
-  pctx->pdata          = pdata;              // Save the user data (request pointer)
-  
+  pctx->pdata          = pdata; // Save the user data (request pointer)
+  pctx->bAuthenticated = false; // Not authenticated until proven otherwise
+  pctx->bOpen          = false; // Not open until authentication is successful
+  pctx->pdata          = pdata; // Save the user data (request pointer)
 
   // Clear the global VSCP filter
   memset(&pctx->filter, 0, sizeof(pctx->filter));
@@ -228,7 +294,7 @@ vscp_ws1_handle_text_protocol_request(vscp_ws_connection_context_t *pctx, const 
   // Received event
   else if (*p == 'E') {
     // frame_type        = VSCP_WS1_PKT_TYPE_EVENT;
-    vscpEvent *pEvent = NULL;
+    vscp_event_t *pEvent = NULL;
     // Parse event data from packet (p should be in the format "E;head;
     vscp_ws1_callback_event(pctx, pEvent);
   }
@@ -257,63 +323,98 @@ vscp_ws1_handle_text_protocol_request(vscp_ws_connection_context_t *pctx, const 
 //
 
 int
-vscp_ws1_handle_binary_protocol_request(vscp_ws_connection_context_t *pctx, const uint8_t *pframe, uint16_t len)
+vscp_ws1_handle_binary_protocol_request(vscp_ws_connection_context_t *pctx, const uint8_t *pframe, size_t len)
 {
   int rv;
-  // uint8_t frame_type = VSCP_WS1_PKT_TYPE_UNKNOWN;
-  //  char frame_buf[1 + VSCP_BINARY_PACKET0_HEADER_LENGTH + 2 +
-  //                 512]; // Buffer to hold the binary frame, size should be enough to hold the largest expected frame
 
   ESP_LOGI(TAG, "Handling binary protocol WS1");
-  uint8_t *pbuf =
-    (uint8_t *) calloc(1, 1 + VSCP_BINARY_PACKET_FRAME0_HEADER_LENGTH + 2 + 512); // Allocate buffer for decrypted frame
+
+  ESP_LOGI(TAG, "Dumping binary command buffer:");
+  ESP_LOG_BUFFER_HEXDUMP(TAG, pframe, len, ESP_LOG_INFO);
+
+  const size_t pbuf_size = 1 + VSCP_BINARY_PACKET_FRAME0_HEADER_LENGTH + 2 + 512;
+  uint8_t *pbuf = (uint8_t *) calloc(1, pbuf_size); // Allocate buffer for decrypted frame
   if (NULL == pbuf) {
     ESP_LOGE(TAG, "Failed to allocate memory for binary frame buffer");
     return VSCP_ERROR_MEMORY;
   }
 
-  if (NULL == pframe || 0 == len || len >= sizeof(pbuf)) {
+  if ((NULL == pframe) || (0 == len) || (len > pbuf_size)) {
     free(pbuf);
+    ESP_LOGE(TAG,
+             "Invalid binary frame received: len=%zu (max %zu) %s",
+             len,
+             pbuf_size,
+             (NULL == pframe) ? "frame is NULL" : "frame is not NULL");
     return VSCP_ERROR_INVALID_FRAME;
   }
 
   // We only support frame format 0,14 and 15 in this implementation
   if ((0 != (pframe[0] & 0xf0)) && (0XF0 != (pframe[0] & 0xf0)) && (0xe0 != (pframe[0] & 0xf0))) {
     free(pbuf);
+    ESP_LOGE(TAG, "Unsupported binary frame format");
     return VSCP_ERROR_INVALID_FRAME;
   }
 
-  if (VSCP_ERROR_SUCCESS !=
-      (rv = vscp_fwhlp_decryptFrame(
-         pbuf,                              // Buffer to hold decrypted frame
-         pframe,                            // Ecrypted data
-         len - (pframe[0] & 0x0f ? 16 : 0), // Length of data to decrypt (if encryption is used, the last 16 bytes are
-                                            // the IV and should not be included in the data to decrypt)
-         vscp_ws1_callback_get_primary_key(pctx), // Encryption key (should be obtained from the session context or
-                                                  // configuration)
-         pframe + len - 16,                       // IV is expected to be the last 16 bytes of the encrypted data
-         VSCP_ENCRYPTION_FROM_TYPE_BYTE))) {
-    free(pbuf);
-    ESP_LOGE(TAG, "Failed to decrypt binary frame with error %d", rv);
-    return rv;
+  size_t frame_len = len;
+
+  if (pframe[0] & 0x0f) {
+    // Encrypted frame: low nibble of byte 0 selects algorithm; trailing 16 bytes are the IV
+    if (VSCP_ERROR_SUCCESS !=
+        (rv = vscp_fwhlp_decryptFrame(
+           pbuf,
+           pframe,
+           len - 16,                              // Exclude appended IV from data length
+           vscp_ws1_callback_get_primary_key(pctx),
+           pframe + len - 16,                     // IV is the last 16 bytes
+           VSCP_ENCRYPTION_FROM_TYPE_BYTE))) {
+      free(pbuf);
+      ESP_LOGE(TAG, "Failed to decrypt binary frame with error %d", rv);
+      return rv;
+    }
+
+    frame_len = vscp_ws1_get_decrypted_binary_frame_len(pbuf, len - 16);
+    if (0 == frame_len) {
+      free(pbuf);
+      ESP_LOGE(TAG, "Failed to determine decrypted binary frame length");
+      return VSCP_ERROR_INVALID_FRAME;
+    }
+  }
+  else {
+    // No encryption: copy frame as-is into pbuf
+    memcpy(pbuf, pframe, len);
   }
 
-  if (len < (1 + VSCP_BINARY_PACKET_FRAME0_HEADER_LENGTH + 2)) {
-    // Frame is too short to be valid
+  // Minimum length depends on frame type
+  size_t min_len;
+  if (0xe0 == (pbuf[0] & 0xf0)) {
+    min_len = 5; // type(1) + cmd(2) + crc(2)
+  }
+  else if (0xf0 == (pbuf[0] & 0xf0)) {
+    min_len = 7; // type(1) + cmd(2) + error(2) + crc(2)
+  }
+  else {
+    min_len = 1 + VSCP_BINARY_PACKET_FRAME0_HEADER_LENGTH + 2; // event frame
+  }
+
+  if (frame_len < min_len) {
     free(pbuf);
+    ESP_LOGE(TAG, "Binary frame too short: %zu < %zu", frame_len, min_len);
     return VSCP_ERROR_INVALID_FRAME;
   }
 
   // Command
   if (0xe0 == (pbuf[0] & 0xf0)) {
 
-    const uint8_t *parg = pbuf + 3; // Point at argument part of packet (after header and command bytes)
+    const uint8_t *parg = pbuf + 3; // Point at argument part of packet (after type and command bytes)
     // frame_type = VSCP_WS1_PKT_TYPE_COMMAND;
 
     uint16_t command = (uint16_t) pbuf[1] << 8 | (uint8_t) pbuf[2];
+    size_t arg_len   = (frame_len >= 5) ? (frame_len - 5) : 0; // exclude type(1) + cmd(2) + crc(2)
 
     // Pass command and argument to command handler callback
-    vscp_handle_binary_command(pctx, command, parg, len - 3);
+    ESP_LOGI(TAG, "Received binary command: 0x%04X arg_len=%zu", command, arg_len);
+    vscp_handle_binary_command(pctx, command, parg, arg_len);
   }
   // Reply
   else if (0xf0 == (pbuf[0] & 0xf0)) {
@@ -322,9 +423,33 @@ vscp_ws1_handle_binary_protocol_request(vscp_ws_connection_context_t *pctx, cons
   // Event
   else if (0x00 == (pbuf[0] & 0xf0)) {
     // frame_type        = VSCP_WS1_PKT_TYPE_EVENT;
-    vscpEvent *pEvent = NULL;
+    vscp_event_t *pEvent = calloc(1, sizeof(vscpEvent));
+    if (NULL == pEvent) {
+      free(pbuf);
+      return VSCP_ERROR_MEMORY;
+    }
+
     // Parse event data from packet (p should be in the format "E;head;
-    vscp_handle_binary_event(pctx, pEvent);
+    int rv = vscp_fwhlp_getEventFromFrame(pEvent, pbuf, frame_len);
+    if (VSCP_ERROR_SUCCESS != rv) {
+      vscp_fwhlp_deleteEvent(&pEvent);
+      free(pbuf);
+      ESP_LOGE(TAG, "Failed to parse event from binary frame with error %d", rv);
+      return rv;
+    }
+
+    // Not needed anymore
+    free(pbuf);
+
+    rv = vscp_handle_binary_event(pctx, pEvent);
+
+    vscp_fwhlp_deleteEvent(&pEvent);
+    if (VSCP_ERROR_SUCCESS != rv) {
+      ESP_LOGE(TAG, "Failed to handle event from binary frame with error %d", rv);
+      return rv;
+    }
+
+    return VSCP_ERROR_SUCCESS;
   }
   // Positive respone
   // else if (*p == '+') {
