@@ -30,8 +30,27 @@ CMD_NOOP = 0x0000
 CMD_QUIT = 0x0001
 CMD_USER = 0x0002
 CMD_PASS = 0x0003
+CMD_CHALLENGE = 0x0004
 CMD_SEND = 0x0005
+CMD_RETR = 0x0006
 CMD_OPEN = 0x0007
+CMD_CLOSE = 0x0008
+CMD_CHKDATA = 0x0009
+CMD_CLEAR = 0x000A
+CMD_STAT = 0x000B
+CMD_INFO = 0x000C
+CMD_GETCHID = 0x000D
+CMD_SETGUID = 0x000E
+CMD_GETGUID = 0x000F
+CMD_VERSION = 0x0010
+CMD_SETFILTER = 0x0011
+CMD_SETMASK = 0x0012
+CMD_INTERFACE = 0x0013
+CMD_TEST = 0x001E
+CMD_WCYD = 0x001F
+CMD_SHUTDOWN = 0x0020
+CMD_RESTART = 0x0021
+CMD_TEXT = 0x0022
 VSCP_ENCRYPTION_AES128 = 0x01
 VSCP_BINARY_EVENT_HEADER_LENGTH = 35
 VSCP_HEADER16_FRAME_VERSION_UNIX_NS = 0x0100
@@ -195,17 +214,17 @@ def handle_binary_reply(buf: bytes) -> None:
   """Validate binary protocol reply (Frame format 15)."""
   if len(buf) < 7:
     raise RuntimeError(f"Reply too short ({len(buf)} bytes), expected >= 7")
-  
+
   # Frame format=15 (Protocol Reply):
   # Byte 0: Frame type & encryption settings (should be 0xF0 = reply, no encryption)
   # Byte 1-2: Command code (echo of command)
   # Byte 3-4: Error code (0x0000 = success)
-  # Byte 5-6: CRC-CCITT (calculated over command + error + args, excluding byte 0)
+  # Byte N-2..N-1: CRC-CCITT over command + error + args (excluding byte 0)
   frame_type = buf[0] & 0xF0
   command = (buf[1] << 8) | buf[2]
   error = (buf[3] << 8) | buf[4]
-  received_crc = (buf[5] << 8) | buf[6]
-  
+  received_crc = (buf[-2] << 8) | buf[-1]
+
   # Validate CRC over command + error + args (skip type byte and trailing CRC bytes)
   frame_data_for_crc = buf[1:-2]
   expected_crc = calculate_crc_ccitt(frame_data_for_crc)
@@ -302,7 +321,7 @@ def parse_binary_reply(buf: bytes) -> Tuple[int, int]:
   frame_type = buf[0] & 0xF0
   command = (buf[1] << 8) | buf[2]
   error = (buf[3] << 8) | buf[4]
-  received_crc = (buf[5] << 8) | buf[6]
+  received_crc = (buf[-2] << 8) | buf[-1]
   expected_crc = calculate_crc_ccitt(buf[1:-2])
 
   if frame_type != 0xF0:
@@ -448,8 +467,8 @@ async def run_scenario_binary_only(url: str, username: str, password: str) -> No
 
 
 async def run_scenario_binary_only_encrypted(url: str, username: str, password: str, key_hex: str) -> None:
-  """Scenario C: encrypted binary USER/PASS/OPEN/NOOP/QUIT with async wait."""
-  print("\nScenario C: encrypted binary USER/PASS/OPEN/NOOP/QUIT")
+  """Scenario C: encrypted binary command sweep with async wait."""
+  print("\nScenario C: encrypted binary USER/PASS/OPEN + command sweep")
   async with websockets.connect(url, ping_interval=None, ping_timeout=1, close_timeout=5) as ws:
     print("  Connected, waiting for initial text greeting/challenge...")
 
@@ -469,6 +488,66 @@ async def run_scenario_binary_only_encrypted(url: str, username: str, password: 
     print("  -> [encrypted binary OPEN]")
     await wait_for_binary_reply(ws, CMD_OPEN, "encrypted OPEN")
 
+    zero_guid = bytes(16)
+    zero_filter = bytes(21)
+    iface_count = b"\x00"
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_GETCHID), key_hex))
+    print("  -> [encrypted binary GETCHID]")
+    await wait_for_binary_reply(ws, CMD_GETCHID, "encrypted GETCHID")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_GETGUID), key_hex))
+    print("  -> [encrypted binary GETGUID]")
+    await wait_for_binary_reply(ws, CMD_GETGUID, "encrypted GETGUID")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_SETGUID, zero_guid), key_hex))
+    print("  -> [encrypted binary SETGUID]")
+    await wait_for_binary_reply(ws, CMD_SETGUID, "encrypted SETGUID")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_VERSION), key_hex))
+    print("  -> [encrypted binary VERSION]")
+    await wait_for_binary_reply(ws, CMD_VERSION, "encrypted VERSION")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_STAT), key_hex))
+    print("  -> [encrypted binary STAT]")
+    await wait_for_binary_reply(ws, CMD_STAT, "encrypted STAT")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_INFO), key_hex))
+    print("  -> [encrypted binary INFO]")
+    await wait_for_binary_reply(ws, CMD_INFO, "encrypted INFO")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_WCYD), key_hex))
+    print("  -> [encrypted binary WCYD]")
+    await wait_for_binary_reply(ws, CMD_WCYD, "encrypted WCYD")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_CHKDATA), key_hex))
+    print("  -> [encrypted binary CHKDATA]")
+    await wait_for_binary_reply(ws, CMD_CHKDATA, "encrypted CHKDATA")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_CLEAR), key_hex))
+    print("  -> [encrypted binary CLEAR]")
+    await wait_for_binary_reply(ws, CMD_CLEAR, "encrypted CLEAR")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_SETFILTER, zero_filter), key_hex))
+    print("  -> [encrypted binary SETFILTER]")
+    await wait_for_binary_reply(ws, CMD_SETFILTER, "encrypted SETFILTER")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_SETMASK, zero_filter), key_hex))
+    print("  -> [encrypted binary SETMASK]")
+    await wait_for_binary_reply(ws, CMD_SETMASK, "encrypted SETMASK")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_INTERFACE, iface_count), key_hex))
+    print("  -> [encrypted binary INTERFACE]")
+    await wait_for_binary_reply(ws, CMD_INTERFACE, "encrypted INTERFACE")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_TEST), key_hex))
+    print("  -> [encrypted binary TEST]")
+    await wait_for_binary_reply(ws, CMD_TEST, "encrypted TEST")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_CHALLENGE), key_hex))
+    print("  -> [encrypted binary CHALLENGE]")
+    await wait_for_binary_reply(ws, CMD_CHALLENGE, "encrypted CHALLENGE")
+
     await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_SEND, build_sample_event_frame()), key_hex))
     print("  -> [encrypted binary SEND event]")
     await wait_for_binary_reply(ws, CMD_SEND, "encrypted SEND")
@@ -478,9 +557,29 @@ async def run_scenario_binary_only_encrypted(url: str, username: str, password: 
     await wait_for_binary_reply(ws, CMD_NOOP, "encrypted NOOP")
     await wait_for_async_events(ws, ASYNC_EVENTS_TO_WAIT, "scenario C")
 
-    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_QUIT), key_hex))
-    print("  -> [encrypted binary QUIT frame]")
-    await wait_for_binary_reply(ws, CMD_QUIT, "encrypted QUIT")
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_CLOSE), key_hex))
+    print("  -> [encrypted binary CLOSE]")
+    await wait_for_binary_reply(ws, CMD_CLOSE, "encrypted CLOSE")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_RETR), key_hex))
+    print("  -> [encrypted binary RETR]")
+    await wait_for_binary_reply(ws, CMD_RETR, "encrypted RETR")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_OPEN), key_hex))
+    print("  -> [encrypted binary OPEN(reopen)]")
+    await wait_for_binary_reply(ws, CMD_OPEN, "encrypted OPEN(reopen)")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_SHUTDOWN), key_hex))
+    print("  -> [encrypted binary SHUTDOWN]")
+    await wait_for_binary_reply(ws, CMD_SHUTDOWN, "encrypted SHUTDOWN")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_TEXT), key_hex))
+    print("  -> [encrypted binary TEXT]")
+    await wait_for_binary_reply(ws, CMD_TEXT, "encrypted TEXT")
+
+    await ws.send(encrypt_binary_frame(build_binary_command_frame(CMD_RESTART), key_hex))
+    print("  -> [encrypted binary RESTART]")
+    await wait_for_binary_reply(ws, CMD_RESTART, "encrypted RESTART")
 
 
 def get_url() -> str:

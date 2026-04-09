@@ -27,12 +27,31 @@
 #define WS_OPCODE_PING 0x9
 #define WS_OPCODE_PONG 0xA
 
-#define CMD_NOOP 0x0000
-#define CMD_QUIT 0x0001
-#define CMD_USER 0x0002
-#define CMD_PASS 0x0003
-#define CMD_SEND 0x0005
-#define CMD_OPEN 0x0007
+#define CMD_NOOP      0x0000
+#define CMD_QUIT      0x0001
+#define CMD_USER      0x0002
+#define CMD_PASS      0x0003
+#define CMD_CHALLENGE 0x0004
+#define CMD_SEND      0x0005
+#define CMD_RETR      0x0006
+#define CMD_OPEN      0x0007
+#define CMD_CLOSE     0x0008
+#define CMD_CHKDATA   0x0009
+#define CMD_CLEAR     0x000A
+#define CMD_STAT      0x000B
+#define CMD_INFO      0x000C
+#define CMD_GETCHID   0x000D
+#define CMD_SETGUID   0x000E
+#define CMD_GETGUID   0x000F
+#define CMD_VERSION   0x0010
+#define CMD_SETFILTER 0x0011
+#define CMD_SETMASK   0x0012
+#define CMD_INTERFACE 0x0013
+#define CMD_TEST      0x001E
+#define CMD_WCYD      0x001F
+#define CMD_SHUTDOWN  0x0020
+#define CMD_RESTART   0x0021
+#define CMD_TEXT      0x0022
 
 #define VSCP_ENCRYPTION_AES128 0x01
 #define VSCP_BINARY_EVENT_HEADER_LENGTH 35
@@ -1213,6 +1232,29 @@ scenario_binary_only_common(const test_config_t *cfg, int encrypted)
     rc |= send_plain_binary_command(fd, CMD_OPEN, NULL, 0, "OPEN", cfg->timeout_ms);
   }
 
+  if (encrypted) {
+    /* 16-byte all-zero GUID for SETGUID; 21-byte all-zero filter/mask for SETFILTER/SETMASK
+       (1 priority + 2 class + 2 type + 16 GUID).  INTERFACE subcommand 0x00 = get count. */
+    static const uint8_t zero_guid[16]   = { 0 };
+    static const uint8_t zero_filter[21] = { 0 };
+    static const uint8_t iface_count[1]  = { 0x00 };
+
+    rc |= send_encrypted_binary_command(fd, CMD_GETCHID,   NULL,        0,                   cfg->key_hex, "GETCHID",   cfg->timeout_ms);
+    rc |= send_encrypted_binary_command(fd, CMD_GETGUID,   NULL,        0,                   cfg->key_hex, "GETGUID",   cfg->timeout_ms);
+    rc |= send_encrypted_binary_command(fd, CMD_SETGUID,   zero_guid,   16,                  cfg->key_hex, "SETGUID",   cfg->timeout_ms);
+    rc |= send_encrypted_binary_command(fd, CMD_VERSION,   NULL,        0,                   cfg->key_hex, "VERSION",   cfg->timeout_ms);
+    rc |= send_encrypted_binary_command(fd, CMD_STAT,      NULL,        0,                   cfg->key_hex, "STAT",      cfg->timeout_ms);
+    rc |= send_encrypted_binary_command(fd, CMD_INFO,      NULL,        0,                   cfg->key_hex, "INFO",      cfg->timeout_ms);
+    rc |= send_encrypted_binary_command(fd, CMD_WCYD,      NULL,        0,                   cfg->key_hex, "WCYD",      cfg->timeout_ms);
+    rc |= send_encrypted_binary_command(fd, CMD_CHKDATA,   NULL,        0,                   cfg->key_hex, "CHKDATA",   cfg->timeout_ms);
+    rc |= send_encrypted_binary_command(fd, CMD_CLEAR,     NULL,        0,                   cfg->key_hex, "CLEAR",     cfg->timeout_ms);
+    rc |= send_encrypted_binary_command(fd, CMD_SETFILTER, zero_filter, sizeof(zero_filter), cfg->key_hex, "SETFILTER", cfg->timeout_ms);
+    rc |= send_encrypted_binary_command(fd, CMD_SETMASK,   zero_filter, sizeof(zero_filter), cfg->key_hex, "SETMASK",   cfg->timeout_ms);
+    rc |= send_encrypted_binary_command(fd, CMD_INTERFACE, iface_count, sizeof(iface_count), cfg->key_hex, "INTERFACE", cfg->timeout_ms);
+    rc |= send_encrypted_binary_command(fd, CMD_TEST,      NULL,        0,                   cfg->key_hex, "TEST",      cfg->timeout_ms);
+    rc |= send_encrypted_binary_command(fd, CMD_CHALLENGE, NULL,        0,                   cfg->key_hex, "CHALLENGE", cfg->timeout_ms);
+  }
+
   uint8_t *event_frame = NULL;
   size_t event_len = 0;
   if (0 != build_sample_event_frame(&event_frame, &event_len)) {
@@ -1235,7 +1277,15 @@ scenario_binary_only_common(const test_config_t *cfg, int encrypted)
   }
 
   if (encrypted) {
-    rc |= send_encrypted_binary_command(fd, CMD_QUIT, NULL, 0, cfg->key_hex, "QUIT", cfg->timeout_ms);
+    /* CLOSE / RETR / OPEN cycle */
+    rc |= send_encrypted_binary_command(fd,     CMD_CLOSE,    NULL, 0, cfg->key_hex, "CLOSE",        cfg->timeout_ms);
+    rc |= send_encrypted_binary_command(fd,     CMD_RETR,     NULL, 0, cfg->key_hex, "RETR",        cfg->timeout_ms);
+    rc |= send_encrypted_binary_command(fd,     CMD_OPEN,     NULL, 0, cfg->key_hex, "OPEN(reopen)", cfg->timeout_ms);
+    rc |= send_encrypted_binary_command(fd,     CMD_SHUTDOWN, NULL, 0, cfg->key_hex, "SHUTDOWN",     cfg->timeout_ms);
+    rc |= send_encrypted_binary_command(fd,     CMD_TEXT,     NULL, 0, cfg->key_hex, "TEXT",        cfg->timeout_ms);
+     /* CMD_RESTART: server replies then calls esp_restart() -- device reboots.
+       Send this last; QUIT is intentionally omitted because the connection will drop. */
+     rc |= send_encrypted_binary_command(fd,     CMD_RESTART,  NULL, 0, cfg->key_hex, "RESTART",      cfg->timeout_ms);
   }
   else {
     rc |= send_plain_binary_command(fd, CMD_QUIT, NULL, 0, "QUIT", cfg->timeout_ms);

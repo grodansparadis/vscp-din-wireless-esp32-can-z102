@@ -127,7 +127,9 @@
     "/^git rm --cached test/ws/test_vscp_binary_c && echo \"test_vscp_binary_c\" >> test/ws/\\.gitignore && git add test/ws/\\.gitignore && git commit --amend --no-edit && git show --stat HEAD$/": {
       "approve": true,
       "matchCommandLine": true
-    }
+    },
+    "git -C /home/akhe/development/VSCP/vscp-din-wireless-esp32-can-z102/firmware/third_party/vscp-firmware": true,
+    "git -C /home/akhe/development/VSCP/vscp-din-wireless-esp32-can-z102": true
   },
   "files.watcherExclude": {
     "**/.git/objects/**": true,

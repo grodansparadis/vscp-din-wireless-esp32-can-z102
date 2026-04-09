@@ -60,6 +60,8 @@
 
 #include <netinet/in.h>
 #include <lwip/sockets.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #include "vscp-compiler.h"
 #include "vscp-projdefs.h"
@@ -175,7 +177,7 @@ vscp_binary_callback_reply(const void *pdata, uint16_t command, uint16_t error, 
 //
 
 int
-vscp_binary_callback_challenge(const void *pdata)
+vscp_binary_callback_challenge(const void *pdata, uint8_t *challenge)
 {
   if (NULL == pdata) {
     return VSCP_ERROR_PARAMETER;
@@ -185,9 +187,11 @@ vscp_binary_callback_challenge(const void *pdata)
 
   // Generate a new random 16-byte sid (session ID) for authentication and encryption
   esp_fill_random(pctx->sid, sizeof(pctx->sid));
+  if (challenge) {
+    memcpy(challenge, pctx->sid, sizeof(pctx->sid));
+  }
 
-  // Send challenge as binary reply with command 0 and error 0
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, pctx->sid, sizeof(pctx->sid));
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -684,12 +688,12 @@ vscp_binary_callback_send_event(const void *pdata, const vscp_event_t *pev)
 int
 vscp_binary_callback_get_event(const void *pdata, vscp_event_t *pev)
 {
-  if (NULL == pdata || NULL == pev) {
+  if (NULL == pdata) {
     return VSCP_ERROR_PARAMETER;
   }
 
-  // Send reply confirming event retrieved
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  // No event queue implemented; indicate empty
+  return VSCP_ERROR_FIFO_EMPTY;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -699,12 +703,12 @@ vscp_binary_callback_get_event(const void *pdata, vscp_event_t *pev)
 int
 vscp_binary_callback_get_eventex(const void *pdata, vscp_event_ex_t *pex)
 {
-  if (NULL == pdata || NULL == pex) {
+  if (NULL == pdata) {
     return VSCP_ERROR_PARAMETER;
   }
 
-  // Send reply confirming event retrieved
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  // No event queue implemented; indicate empty
+  return VSCP_ERROR_FIFO_EMPTY;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -990,8 +994,14 @@ vscp_binary_callback_restart(const void *pdata)
     return VSCP_ERROR_PARAMETER;
   }
 
-  // Send reply confirming restart
-  vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  // Send reply with correct command code before restarting.
+  // Give the websocket stack a brief window to flush the frame.
+  int rv = vscp_binary_callback_reply(pdata, VSCP_BINARY_COMMAND_CODE_RESTART, VSCP_ERROR_SUCCESS, NULL, 0);
+  if (VSCP_ERROR_SUCCESS != rv) {
+    return rv;
+  }
+
+  vTaskDelay(pdMS_TO_TICKS(100));
 
   // Schedule device restart
   esp_restart();
@@ -1009,8 +1019,8 @@ vscp_binary_callback_shutdown(const void *pdata)
     return VSCP_ERROR_PARAMETER;
   }
 
-  // Send reply confirming shutdown (actual shutdown will be deferred)
-  vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  // Send reply with correct command code
+  vscp_binary_callback_reply(pdata, VSCP_BINARY_COMMAND_CODE_SHUTDOWN, VSCP_ERROR_SUCCESS, NULL, 0);
 
   // Note: Actual system shutdown would require additional implementation
   // For now, just return success after notifying the client

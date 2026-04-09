@@ -72,7 +72,9 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
     vscp_binary_callback_reply(pdata, command, rv, NULL, 0);
   }
   else if (VSCP_BINARY_COMMAND_CODE_CHALLENGE == command) {
-    return vscp_binary_callback_challenge(pdata);
+    uint8_t challenge[16];
+    rv = vscp_binary_callback_challenge(pdata, challenge);
+    return vscp_binary_callback_reply(pdata, command, rv, challenge, sizeof(challenge));
   }
   else if (VSCP_BINARY_COMMAND_CODE_SEND == command) {
     vscp_event_t *pev = (vscp_event_t *) calloc(1, sizeof(vscpEvent));
@@ -146,7 +148,10 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
         // Error occurred while retrieving event
         return vscp_binary_callback_reply(pdata, command, rv, NULL, 0);
       }
-    }
+    } // for
+
+    // All was OK
+    return vscp_binary_callback_reply(pdata, command, 0, NULL, 0);
   }
   else if (VSCP_BINARY_COMMAND_CODE_OPEN == command) {
     rv = vscp_binary_callback_open(pdata);
@@ -173,7 +178,8 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
     }
   }
   else if (VSCP_BINARY_COMMAND_CODE_CLEAR == command) {
-    return vscp_binary_callback_clrall(pdata);
+    rv = vscp_binary_callback_clrall(pdata);
+    return vscp_binary_callback_reply(pdata, command, rv, NULL, 0);
   }
   else if (VSCP_BINARY_COMMAND_CODE_STAT == command) {
     vscp_statistics_t statistics;
@@ -415,7 +421,8 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
   }
   else if (VSCP_BINARY_COMMAND_CODE_TEXT == command) {
     // We normally do nothing here except resetting binary flag
-    return vscp_binary_callback_text(pdata);
+    rv = vscp_binary_callback_text(pdata);
+    return vscp_binary_callback_reply(pdata, command, rv, NULL, 0);
   }
   else if (VSCP_BINARY_COMMAND_CODE_WCYD == command) {
     uint64_t capabilities = 0;
@@ -430,13 +437,12 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
     return vscp_binary_callback_reply(pdata, command, VSCP_ERROR_SUCCESS, buf, sizeof(buf));
   }
   else if (VSCP_BINARY_COMMAND_CODE_SHUTDOWN == command) {
+    // Reply and optional shutdown are handled inside the callback
     return vscp_binary_callback_shutdown(pdata);
   }
   else if (VSCP_BINARY_COMMAND_CODE_RESTART == command) {
+    // Reply is sent inside the callback before esp_restart() is called
     return vscp_binary_callback_restart(pdata);
-  }
-  else if (VSCP_BINARY_COMMAND_CODE_TEXT == command) {
-    return vscp_binary_callback_text(pdata);
   }
   else if (command >= VSCP_BINARY_COMMAND_CODE_USER_START) {
     // User defined command, pass to callback

@@ -22,8 +22,27 @@ const CMD_NOOP = 0x0000;
 const CMD_QUIT = 0x0001;
 const CMD_USER = 0x0002;
 const CMD_PASS = 0x0003;
+const CMD_CHALLENGE = 0x0004;
 const CMD_SEND = 0x0005;
+const CMD_RETR = 0x0006;
 const CMD_OPEN = 0x0007;
+const CMD_CLOSE = 0x0008;
+const CMD_CHKDATA = 0x0009;
+const CMD_CLEAR = 0x000A;
+const CMD_STAT = 0x000B;
+const CMD_INFO = 0x000C;
+const CMD_GETCHID = 0x000D;
+const CMD_SETGUID = 0x000E;
+const CMD_GETGUID = 0x000F;
+const CMD_VERSION = 0x0010;
+const CMD_SETFILTER = 0x0011;
+const CMD_SETMASK = 0x0012;
+const CMD_INTERFACE = 0x0013;
+const CMD_TEST = 0x001E;
+const CMD_WCYD = 0x001F;
+const CMD_SHUTDOWN = 0x0020;
+const CMD_RESTART = 0x0021;
+const CMD_TEXT = 0x0022;
 const VSCP_ENCRYPTION_AES128 = 0x01;
 const VSCP_BINARY_EVENT_HEADER_LENGTH = 35;
 const VSCP_HEADER16_FRAME_VERSION_UNIX_NS = 0x0100;
@@ -228,7 +247,7 @@ function parseBinaryReply(buf) {
   const frameType = buf[0] & 0xf0;
   const command = (buf[1] << 8) | buf[2];
   const error = (buf[3] << 8) | buf[4];
-  const receivedCrc = (buf[5] << 8) | buf[6];
+  const receivedCrc = (buf[buf.length - 2] << 8) | buf[buf.length - 1];
   const expectedCrc = calculateCRC(buf.slice(1, buf.length - 2));
 
   if (frameType !== 0xf0) {
@@ -481,7 +500,7 @@ async function runScenarioBinaryOnly(url, username, password) {
 }
 
 async function runScenarioBinaryOnlyEncrypted(url, username, password, keyHex) {
-  console.log("\nScenario C: encrypted binary USER/PASS/OPEN/NOOP/QUIT");
+  console.log("\nScenario C: encrypted binary USER/PASS/OPEN + command sweep");
   const ws = new WebSocket(url);
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('Timeout opening websocket')), TIMEOUT_MS);
@@ -510,6 +529,66 @@ async function runScenarioBinaryOnlyEncrypted(url, username, password, keyHex) {
     console.log('  -> [encrypted binary OPEN]');
     await waitForBinaryReply(ws, CMD_OPEN, 'encrypted OPEN');
 
+    const zeroGuid = Buffer.alloc(16, 0x00);
+    const zeroFilter = Buffer.alloc(21, 0x00);
+    const ifaceCount = Buffer.from([0x00]);
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_GETCHID), keyHex));
+    console.log('  -> [encrypted binary GETCHID]');
+    await waitForBinaryReply(ws, CMD_GETCHID, 'encrypted GETCHID');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_GETGUID), keyHex));
+    console.log('  -> [encrypted binary GETGUID]');
+    await waitForBinaryReply(ws, CMD_GETGUID, 'encrypted GETGUID');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_SETGUID, zeroGuid), keyHex));
+    console.log('  -> [encrypted binary SETGUID]');
+    await waitForBinaryReply(ws, CMD_SETGUID, 'encrypted SETGUID');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_VERSION), keyHex));
+    console.log('  -> [encrypted binary VERSION]');
+    await waitForBinaryReply(ws, CMD_VERSION, 'encrypted VERSION');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_STAT), keyHex));
+    console.log('  -> [encrypted binary STAT]');
+    await waitForBinaryReply(ws, CMD_STAT, 'encrypted STAT');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_INFO), keyHex));
+    console.log('  -> [encrypted binary INFO]');
+    await waitForBinaryReply(ws, CMD_INFO, 'encrypted INFO');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_WCYD), keyHex));
+    console.log('  -> [encrypted binary WCYD]');
+    await waitForBinaryReply(ws, CMD_WCYD, 'encrypted WCYD');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_CHKDATA), keyHex));
+    console.log('  -> [encrypted binary CHKDATA]');
+    await waitForBinaryReply(ws, CMD_CHKDATA, 'encrypted CHKDATA');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_CLEAR), keyHex));
+    console.log('  -> [encrypted binary CLEAR]');
+    await waitForBinaryReply(ws, CMD_CLEAR, 'encrypted CLEAR');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_SETFILTER, zeroFilter), keyHex));
+    console.log('  -> [encrypted binary SETFILTER]');
+    await waitForBinaryReply(ws, CMD_SETFILTER, 'encrypted SETFILTER');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_SETMASK, zeroFilter), keyHex));
+    console.log('  -> [encrypted binary SETMASK]');
+    await waitForBinaryReply(ws, CMD_SETMASK, 'encrypted SETMASK');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_INTERFACE, ifaceCount), keyHex));
+    console.log('  -> [encrypted binary INTERFACE]');
+    await waitForBinaryReply(ws, CMD_INTERFACE, 'encrypted INTERFACE');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_TEST), keyHex));
+    console.log('  -> [encrypted binary TEST]');
+    await waitForBinaryReply(ws, CMD_TEST, 'encrypted TEST');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_CHALLENGE), keyHex));
+    console.log('  -> [encrypted binary CHALLENGE]');
+    await waitForBinaryReply(ws, CMD_CHALLENGE, 'encrypted CHALLENGE');
+
     ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_SEND, buildSampleEventFrame()), keyHex));
     console.log('  -> [encrypted binary SEND event]');
     await waitForBinaryReply(ws, CMD_SEND, 'encrypted SEND');
@@ -519,9 +598,29 @@ async function runScenarioBinaryOnlyEncrypted(url, username, password, keyHex) {
     await waitForBinaryReply(ws, CMD_NOOP, 'encrypted NOOP');
     await waitForAsyncEvents(ws, ASYNC_EVENTS_TO_WAIT, 'scenario C');
 
-    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_QUIT), keyHex));
-    console.log('  -> [encrypted binary QUIT frame]');
-    await waitForBinaryReply(ws, CMD_QUIT, 'encrypted QUIT');
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_CLOSE), keyHex));
+    console.log('  -> [encrypted binary CLOSE]');
+    await waitForBinaryReply(ws, CMD_CLOSE, 'encrypted CLOSE');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_RETR), keyHex));
+    console.log('  -> [encrypted binary RETR]');
+    await waitForBinaryReply(ws, CMD_RETR, 'encrypted RETR');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_OPEN), keyHex));
+    console.log('  -> [encrypted binary OPEN(reopen)]');
+    await waitForBinaryReply(ws, CMD_OPEN, 'encrypted OPEN(reopen)');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_SHUTDOWN), keyHex));
+    console.log('  -> [encrypted binary SHUTDOWN]');
+    await waitForBinaryReply(ws, CMD_SHUTDOWN, 'encrypted SHUTDOWN');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_TEXT), keyHex));
+    console.log('  -> [encrypted binary TEXT]');
+    await waitForBinaryReply(ws, CMD_TEXT, 'encrypted TEXT');
+
+    ws.send(encryptBinaryFrame(buildBinaryCommandFrame(CMD_RESTART), keyHex));
+    console.log('  -> [encrypted binary RESTART]');
+    await waitForBinaryReply(ws, CMD_RESTART, 'encrypted RESTART');
   } finally {
     try { ws.close(); } catch {}
   }

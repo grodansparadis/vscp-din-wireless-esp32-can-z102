@@ -215,11 +215,12 @@
    * @brief Dop challenge sequency
    *
    * @param pdata Pointer to context.
+   * @param challenge Pointer to buffer that will receive the challenge.
    * @return Return VSCP_ERROR_SUCCESS if logged in error code else.
    *
    */
 
-  int vscp_binary_callback_challenge(const void *pdata);
+  int vscp_binary_callback_challenge(const void *pdata, uint8_t *challenge);
 
   /**
    * @fn vscp_binary_callback_check_authenticated
