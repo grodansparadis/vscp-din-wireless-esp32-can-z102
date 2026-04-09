@@ -60,8 +60,8 @@
 
 #include <netinet/in.h>
 #include <lwip/sockets.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
+// #include <freertos/FreeRTOS.h>
+// #include <freertos/task.h>
 
 #include "vscp-compiler.h"
 #include "vscp-projdefs.h"
@@ -83,6 +83,111 @@ extern node_persistent_config_t g_persistent;
 
 #define TAG __func__
 
+static int
+vscp_binary_build_reply_plain(uint16_t command,
+                              uint16_t error,
+                              const uint8_t *parg,
+                              size_t len,
+                              uint8_t encryption,
+                              uint8_t **pplain,
+                              size_t *pplain_len)
+{
+  if ((NULL == pplain) || (NULL == pplain_len)) {
+    return VSCP_ERROR_PARAMETER;
+  }
+
+  const size_t plain_len = 1 + 4 + len + 2; // type + command/error + argument + crc
+  uint8_t *plain         = calloc(1, plain_len);
+  if (NULL == plain) {
+    ESP_LOGE(TAG, "Reply: failed to allocate memory for reply");
+    return VSCP_ERROR_MEMORY;
+  }
+
+  // Frame type 0xF0 is reply, lower nibble is encryption algorithm.
+  plain[0] = 0xF0 | (encryption & 0x0F);
+  plain[1] = (command >> 8) & 0xFF;
+  plain[2] = command & 0xFF;
+  plain[3] = (error >> 8) & 0xFF;
+  plain[4] = error & 0xFF;
+
+  if ((NULL != parg) && (len > 0)) {
+    memcpy(plain + 5, parg, len);
+  }
+
+  // CRC is over command + error + argument (skip type byte and crc bytes).
+  uint16_t crc   = crcFast(plain + 1, 4 + len);
+  plain[5 + len] = (crc >> 8) & 0xFF;
+  plain[6 + len] = crc & 0xFF;
+
+  *pplain     = plain;
+  *pplain_len = plain_len;
+
+  return VSCP_ERROR_SUCCESS;
+}
+
+static int
+vscp_binary_prepare_reply_payload(uint8_t *plain,
+                                  size_t plain_len,
+                                  const vscp_ws_connection_context_t *pctx,
+                                  const uint8_t **ptx_payload,
+                                  size_t *ptx_len,
+                                  uint8_t **penc)
+{
+  const uint8_t encryption = pctx->encryption & 0x0F;
+
+  *penc = NULL;
+  if (encryption == VSCP_HLO_ENCRYPTION_NONE) {
+    *ptx_payload = plain;
+    *ptx_len     = plain_len;
+    return VSCP_ERROR_SUCCESS;
+  }
+
+  uint8_t *enc = calloc(1, plain_len + 32); // Room for padding and trailing IV.
+  if (NULL == enc) {
+    ESP_LOGE(TAG, "Reply: failed to allocate memory for encryption");
+    return VSCP_ERROR_MEMORY;
+  }
+
+  size_t tx_len = vscp_fwhlp_encryptFrame(enc,
+                                          plain,
+                                          plain_len,
+                                          vscp_ws1_callback_get_primary_key((void *) pctx),
+                                          NULL,
+                                          VSCP_ENCRYPTION_FROM_TYPE_BYTE);
+  if (0 == tx_len) {
+    ESP_LOGE(TAG, "Reply: failed to encrypt frame");
+    free(enc);
+    return VSCP_ERROR_ERROR;
+  }
+
+  *penc        = enc;
+  *ptx_payload = enc;
+  *ptx_len     = tx_len;
+
+  return VSCP_ERROR_SUCCESS;
+}
+
+static int
+vscp_binary_send_ws_binary_frame(httpd_req_t *req, const uint8_t *payload, size_t len)
+{
+  if ((NULL == req) || (NULL == payload)) {
+    return VSCP_ERROR_PARAMETER;
+  }
+
+  httpd_ws_frame_t tx = { 0 };
+  tx.type             = HTTPD_WS_TYPE_BINARY;
+  tx.payload          = (uint8_t *) payload;
+  tx.len              = len;
+
+  esp_err_t err = httpd_ws_send_frame(req, &tx);
+  if (ESP_OK != err) {
+    ESP_LOGE(TAG, "Reply: failed to send frame, error=%d", err);
+    return VSCP_ERROR_INTERFACE;
+  }
+
+  return VSCP_ERROR_SUCCESS;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // vscp_binary_callback_reply
 //
@@ -101,71 +206,30 @@ vscp_binary_callback_reply(const void *pdata, uint16_t command, uint16_t error, 
     return VSCP_ERROR_INVALID_CONTEXT;
   }
 
-  const uint8_t encryption = pctx->encryption & 0x0F;
-  const size_t plain_len   = 1 + 4 + len + 2; // type + command/error + argument + crc
-  uint8_t *plain           = calloc(1, plain_len);
-  if (NULL == plain) {
-    ESP_LOGE(TAG, "Reply: failed to allocate memory for reply");
-    return VSCP_ERROR_MEMORY;
+  uint8_t *plain           = NULL;
+  size_t plain_len         = 0;
+  const uint8_t *tx_payload = NULL;
+  size_t tx_len            = 0;
+  uint8_t *enc             = NULL;
+
+  int rv = vscp_binary_build_reply_plain(command, error, parg, len, pctx->encryption, &plain, &plain_len);
+  if (VSCP_ERROR_SUCCESS != rv) {
+    return rv;
   }
 
-  // Frame type 0xF0 is reply, lower nibble is encryption algorithm.
-  plain[0] = 0xF0 | encryption;
-  plain[1] = (command >> 8) & 0xFF;
-  plain[2] = command & 0xFF;
-  plain[3] = (error >> 8) & 0xFF;
-  plain[4] = error & 0xFF;
-
-  if (parg && len > 0) {
-    memcpy(plain + 5, parg, len);
+  rv = vscp_binary_prepare_reply_payload(plain, plain_len, pctx, &tx_payload, &tx_len, &enc);
+  if (VSCP_ERROR_SUCCESS != rv) {
+    free(plain);
+    return rv;
   }
 
-  // CRC is over command + error + argument (skip type byte and crc bytes).
-  uint16_t crc   = crcFast(plain + 1, 4 + len);
-  plain[5 + len] = (crc >> 8) & 0xFF;
-  plain[6 + len] = crc & 0xFF;
-
-  const uint8_t *tx_payload = plain;
-  size_t tx_len             = plain_len;
-  uint8_t *enc              = NULL;
-
-  if (encryption != VSCP_HLO_ENCRYPTION_NONE) {
-    enc = calloc(1, plain_len + 32); // Room for padding and trailing IV.
-    if (NULL == enc) {
-      ESP_LOGE(TAG, "Reply: failed to allocate memory for encryption");
-      free(plain);
-      return VSCP_ERROR_MEMORY;
-    }
-
-    tx_len = vscp_fwhlp_encryptFrame(enc,
-                                     plain,
-                                     plain_len,
-                                     vscp_ws1_callback_get_primary_key(pctx),
-                                     NULL,
-                                     VSCP_ENCRYPTION_FROM_TYPE_BYTE);
-    if (0 == tx_len) {
-      ESP_LOGE(TAG, "Reply: failed to encrypt frame");
-      free(enc);
-      free(plain);
-      return VSCP_ERROR_ERROR;
-    }
-
-    tx_payload = enc;
-  }
-
-  httpd_ws_frame_t tx = { 0 };
-  tx.type             = HTTPD_WS_TYPE_BINARY;
-  tx.payload          = (uint8_t *) tx_payload;
-  tx.len              = tx_len;
-
-  esp_err_t err = httpd_ws_send_frame(req, &tx);
+  rv = vscp_binary_send_ws_binary_frame(req, tx_payload, tx_len);
 
   free(enc);
   free(plain);
 
-  if (ESP_OK != err) {
-    ESP_LOGE(TAG, "Reply: failed to send frame, error=%d", err);
-    return VSCP_ERROR_INTERFACE;
+  if (VSCP_ERROR_SUCCESS != rv) {
+    return rv;
   }
 
   ESP_LOGI(TAG, "Reply: sent command=0x%04X error=0x%04X len=%d", command, error, len);
@@ -177,7 +241,7 @@ vscp_binary_callback_reply(const void *pdata, uint16_t command, uint16_t error, 
 //
 
 int
-vscp_binary_callback_challenge(const void *pdata, uint8_t *challenge)
+vscp_binary_callback_challenge(const void *pdata, uint8_t *challenge, size_t challenge_len)
 {
   if (NULL == pdata) {
     return VSCP_ERROR_PARAMETER;
@@ -188,6 +252,9 @@ vscp_binary_callback_challenge(const void *pdata, uint8_t *challenge)
   // Generate a new random 16-byte sid (session ID) for authentication and encryption
   esp_fill_random(pctx->sid, sizeof(pctx->sid));
   if (challenge) {
+    if (challenge_len < sizeof(pctx->sid)) {
+      return VSCP_ERROR_PARAMETER;
+    }
     memcpy(challenge, pctx->sid, sizeof(pctx->sid));
   }
 

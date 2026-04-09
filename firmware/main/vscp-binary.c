@@ -73,7 +73,7 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
   }
   else if (VSCP_BINARY_COMMAND_CODE_CHALLENGE == command) {
     uint8_t challenge[16];
-    rv = vscp_binary_callback_challenge(pdata, challenge);
+    rv = vscp_binary_callback_challenge(pdata, challenge, sizeof(challenge));
     return vscp_binary_callback_reply(pdata, command, rv, challenge, sizeof(challenge));
   }
   else if (VSCP_BINARY_COMMAND_CODE_SEND == command) {
