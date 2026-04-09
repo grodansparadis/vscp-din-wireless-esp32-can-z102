@@ -56,6 +56,41 @@ Install with: `pip install websockets cryptography`
 
 **Environment Variables:** Same as JavaScript test (WS_BINARY_URL, VSCP_USERNAME, etc.)
 
+## test_vscp_binary.c
+Standalone C smoke test for VSCP binary protocol over `ws1`, mirroring the Python test scenarios:
+
+1. Scenario A: text `CHALLENGE` + `AUTH` + `OPEN`, then binary `NOOP`/`QUIT`
+2. Scenario B: binary `USER`/`PASS`/`OPEN`/`SEND`/`NOOP`/`QUIT`
+3. Scenario C: encrypted binary `USER`/`PASS`/`OPEN`/`SEND`/`NOOP`/`QUIT`
+
+It implements:
+
+- RFC6455 websocket handshake/framing over `ws://`
+- CRC-CCITT validation for VSCP binary replies
+- AES-128-CBC auth encryption (`AUTH`)
+- AES-128-CBC binary frame encryption with zero padding + appended IV (same frame model as Python test)
+
+Build (requires OpenSSL dev package):
+
+```bash
+gcc -std=c11 -O2 -Wall -Wextra -o test_vscp_binary_c test_vscp_binary.c -lcrypto
+```
+
+Run:
+
+```bash
+./test_vscp_binary_c --url ws://192.168.1.104:8884/ws1
+```
+
+Environment variables:
+
+- `WS_BINARY_URL` or `WS1_URL`
+- `WS_TIMEOUT_S`
+- `WS_ASYNC_EVENTS`
+- `VSCP_USERNAME`
+- `VSCP_PASSWORD`
+- `VSCP_KEY16`
+
 ## AUTH encryption (JS and Python scripts)
 
 `test_ws1.js`, `test_ws2.js`, `test_ws1.py`, and `test_ws2.py` now build `AUTH` dynamically using:
