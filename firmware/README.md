@@ -71,6 +71,34 @@ python test/ws/test_ws1.py --url ws://192.168.1.50:8884/ws1 --user admin --passw
 python test/ws/test_ws2.py --url ws://192.168.1.50:8884/ws2 --user admin --password secret --key A4A86F7D7E119BA3F0CD06881E371B98
 ```
 
+## Codacy CLI
+
+This firmware workspace includes a Codacy CLI wrapper script:
+
+```bash
+./tools/codacy-cli.sh download
+./tools/codacy-cli.sh init
+./tools/codacy-cli.sh install
+./tools/codacy-cli.sh analyze
+```
+
+The wrapper uses the bundled launcher at `third_party/vscp-firmware/.codacy/cli.sh` and downloads Codacy CLI v2 on first use.
+The default local configuration is in `.codacy/codacy.yaml` and is tuned for this ESP-IDF firmware workspace.
+
+Available VS Code tasks:
+
+- `Tools: Codacy CLI Download`
+- `Tools: Codacy CLI Version`
+* `Tools: Codacy CLI Init`
+* `Tools: Codacy CLI Install`
+- `Tools: Codacy CLI Analyze`
+- `Tools: Codacy Focused`
+
+Optional environment variables:
+
+- `CODACY_PROJECT_TOKEN` for uploading/publishing workflows
+- `CODACY_CLI_V2_VERSION` to pin a specific CLI version
+
 ## How to use example
 
 ### Hardware Required

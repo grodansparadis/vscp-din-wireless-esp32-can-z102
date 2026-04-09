@@ -163,6 +163,51 @@
       },
       "command": "cd .. && tools/run-codacy-focused.sh && tools/summarize-codacy-focused.py",
       "problemMatcher": []
+    },
+    {
+      "label": "Tools: Codacy CLI Download",
+      "type": "shell",
+      "options": {
+        "cwd": "${workspaceRoot}"
+      },
+      "command": "./tools/codacy-cli.sh download",
+      "problemMatcher": []
+    },
+    {
+      "label": "Tools: Codacy CLI Version",
+      "type": "shell",
+      "options": {
+        "cwd": "${workspaceRoot}"
+      },
+      "command": "./tools/codacy-cli.sh --version",
+      "problemMatcher": []
+    },
+    {
+      "label": "Tools: Codacy CLI Init",
+      "type": "shell",
+      "options": {
+        "cwd": "${workspaceRoot}"
+      },
+      "command": "./tools/codacy-cli.sh init",
+      "problemMatcher": []
+    },
+    {
+      "label": "Tools: Codacy CLI Install",
+      "type": "shell",
+      "options": {
+        "cwd": "${workspaceRoot}"
+      },
+      "command": "./tools/codacy-cli.sh install",
+      "problemMatcher": []
+    },
+    {
+      "label": "Tools: Codacy CLI Analyze",
+      "type": "shell",
+      "options": {
+        "cwd": "${workspaceRoot}"
+      },
+      "command": "./tools/codacy-cli.sh analyze",
+      "problemMatcher": []
     }
   ],
   "version": "2.0.0"
