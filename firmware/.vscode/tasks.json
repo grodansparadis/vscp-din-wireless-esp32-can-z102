@@ -24,7 +24,7 @@
       "options": {
         "cwd": "${workspaceRoot}",
       },
-      "command": "source /home/akhe/development/esp/esp-idf/export.sh && idf.py build",
+      "command": "./tools/idf-safe.sh build",
       "problemMatcher": [
         "$gcc"
       ]
@@ -80,7 +80,7 @@
       "options": {
         "cwd": "${workspaceRoot}",
       },
-      "command": "source /home/akhe/development/esp/esp-idf/export.sh && idf.py ${config:esp32.port} flash",
+      "command": "./tools/idf-safe.sh ${config:esp32.port} flash",
       "problemMatcher": []
     },
     {
@@ -98,7 +98,7 @@
       "options": {
         "cwd": "${workspaceRoot}",
       },
-      "command": "source /home/akhe/development/esp/esp-idf/export.sh && idf.py ${config:esp32.port} flash monitor",
+      "command": "./tools/idf-safe.sh ${config:esp32.port} flash monitor",
       "problemMatcher": []
     },
     {

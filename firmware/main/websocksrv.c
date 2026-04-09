@@ -53,7 +53,7 @@
 #include <esp_vfs.h>
 #include <esp_spiffs.h>
 #include <esp_http_server.h>
-//#include <wifi_provisioning/manager.h>
+// #include <wifi_provisioning/manager.h>
 #include "keep-alive.h"
 #include "sdkconfig.h"
 
@@ -91,6 +91,29 @@ static const size_t max_clients = 4;
 httpd_handle_t g_websocket_srv = NULL;
 // httpd_handle_t g_server_websocket = NULL;
 
+esp_err_t
+wss_close_client_fd(int fd)
+{
+  if (NULL == g_websocket_srv) {
+    ESP_LOGW(TAG, "wss_close_client_fd: websocket server not running");
+    return ESP_ERR_INVALID_STATE;
+  }
+
+  if (fd < 0) {
+    ESP_LOGW(TAG, "wss_close_client_fd: invalid socket fd=%d", fd);
+    return ESP_ERR_INVALID_ARG;
+  }
+
+  int client_info = httpd_ws_get_fd_info(g_websocket_srv, fd);
+  if (HTTPD_WS_CLIENT_WEBSOCKET != client_info) {
+    ESP_LOGW(TAG, "wss_close_client_fd: fd=%d is not an active websocket client (info=%d)", fd, client_info);
+    return ESP_ERR_NOT_FOUND;
+  }
+
+  ESP_LOGI(TAG, "wss_close_client_fd: closing websocket fd=%d", fd);
+  return httpd_sess_trigger_close(g_websocket_srv, fd);
+}
+
 /*
  * Structure holding server handle
  * and internal socket fd in order
@@ -99,7 +122,7 @@ httpd_handle_t g_websocket_srv = NULL;
 struct async_resp_arg {
   httpd_handle_t hd;
   int fd;
-  char event_data[512];  // Buffer for formatted VSCP event string
+  vscp_event_ex_t ex; // Canonical event payload. Serialization is done in send_event.
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -154,8 +177,8 @@ trigger_async_send(httpd_handle_t handle, httpd_req_t *req)
   if (resp_arg == NULL) {
     return ESP_ERR_NO_MEM;
   }
-  resp_arg->hd      = req->handle;
-  resp_arg->fd      = httpd_req_to_sockfd(req);
+  resp_arg->hd  = req->handle;
+  resp_arg->fd  = httpd_req_to_sockfd(req);
   esp_err_t ret = httpd_queue_work(handle, ws_async_send, resp_arg);
   if (ret != ESP_OK) {
     free(resp_arg);
@@ -280,7 +303,7 @@ send_event(void *arg)
   int fd                          = resp_arg->fd;
 
   // We need to check which protocol the client expects
-  vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *)httpd_sess_get_ctx(hd,fd);
+  vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) httpd_sess_get_ctx(hd, fd);
 
   if (pctx == NULL) {
     ESP_LOGW(TAG, "send_event: client context is NULL, skipping send for fd=%d", fd);
@@ -288,22 +311,96 @@ send_event(void *arg)
     return;
   }
 
-  ESP_LOGI(TAG, "send_event: Sending to fd=%d, protocol=%d, event=%s", fd, pctx->protocol, resp_arg->event_data);
+  ESP_LOGI(TAG,
+           "send_event: Sending to fd=%d protocol=%d binary=%d enc=%d",
+           fd,
+           pctx->protocol,
+           pctx->bBinary,
+           pctx->encryption & 0x0F);
 
   // Create a new frame with the event payload
   httpd_ws_frame_t ws_pkt;
   memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-  ws_pkt.type    = HTTPD_WS_TYPE_TEXT;
-  ws_pkt.payload = (uint8_t *) resp_arg->event_data;
-  ws_pkt.len     = strlen(resp_arg->event_data);
-  
+  if (pctx->bBinary) {
+    uint8_t event_bin[1 + VSCP_BINARY_PACKET_FRAME0_HEADER_LENGTH + 2 + 512] = { 0 };
+    uint16_t event_bin_len                                                     = vscp_fwhlp_getFrameSizeFromEventEx(&resp_arg->ex);
+
+    if (event_bin_len > sizeof(event_bin)) {
+      ESP_LOGE(TAG, "send_event: binary event frame too large len=%u", event_bin_len);
+      free(resp_arg);
+      return;
+    }
+
+    if (VSCP_ERROR_SUCCESS != vscp_fwhlp_writeEventExToFrame(event_bin, sizeof(event_bin), 0, &resp_arg->ex)) {
+      ESP_LOGE(TAG, "send_event: failed to format binary event for fd=%d", fd);
+      free(resp_arg);
+      return;
+    }
+
+    const uint8_t encryption = pctx->encryption & 0x0F;
+
+    if (VSCP_HLO_ENCRYPTION_NONE != encryption) {
+      uint8_t plain[1 + VSCP_BINARY_PACKET_FRAME0_HEADER_LENGTH + 2 + 512] = { 0 };
+      uint8_t enc[sizeof(plain) + 32]                                      = { 0 };
+
+      if (event_bin_len > sizeof(plain)) {
+        ESP_LOGE(TAG, "send_event: binary event frame too large for encryption len=%u", event_bin_len);
+        free(resp_arg);
+        return;
+      }
+
+      memcpy(plain, event_bin, event_bin_len);
+      plain[0] = (plain[0] & 0xF0) | encryption;
+
+      size_t enclen = vscp_fwhlp_encryptFrame(enc,
+                                              plain,
+                                              event_bin_len,
+                                              (uint8_t *) vscp_ws1_callback_get_primary_key(pctx),
+                                              NULL,
+                                              VSCP_ENCRYPTION_FROM_TYPE_BYTE);
+      if (0 == enclen) {
+        ESP_LOGE(TAG, "send_event: failed to encrypt binary event for fd=%d", fd);
+        free(resp_arg);
+        return;
+      }
+
+      ws_pkt.type    = HTTPD_WS_TYPE_BINARY;
+      ws_pkt.payload = enc;
+      ws_pkt.len     = enclen;
+
+      esp_err_t ret = httpd_ws_send_frame_async(hd, fd, &ws_pkt);
+      if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "send_event: encrypted async send failed fd=%d err=%d", fd, ret);
+      }
+
+      free(resp_arg);
+      return;
+    }
+
+    ws_pkt.type    = HTTPD_WS_TYPE_BINARY;
+    ws_pkt.payload = event_bin;
+    ws_pkt.len     = event_bin_len;
+  }
+  else {
+    char event_str[512] = { 0 };
+    if (VSCP_ERROR_SUCCESS != vscp_fwhlp_eventToStringEx(event_str, sizeof(event_str), &resp_arg->ex)) {
+      ESP_LOGE(TAG, "send_event: failed to format text event for fd=%d", fd);
+      free(resp_arg);
+      return;
+    }
+
+    ws_pkt.type    = HTTPD_WS_TYPE_TEXT;
+    ws_pkt.payload = (uint8_t *) event_str;
+    ws_pkt.len     = strlen(event_str);
+  }
+
   // Send the frame - httpd_ws_send_frame_async copies the payload internally
   esp_err_t ret = httpd_ws_send_frame_async(hd, fd, &ws_pkt);
-  
+
   if (ret != ESP_OK) {
     ESP_LOGE(TAG, "send_event: httpd_ws_send_frame_async failed for fd=%d, error=%d", fd, ret);
   }
-  
+
   free(resp_arg);
 }
 
@@ -591,7 +688,7 @@ wss_send_event_task(void *pvParameters)
   int rv;
   bool send_messages     = true;
   can4vscp_frame_t rxmsg = {};
-  uint32_t event_count = 0;
+  uint32_t event_count   = 0;
 
   httpd_handle_t *server = (httpd_handle_t *) pvParameters;
 
@@ -610,13 +707,16 @@ wss_send_event_task(void *pvParameters)
       continue;
     }
 
-    ESP_LOGI(TAG, "wss_send_event_task: Received CAN message (event_count=%lu, identifier=0x%lX, dlc=%u)", 
-             event_count, rxmsg.identifier, rxmsg.data_length_code);
+    ESP_LOGI(TAG,
+             "wss_send_event_task: Received CAN message (event_count=%lu, identifier=0x%lX, dlc=%u)",
+             event_count,
+             rxmsg.identifier,
+             rxmsg.data_length_code);
 
     event_count++;
 
     // Convert CAN4VSCP message to VSCP event
-    vscpEvent *pev = NULL;
+    vscp_event_t *pev = NULL;
     if (VSCP_ERROR_SUCCESS != (rv = can4vscp_msg_to_event(&pev, &rxmsg))) {
       ESP_LOGE(TAG, "wss_send_event_task: Failed to convert CAN message to VSCP event rv=%d", rv);
       vscp_fwhlp_deleteEvent(&pev);
@@ -629,26 +729,26 @@ wss_send_event_task(void *pvParameters)
       continue;
     }
 
-    // Format the event as a string for WebSocket transmission
-    char event_str[512];
-    if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_eventToString(event_str, sizeof(event_str), pev))) {
-      ESP_LOGE(TAG, "wss_send_event_task: Failed to format event to string rv=%d", rv);
+    vscp_event_ex_t ex;
+    memset(&ex, 0, sizeof(ex));
+    if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_convertEventToEventEx(&ex, pev))) {
+      ESP_LOGE(TAG, "wss_send_event_task: Failed to convert event to eventEx rv=%d", rv);
       vscp_fwhlp_deleteEvent(&pev);
       continue;
     }
 
-    ESP_LOGI(TAG, "wss_send_event_task: Broadcasting event: %s", event_str);
+    ESP_LOGI(TAG, "wss_send_event_task: Broadcasting event class=%u type=%u size=%u", ex.vscp_class, ex.vscp_type, ex.sizeData);
 
     // Get list of connected WebSocket clients
     size_t clients = max_clients;
     int client_fds[max_clients];
     if (httpd_get_client_list(g_websocket_srv, &clients, client_fds) == ESP_OK) {
       ESP_LOGI(TAG, "wss_send_event_task: Found %u connected WebSocket clients", clients);
-      
+
       if (clients == 0) {
         ESP_LOGW(TAG, "wss_send_event_task: No connected clients to send event to");
       }
-      
+
       for (size_t i = 0; i < clients; ++i) {
         int sock = client_fds[i];
         if (httpd_ws_get_fd_info(g_websocket_srv, sock) == HTTPD_WS_CLIENT_WEBSOCKET) {
@@ -657,17 +757,16 @@ wss_send_event_task(void *pvParameters)
           assert(resp_arg != NULL);
           resp_arg->hd = g_websocket_srv;
           resp_arg->fd = sock;
-          // Copy the formatted event string to the response argument
-          strncpy(resp_arg->event_data, event_str, sizeof(resp_arg->event_data) - 1);
-          resp_arg->event_data[sizeof(resp_arg->event_data) - 1] = '\0';
-          
+          memcpy(&resp_arg->ex, &ex, sizeof(vscp_event_ex_t));
+
           if (httpd_queue_work(resp_arg->hd, send_event, resp_arg) != ESP_OK) {
             ESP_LOGE(TAG, "wss_send_event_task: httpd_queue_work failed for fd=%d!", sock);
             free(resp_arg);
             send_messages = false;
             break;
           }
-        } else {
+        }
+        else {
           ESP_LOGD(TAG, "wss_send_event_task: Client fd=%d is not a WebSocket client", sock);
         }
       }
@@ -675,6 +774,8 @@ wss_send_event_task(void *pvParameters)
     else {
       ESP_LOGE(TAG, "wss_send_event_task: httpd_get_client_list failed!");
     }
+
+    // We have no use for the event anymore
     vscp_fwhlp_deleteEvent(&pev);
   }
 
@@ -716,7 +817,7 @@ ws1_get_handler(httpd_req_t *req)
     //   ESP_LOGI(TAG, "WS1 remote IP: %s", remote_ip);
     // }
 
-    // If no session data allocated we allocate a session context for this connection and save the 
+    // If no session data allocated we allocate a session context for this connection and save the
     // request pointer in it so we can use it in the callbacks
     if (req->sess_ctx == NULL) {
 
@@ -745,7 +846,7 @@ ws1_get_handler(httpd_req_t *req)
   }
 
   httpd_ws_frame_t ws_pkt = { 0 };
-  //rx.type             = HTTPD_WS_TYPE_TEXT;
+  // rx.type             = HTTPD_WS_TYPE_TEXT;
 
   /*
     First receive the full ws payload
@@ -759,7 +860,10 @@ ws1_get_handler(httpd_req_t *req)
 
   ESP_LOGI(TAG, "WS1 frame len is %d type=%d", ws_pkt.len, ws_pkt.type);
 
-  if (ws_pkt.len && (ws_pkt.type == HTTPD_WS_TYPE_TEXT )) {
+  if (ws_pkt.len && (ws_pkt.type == HTTPD_WS_TYPE_TEXT)) {
+
+    // Client is currently in text mode.
+    ((vscp_ws_connection_context_t *) req->sess_ctx)->bBinary = false;
 
     // Allocate spece for the payload (+1 for NULL termination since we are expecting a string)
     uint8_t *payload = calloc(1, ws_pkt.len + 1);
@@ -780,7 +884,10 @@ ws1_get_handler(httpd_req_t *req)
 
     free(payload);
   }
-  if (ws_pkt.len && (ws_pkt.type == HTTPD_WS_TYPE_BINARY )) {
+  if (ws_pkt.len && (ws_pkt.type == HTTPD_WS_TYPE_BINARY)) {
+
+    // Client is currently in binary mode.
+    ((vscp_ws_connection_context_t *) req->sess_ctx)->bBinary = true;
 
     // Allocate spece for the payload (+1 for NULL termination since we are expecting a string)
     uint8_t *payload = calloc(1, ws_pkt.len + 1);
@@ -806,7 +913,7 @@ ws1_get_handler(httpd_req_t *req)
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
     ws_pkt.type = HTTPD_WS_TYPE_PONG;
-    rv         = httpd_ws_send_frame(req, &ws_pkt);
+    rv          = httpd_ws_send_frame(req, &ws_pkt);
     if (ESP_OK != rv) {
       ESP_LOGE(TAG, "WS1 failed to send PONG frame with %d", rv);
       return rv;
@@ -822,7 +929,7 @@ ws1_get_handler(httpd_req_t *req)
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
     ws_pkt.type = HTTPD_WS_TYPE_CLOSE;
-    rv         = httpd_ws_send_frame(req, &ws_pkt);
+    rv          = httpd_ws_send_frame(req, &ws_pkt);
     if (ESP_OK != rv) {
       ESP_LOGE(TAG, "WS1 failed to send CLOSE frame with %d", rv);
       return rv;
@@ -833,13 +940,12 @@ ws1_get_handler(httpd_req_t *req)
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
     ws_pkt.type = HTTPD_WS_TYPE_CLOSE;
-    rv         = httpd_ws_send_frame(req, &ws_pkt);
+    rv          = httpd_ws_send_frame(req, &ws_pkt);
     if (ESP_OK != rv) {
       ESP_LOGE(TAG, "WS1 failed to send CLOSE frame with %d", rv);
       return rv;
     }
   }
-
 
   return rv;
 }

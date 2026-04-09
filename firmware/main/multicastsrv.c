@@ -84,7 +84,7 @@ extern transport_t tr_multicast;
 //   uint8_t buf[VSCP_MULTICAST_BUFFER_SIZE] = { 0 };
 //   struct sockaddr_in multicast_addr;
 
-//   vscpEventEx ex;
+//   vscp_event_ex_t ex;
 //   if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_parseStringToEventEx(&ex, pstrev))) {
 //     ESP_LOGE(TAG, "Error parsing event string");
 //     close(sock);
@@ -211,7 +211,7 @@ multicast_send_heartbeat(int sock)
   multicast_addr.sin_addr.s_addr = inet_addr(g_persistent.multicastUrl);
   multicast_addr.sin_port        = htons(9598);
 
-  vscpEvent *pev = calloc(1, sizeof(vscpEvent));
+  vscp_event_t *pev = calloc(1, sizeof(vscpEvent));
   if (NULL == pev) {
     ESP_LOGE(TAG, "Failed to allocate memory for VSCP event");
     return VSCP_ERROR_MEMORY;
@@ -272,7 +272,7 @@ void
 multicast_heartbeat_task(void *pvParameters)
 {
   (void) pvParameters;
-  vscpEventEx ex;
+  vscp_event_ex_t ex;
   memset(&ex, 0, sizeof(ex));
 
   // Define heartbeat event
@@ -370,7 +370,7 @@ multicast_tx_task(void *pvParameters)
       continue;
     }
 
-    vscpEvent *pev = NULL;
+    vscp_event_t *pev = NULL;
     if (VSCP_ERROR_SUCCESS != (rv = can4vscp_msg_to_event(&pev, &rxmsg))) {
       ESP_LOGE(TAG, "Failed to convert CAN message to VSCP event rv=%d", rv);
       vscp_fwhlp_deleteEvent(&pev);
@@ -544,7 +544,7 @@ multicast_rx_task(void *pvParameters)
 
     } // encrypted
 
-    vscpEvent ev;
+    vscp_event_t ev;
     memset(&ev, 0, sizeof(ev));
     if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_getEventFromFrame(&ev, buf, len))) {
       ESP_LOGE(TAG, "Error reading event from frame. rv=%d", rv);

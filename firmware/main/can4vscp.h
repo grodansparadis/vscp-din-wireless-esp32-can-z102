@@ -89,7 +89,7 @@ typedef struct {
   * If the message is filtered out, the allocated event is freed and VSCP_ERROR_SUCCESS is returned.
 */
 int
-can4vscp_msg_to_event(vscpEvent **pev, const can4vscp_frame_t *msg);
+can4vscp_msg_to_event(vscp_event_t **pev, const can4vscp_frame_t *msg);
 
 /*!
   * @brief Translate VSCP event to CAN4VSCP message
@@ -102,7 +102,7 @@ can4vscp_msg_to_event(vscpEvent **pev, const can4vscp_frame_t *msg);
   * Data is allocated and filled if the message has data.
 */
 int
-can4vscp_event_to_msg(can4vscp_frame_t *msg, const vscpEvent *pev);
+can4vscp_event_to_msg(can4vscp_frame_t *msg, const vscp_event_t *pev);
 
 /*!
   @fn can4vscp_block

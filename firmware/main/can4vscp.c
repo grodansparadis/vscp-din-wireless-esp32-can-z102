@@ -163,14 +163,14 @@ can4vscp_rx_done_cb(twai_node_handle_t handle, const twai_rx_done_event_data_t *
 //
 
 int
-can4vscp_msg_to_event(vscpEvent **pev, const can4vscp_frame_t *msg)
+can4vscp_msg_to_event(vscp_event_t **pev, const can4vscp_frame_t *msg)
 {
   if ((NULL == pev) || (NULL == msg)) {
     return VSCP_ERROR_INVALID_POINTER;
   }
 
   // Allocate a new event
-  *pev = (vscpEvent *) calloc(1, sizeof(vscpEvent));
+  *pev = (vscp_event_t *) calloc(1, sizeof(vscpEvent));
   if (NULL == *pev) {
     return VSCP_ERROR_MEMORY;
   }
@@ -212,7 +212,7 @@ can4vscp_msg_to_event(vscpEvent **pev, const can4vscp_frame_t *msg)
 //
 
 int
-can4vscp_event_to_msg(can4vscp_frame_t *msg, const vscpEvent *pev)
+can4vscp_event_to_msg(can4vscp_frame_t *msg, const vscp_event_t *pev)
 {
   if ((NULL == pev) || (NULL == msg)) {
     return VSCP_ERROR_INVALID_POINTER;

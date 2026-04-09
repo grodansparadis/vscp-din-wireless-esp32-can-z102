@@ -54,7 +54,6 @@ int
 vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *parg, size_t len)
 {
   int rv;
-  // char buf[512] = { 0 };
 
   if (VSCP_BINARY_COMMAND_CODE_NOOP == command) {
     // No operation, just reply with success
@@ -65,21 +64,32 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
     return vscp_binary_callback_quit(pdata);
   }
   else if (VSCP_BINARY_COMMAND_CODE_USER == command) {
-    return vscp_binary_callback_user(pdata, (const char *) parg);
+    rv = vscp_binary_callback_user(pdata, (const char *) parg);
+    return vscp_binary_callback_reply(pdata, command, rv, NULL, 0);
   }
   else if (VSCP_BINARY_COMMAND_CODE_PASS == command) {
-    return vscp_binary_callback_password(pdata, (const char *) parg);
+    rv = vscp_binary_callback_password(pdata, (const char *) parg);
+    vscp_binary_callback_reply(pdata, command, rv, NULL, 0);
   }
   else if (VSCP_BINARY_COMMAND_CODE_CHALLENGE == command) {
     return vscp_binary_callback_challenge(pdata);
   }
   else if (VSCP_BINARY_COMMAND_CODE_SEND == command) {
-    vscpEventEx ex;
+    vscp_event_t *pev = (vscp_event_t *) calloc(1, sizeof(vscpEvent));
+    if (NULL == pev) {
+      return vscp_binary_callback_reply(pdata, command, VSCP_ERROR_MEMORY, NULL, 0);
+    }
+
     // Parse event data from parg and fill ex structure
-    if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_getEventExFromFrame(&ex, parg, len))) {
+    if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_getEventFromFrame(pev, parg, len))) {
+      vscp_fwhlp_deleteEvent(&pev);
       return vscp_binary_callback_reply(pdata, command, rv, NULL, 0);
     }
-    return vscp_binary_callback_send_eventex(pdata, &ex);
+
+    int rv = vscp_binary_callback_send_event(pdata, pev);
+    vscp_fwhlp_deleteEvent(&pev);
+
+    return vscp_binary_callback_reply(pdata, command, rv, NULL, 0);
   }
   else if (VSCP_BINARY_COMMAND_CODE_RETR == command) {
     uint16_t count = 1; // Default to retrieving one event
@@ -97,7 +107,7 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
 
     for (int i = 0; i < count; i++) {
       int rv;
-      vscpEvent *pev;
+      vscp_event_t *pev;
       if (VSCP_ERROR_SUCCESS == (rv = vscp_binary_callback_get_event(pdata, pev))) {
 
         // Send event data back to client
@@ -118,7 +128,8 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
         }
 
         // Send reply with event data (point beyond leading byte. That byte + crc is subtracted from lenth)
-        if (VSCP_ERROR_SUCCESS != (rv = vscp_binary_callback_reply(pdata, command, VSCP_ERROR_SUCCESS, buf+1, buflen-3))) {
+        if (VSCP_ERROR_SUCCESS !=
+            (rv = vscp_binary_callback_reply(pdata, command, VSCP_ERROR_SUCCESS, buf + 1, buflen - 3))) {
           free(buf);
           vscp_fwhlp_deleteEvent(&pev);
           return rv;
@@ -138,10 +149,12 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
     }
   }
   else if (VSCP_BINARY_COMMAND_CODE_OPEN == command) {
-    return vscp_binary_callback_open(pdata);
+    rv = vscp_binary_callback_open(pdata);
+    return vscp_binary_callback_reply(pdata, command, rv, NULL, 0);
   }
   else if (VSCP_BINARY_COMMAND_CODE_CLOSE == command) {
-    return vscp_binary_callback_close(pdata);
+    rv = vscp_binary_callback_close(pdata);
+    return vscp_binary_callback_reply(pdata, command, rv, NULL, 0);
   }
   else if (VSCP_BINARY_COMMAND_CODE_CHKDATA == command) {
     uint32_t count;
@@ -366,7 +379,7 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
       buf[2]                       = (ifinfo.idx >> 8) & 0xFF;
       buf[3]                       = ifinfo.idx & 0xFF;
       memcpy(buf + 4, ifinfo.guid, 16);
-      memcpy(buf + 20, ifinfo.description,64); // Interface description
+      memcpy(buf + 20, ifinfo.description, 64); // Interface description
       return vscp_binary_callback_reply(pdata, command, VSCP_ERROR_SUCCESS, buf, sizeof(buf));
     }
     else if (len >= 3 && parg[0] == 2) {
@@ -442,12 +455,24 @@ vscp_handle_binary_command(const void *pdata, uint16_t command, const uint8_t *p
 //
 
 int
-vscp_handle_binary_event(const void *pdata, vscpEvent *pEvent)
+vscp_handle_binary_event(const void *pdata, vscp_event_t *pEvent)
 {
+  int rv;
+
   if (NULL == pEvent) {
     return VSCP_ERROR_PARAMETER;
   }
 
-  return vscp_binary_callback_event_received(pdata, pEvent);
-}
+  rv = vscp_binary_callback_send_event(pdata, pEvent);
 
+  // Event is deleted in caller routine
+
+  // Fill the reply buffer with data
+  uint8_t buf[4] = { 0 };
+  buf[0]         = (pEvent->head >> 8) & 0xFF;
+  buf[1]         = pEvent->head & 0xFF;
+  buf[2]         = (pEvent->crc >> 8) & 0xFF;
+  buf[3]         = pEvent->crc & 0xFF;
+
+  return vscp_binary_callback_reply(pdata, VSCP_BINARY_COMMAND_CODE_EVENT_CONFIRM, rv, buf, sizeof(buf));
+}

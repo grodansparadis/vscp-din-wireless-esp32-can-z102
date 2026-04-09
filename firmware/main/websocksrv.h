@@ -64,4 +64,12 @@ int wss_register_handlers(httpd_handle_t server);
 httpd_handle_t
 wss_start_websocket_server(void);
 
+/*!
+  Close a connected WebSocket client session by socket file descriptor.
+  @param fd Client socket file descriptor
+  @return ESP_OK on success, error code otherwise
+*/
+esp_err_t
+wss_close_client_fd(int fd);
+
 #endif /* __VSCP_WEBSOCK_SERVER_H__ */

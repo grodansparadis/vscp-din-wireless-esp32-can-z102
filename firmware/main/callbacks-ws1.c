@@ -121,7 +121,7 @@ vscp_ws1_callback_get_primary_key(vscp_ws_connection_context_t *pctx)
 //
 
 int
-vscp_ws1_callback_is_allowed_event(vscp_ws_connection_context_t *pctx, vscpEvent *pEvent)
+vscp_ws1_callback_is_allowed_event(vscp_ws_connection_context_t *pctx, vscp_event_t *pEvent)
 {
   // All events are allowed
   return VSCP_ERROR_SUCCESS;
@@ -242,7 +242,7 @@ vscp_ws1_callback_reply(vscp_ws_connection_context_t *pctx, const char *response
 //
 
 int
-vscp_ws1_callback_event(vscp_ws_connection_context_t *pctx, vscpEvent *pEvent)
+vscp_ws1_callback_event(vscp_ws_connection_context_t *pctx, vscp_event_t *pEvent)
 {
   return VSCP_ERROR_SUCCESS;
 }

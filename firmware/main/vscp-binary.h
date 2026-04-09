@@ -77,6 +77,8 @@
 
 #define VSCP_BINARY_COMMAND_CODE_USER_START 0xFF00 /* Start for user command range */
 
+#define VSCP_BINARY_COMMAND_CODE_EVENT_CONFIRM 0xFFFF /* Event confirm command */
+
   /*!
     @brief Handle a binary command.
 
@@ -97,7 +99,7 @@
     @param pEvent Pointer to the event structure.
     @return VSCP_ERROR_SUCCESS if all is OK, errorcode otherwise.
   */
-  int vscp_handle_binary_event(const void *pdata, vscpEvent *pEvent);
+  int vscp_handle_binary_event(const void *pdata, vscp_event_t *pEvent);
 
   ///////////////////////////////////////////////////////////////////////////////
   //                             Callbacks
@@ -144,7 +146,7 @@
    * @param pmsg Pointer to message to send
    * @return VSCP_ERROR_SUCCESS if all is OK, errorcode otherwise.
    *
-   * Send null terminated data to client. The callback should send the data
+   * Send null terminated data to websocket client. The callback should send the data
    * and return a positive response if it was successful in doing so and a
    * negative response if not.
    */
@@ -153,7 +155,7 @@
 
   /**
    * @fn vscp_binary_callback_disconnect_client
-   * @brief Disconnect client
+   * @brief Disconnect websocket client
    *
    * @param pdata Pointer to context..
    * @return VSCP_ERROR_SUCCESS if all is OK, errorcode otherwise.
@@ -163,14 +165,14 @@
 
   /**
    * @fn vscp_binary_callback_event_received
-   * @brief Event has ben received from client.
+   * @brief Event has been received from websocket client.
    *
    * @param pdata Pointer to context..
    * @param pex Pointer to received event ex.
    * @return VSCP_ERROR_SUCCESS if all is OK, errorcode otherwise.
    */
 
-  int vscp_binary_callback_event_received(const void *pdata, const vscpEvent *pev);
+  int vscp_binary_callback_event_received(const void *pdata, const vscp_event_t *pev);
 
   /**
    * @fn vscp_binary_callback_check_user
@@ -274,21 +276,9 @@
    *
    */
 
-  int vscp_binary_callback_send_event(const void *pdata, const vscpEvent *pev);
+  int vscp_binary_callback_send_event(const void *pdata, const vscp_event_t *pev);
 
-  /**
-   * @fn vscp_binary_callback_send
-   * @brief Send event ('send').
-   *
-   * @param pdata Pointer to context.
-   * @param pex Pointer to event ex to send. The callback should send the event and return a positive response if it was
-   *            successful in doing so and a negative response if not.
-   * @return Return VSCP_ERROR_SUCCESS if logged in error code else.
-   *
-   */
-
-  int vscp_binary_callback_send_eventex(const void *pdata, const vscpEventEx *pex);
-
+  
   /**
    * @fn vscp_binary_callback_get_event
    * @brief Get event ('retr').
@@ -308,7 +298,7 @@
    * On a node that can't send events asynchoniously this callback can be used to get events.
    */
 
-  int vscp_binary_callback_get_event(const void *pdata, vscpEvent *pev);
+  int vscp_binary_callback_get_event(const void *pdata, vscp_event_t *pev);
 
   /**
    * @fn vscp_binary_callback_get_event
@@ -329,7 +319,7 @@
    * On a node that can't send events asynchoniously this callback can be used to get events.
    */
 
-  int vscp_binary_callback_get_eventex(const void *pdata, vscpEventEx *pex);
+  int vscp_binary_callback_get_eventex(const void *pdata, vscp_event_ex_t *pex);
 
   /*!
    * @fn vscp_binary_callback_send_async_event
@@ -343,7 +333,7 @@
    * This callback is used by the server to send events to the client. The callback should send the event using
    * VSCP frame=0, type=1 (https://grodansparadis.github.io/vscp-doc-spec/#/./vscp_over_binary?id=vscp-frame-type-1)
    */
-  int vscp_binary_callback_send_asyncevent(const void *pdata, vscpEvent *pev);
+  int vscp_binary_callback_send_asyncevent(const void *pdata, vscp_event_t *pev);
 
   /*!
    * @fn vscp_binary_callback_open
@@ -557,7 +547,7 @@
    * transmit fifo to the client and send a '+OK\r\n' response each second to the client.
    */
 
-  int vscp_binary_callback_rcvloop(const void *pdata, vscpEvent **pev);
+  int vscp_binary_callback_rcvloop(const void *pdata, vscp_event_t **pev);
 
   /**
    * @fn vscp_binary_callback_wcyd

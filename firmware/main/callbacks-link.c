@@ -421,7 +421,7 @@ vscp_link_callback_test(const void *pdata, const char *arg)
 //
 
 int
-vscp_link_callback_send(const void *pdata, vscpEvent *pev)
+vscp_link_callback_send(const void *pdata, vscp_event_t *pev)
 {
   if ((NULL == pdata) || (NULL == pev)) {
     return VSCP_ERROR_INVALID_POINTER;
@@ -485,7 +485,7 @@ vscp_link_callback_send(const void *pdata, vscpEvent *pev)
   // Write to send buffer of other interfaces
   for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
     // if (pctx->sock != i) {
-    //   vscpEventEx *pnew = vscp_fwhlp_mkEventCopy(pex);
+    //   vscp_event_ex_t *pnew = vscp_fwhlp_mkEventCopy(pex);
     //   if (NULL == pnew) {
     //     vscp_fwhlp_deleteEvent(&pnew);
     //     vscp_fwhlp_deleteEvent(&pex);
@@ -517,7 +517,7 @@ vscp_link_callback_send(const void *pdata, vscpEvent *pev)
 //
 
 int
-vscp_link_callback_retr(const void *pdata, vscpEvent **pev)
+vscp_link_callback_retr(const void *pdata, vscp_event_t **pev)
 {
   BaseType_t rv;
   can4vscp_frame_t msg = {};
@@ -536,7 +536,7 @@ vscp_link_callback_retr(const void *pdata, vscpEvent **pev)
 
   // OK we have a message and should return it as a VSCP event
   // Allocate a new event
-  *pev = (vscpEvent *) malloc(sizeof(vscpEvent));
+  *pev = (vscp_event_t *) malloc(sizeof(vscpEvent));
   if (NULL == *pev) {
     return VSCP_ERROR_MEMORY;
   }
@@ -836,7 +836,7 @@ vscp_link_callback_info(const void *pdata, vscp_status_t *pstatus)
 //
 
 int
-vscp_link_callback_rcvloop(const void *pdata, vscpEvent **pev)
+vscp_link_callback_rcvloop(const void *pdata, vscp_event_t **pev)
 {
   // BaseType_t rv;
   // twai_message_t msg = {};

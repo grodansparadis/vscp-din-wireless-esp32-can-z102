@@ -48,7 +48,7 @@
         "color": "cyan",
         "singleInstance": true,
         "tooltip": "idf.py flash  (/dev/ttyACM0)",
-        "command": "source /home/akhe/development/esp/esp-idf/export.sh && idf.py -p /dev/ttyACM0 flash"
+        "command": "./tools/idf-safe.sh -p /dev/ttyACM0 flash"
       },
       {
         "name": "$(terminal)Monitor",
@@ -62,7 +62,7 @@
         "color": "green",
         "singleInstance": true,
         "tooltip": "idf.py flash monitor  (/dev/ttyACM0)",
-        "command": "source /home/akhe/development/esp/esp-idf/export.sh && idf.py -p /dev/ttyACM0 flash monitor"
+        "command": "./tools/idf-safe.sh -p /dev/ttyACM0 flash monitor"
       },
       {
         "name": "$(settings-gear)MenuConfig",
@@ -99,6 +99,8 @@
   "idf.toolsPath": "/home/akhe/.espressif",
   "idf.pythonInstallPath": "/home/akhe/.espressif/python_env/idf6.0_py3.13_env/bin/python",
   "idf.currentSetup": "/home/akhe/development/esp/esp-idf",
+  "cmake.configureOnOpen": false,
+  "cmake.generator": "Ninja",
   "idf.customExtraVars": {
     "OPENOCD_SCRIPTS": "/home/akhe/.espressif/tools/openocd-esp32/v0.12.0-esp32-20251215/openocd-esp32/share/openocd/scripts",
     "ESP_NOW_VER_MAJOR": "2",
@@ -108,6 +110,7 @@
   },
   "chat.tools.terminal.autoApprove": {
     "idf.py": true,
+    "./tools/idf-safe.sh": true,
     "/^source /home/akhe/development/esp/esp-idf/export\\.sh && idf\\.py build 2>&1 \\| tail -30$/": {
       "approve": true,
       "matchCommandLine": true
@@ -125,7 +128,7 @@
   "files.watcherExclude": {
     "**/.git/objects/**": true,
     "**/.git/subtree-cache/**": true,
-    "**/node_modules/*/**": true
+    "**/node_modules/*/**": true,
     "**/build/*/**": true
   }
 }

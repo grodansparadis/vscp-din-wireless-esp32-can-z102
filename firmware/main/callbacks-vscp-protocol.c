@@ -358,7 +358,7 @@ vscp_frmw2_callback_get_timestamp(void* const puserdata)
 //
 
 int
-vscp_frmw2_callback_get_time(void* const puserdata, const vscpEventEx *pex)
+vscp_frmw2_callback_get_time(void* const puserdata, const vscp_event_ex_t *pex)
 {
   return VSCP_ERROR_SUCCESS;
 }
@@ -368,13 +368,13 @@ vscp_frmw2_callback_get_time(void* const puserdata, const vscpEventEx *pex)
 //
 
 int
-vscp_frmw2_callback_send_event_ex(void *const puserdata, vscpEventEx *pex)
+vscp_frmw2_callback_send_event_ex(void *const puserdata, vscp_event_ex_t *pex)
 {
   for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
 
     // // Only if user is validated
     // if (gctx[i].bValidated) {
-    //   vscpEvent *pnew = vscp_fwhlp_mkEventCopy(pex);
+    //   vscp_event_t *pnew = vscp_fwhlp_mkEventCopy(pex);
     //   if (NULL == pnew) {
     //     return VSCP_ERROR_MEMORY;
     //   }
@@ -402,12 +402,12 @@ vscp_frmw2_callback_send_event_ex(void *const puserdata, vscpEventEx *pex)
 //
 
 int
-vscp_frmw2_callback_send_eventEx(void* const puserdata, vscpEventEx *pex)
+vscp_frmw2_callback_send_eventEx(void* const puserdata, vscp_event_ex_t *pex)
 {
   for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
     // // Only if user is validated
     // if (gctx[i].bValidated) {
-    //   vscpEvent *pnew = vscp_fwhlp_mkEventCopy(pex);
+    //   vscp_event_t *pnew = vscp_fwhlp_mkEventCopy(pex);
     //   if (NULL == pnew) {
     //     return VSCP_ERROR_MEMORY;
     //   }

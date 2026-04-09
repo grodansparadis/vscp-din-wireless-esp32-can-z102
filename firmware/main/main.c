@@ -1498,7 +1498,7 @@ app_main(void)
 
   crcInit(); // For calculating CRC of VSCP events
 
-  // vscpEvent ev = { 0 };
+  // vscp_event_t ev = { 0 };
   // ;
   // char *jsonobj = "{\"vscpHead\":321,\"vscpObid\":12345,\"vscpTimeStamp\":67890,\"vscpClass\":10,\"vscpType\":6,"
   //                 "\"vscpGuid\":\"FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF\",\"vscpData\":[1,2,3,4,5,6,7,8]}";
@@ -1511,7 +1511,7 @@ app_main(void)
   //          ev.vscp_type,
   //          ev.sizeData);
 
-  // vscpEventEx pex = { 0 };
+  // vscp_event_ex_t pex = { 0 };
   // vscp_fwhlp_parse_json_ex(&pex, jsonobj);
   // ESP_LOGE(TAG,
   //          "Parsed event: status=%d class=%d, type=%d, data_len=%d",

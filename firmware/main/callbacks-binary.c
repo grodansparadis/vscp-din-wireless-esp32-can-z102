@@ -47,7 +47,8 @@
 #include <esp_ota_ops.h>
 #include <esp_timer.h>
 #include <esp_err.h>
-#include <esp_log.h>
+#include "esp_log.h"
+#include "esp_log_buffer.h"
 #include <nvs_flash.h>
 #include <esp_http_server.h>
 
@@ -71,26 +72,14 @@
 #include "main.h"
 
 #include "vscp-binary.h"
-#include "vscp-mesh.h"
+#include "can4vscp.h"
 #include "vscp-ws1.h"
 #include "vscp-ws-common.h"
+#include "websocksrv.h"
 
 extern node_persistent_config_t g_persistent;
 
 #define TAG __func__
-
-static bool g_vscp_mesh_initialized = false;
-
-static void
-vscp_binary_mesh_lazy_init(void)
-{
-  if (!g_vscp_mesh_initialized) {
-    vscp_mesh_config_t cfg;
-    vscp_mesh_default_config(&cfg);
-    (void) vscp_mesh_init(&cfg);
-    g_vscp_mesh_initialized = true;
-  }
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 // vscp_binary_callback_reply
@@ -106,6 +95,7 @@ vscp_binary_callback_reply(const void *pdata, uint16_t command, uint16_t error, 
   vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
   httpd_req_t *req                   = (httpd_req_t *) pctx->pdata;
   if (NULL == req) {
+    ESP_LOGE(TAG, "Reply: no request context, cannot send reply");
     return VSCP_ERROR_INVALID_CONTEXT;
   }
 
@@ -113,6 +103,7 @@ vscp_binary_callback_reply(const void *pdata, uint16_t command, uint16_t error, 
   const size_t plain_len   = 1 + 4 + len + 2; // type + command/error + argument + crc
   uint8_t *plain           = calloc(1, plain_len);
   if (NULL == plain) {
+    ESP_LOGE(TAG, "Reply: failed to allocate memory for reply");
     return VSCP_ERROR_MEMORY;
   }
 
@@ -139,6 +130,7 @@ vscp_binary_callback_reply(const void *pdata, uint16_t command, uint16_t error, 
   if (encryption != VSCP_HLO_ENCRYPTION_NONE) {
     enc = calloc(1, plain_len + 32); // Room for padding and trailing IV.
     if (NULL == enc) {
+      ESP_LOGE(TAG, "Reply: failed to allocate memory for encryption");
       free(plain);
       return VSCP_ERROR_MEMORY;
     }
@@ -150,6 +142,7 @@ vscp_binary_callback_reply(const void *pdata, uint16_t command, uint16_t error, 
                                      NULL,
                                      VSCP_ENCRYPTION_FROM_TYPE_BYTE);
     if (0 == tx_len) {
+      ESP_LOGE(TAG, "Reply: failed to encrypt frame");
       free(enc);
       free(plain);
       return VSCP_ERROR_ERROR;
@@ -169,9 +162,11 @@ vscp_binary_callback_reply(const void *pdata, uint16_t command, uint16_t error, 
   free(plain);
 
   if (ESP_OK != err) {
+    ESP_LOGE(TAG, "Reply: failed to send frame, error=%d", err);
     return VSCP_ERROR_INTERFACE;
   }
 
+  ESP_LOGI(TAG, "Reply: sent command=0x%04X error=0x%04X len=%d", command, error, len);
   return VSCP_ERROR_SUCCESS;
 }
 
@@ -422,8 +417,12 @@ int
 vscp_binary_callback_user(const void *pdata, const char *user)
 {
   if (NULL == pdata || NULL == user) {
+    ESP_LOGE(TAG, "vscp_binary_callback_user: Invalid parameters");
     return VSCP_ERROR_PARAMETER;
   }
+
+  ESP_LOGI(TAG, "Received username: '%s'", user);
+
   // We just save the username in this stage (even if username is invalid)
   vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
   pctx->bAuthenticated               = false; // Reset authentication status when username changes
@@ -466,7 +465,7 @@ vscp_binary_callback_password(const void *pdata, const char *password)
     p++;
   }
 
-  ESP_LOGI(TAG, "Username:'%s'\n", pctx->user);
+  ESP_LOGI(TAG, "Username:'%s'\n", pctx->user.username);
   ESP_LOGI(TAG, "Password '%s'\n", p);
 
   if (validate_user(pctx->user.username, p)) {
@@ -536,8 +535,12 @@ vscp_binary_callback_test(const void *pdata, const uint8_t *arg, size_t len)
     return VSCP_ERROR_PARAMETER;
   }
 
+  if (len > 0 && arg != NULL) {
+    ESP_LOG_BUFFER_HEX(TAG, arg, len);
+  }
+
   // Echo back the test data as reply
-  return VSCP_ERROR_SUCCESS;
+  return vscp_binary_callback_reply(pdata, VSCP_BINARY_COMMAND_CODE_TEST, VSCP_ERROR_SUCCESS, arg, len);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -601,7 +604,7 @@ vscp_binary_callback_clrall(const void *pdata)
 //
 
 int
-vscp_binary_callback_send_event(const void *pdata, const vscpEvent *pev)
+vscp_binary_callback_send_event(const void *pdata, const vscp_event_t *pev)
 {
   if (NULL == pdata || NULL == pev) {
     return VSCP_ERROR_PARAMETER;
@@ -629,12 +632,12 @@ vscp_binary_callback_send_event(const void *pdata, const vscpEvent *pev)
   else if (pev->vscp_class > 512) {
     ;
   }
-  /* 
+  /*
     Level I event. If addressed to nodeid = 0
     and VSCP_CLASS1_PROTOCOL it is addressed to us
     and we should handle it. If not send event
     on the TWAI interface.
-  */ 
+  */
   else {
     if ((VSCP_CLASS1_PROTOCOL == pev->vscp_class) && (0 == pev->GUID[15])) {
       ;
@@ -650,12 +653,10 @@ vscp_binary_callback_send_event(const void *pdata, const vscpEvent *pev)
     }
   }
 
-
-
   // Write to send buffer of other interfaces
   for (int i = 0; i < MAX_TCP_CONNECTIONS; i++) {
     // if (pctx->sock != i) {
-    //   vscpEventEx *pnew = vscp_fwhlp_mkEventCopy(pex);
+    //   vscp_event_ex_t *pnew = vscp_fwhlp_mkEventCopy(pex);
     //   if (NULL == pnew) {
     //     vscp_fwhlp_deleteEvent(&pnew);
     //     vscp_fwhlp_deleteEvent(&pex);
@@ -677,31 +678,11 @@ vscp_binary_callback_send_event(const void *pdata, const vscpEvent *pev)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// vscp_binary_callback_send_eventex
-//
-
-int
-vscp_binary_callback_send_eventex(const void *pdata, const vscpEventEx *pex)
-{
-  (void) pdata;
-
-  vscp_binary_mesh_lazy_init();
-  int rv = vscp_mesh_send_eventex(pex, VSCP_MESH_ADDR_BROADCAST);
-
-  // Preserve existing callback behavior when no mesh TX backend is attached yet.
-  if (VSCP_ERROR_UNSUPPORTED == rv) {
-    return VSCP_ERROR_SUCCESS;
-  }
-
-  return rv;
-}
-
-///////////////////////////////////////////////////////////////////////////////
 // vscp_binary_callback_get_event
 //
 
 int
-vscp_binary_callback_get_event(const void *pdata, vscpEvent *pev)
+vscp_binary_callback_get_event(const void *pdata, vscp_event_t *pev)
 {
   if (NULL == pdata || NULL == pev) {
     return VSCP_ERROR_PARAMETER;
@@ -716,7 +697,7 @@ vscp_binary_callback_get_event(const void *pdata, vscpEvent *pev)
 //
 
 int
-vscp_binary_callback_get_eventex(const void *pdata, vscpEventEx *pex)
+vscp_binary_callback_get_eventex(const void *pdata, vscp_event_ex_t *pex)
 {
   if (NULL == pdata || NULL == pex) {
     return VSCP_ERROR_PARAMETER;
@@ -731,7 +712,7 @@ vscp_binary_callback_get_eventex(const void *pdata, vscpEventEx *pex)
 //
 
 int
-vscp_binary_callback_send_asyncevent(const void *pdata, vscpEvent *pev)
+vscp_binary_callback_send_asyncevent(const void *pdata, vscp_event_t *pev)
 {
   if (NULL == pdata || NULL == pev) {
     return VSCP_ERROR_PARAMETER;
@@ -752,8 +733,25 @@ vscp_binary_callback_quit(const void *pdata)
     return VSCP_ERROR_PARAMETER;
   }
 
-  // Send reply confirming quit
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  // Reply first, then close the websocket session.
+  int rv = vscp_binary_callback_reply(pdata, VSCP_BINARY_COMMAND_CODE_QUIT, VSCP_ERROR_SUCCESS, NULL, 0);
+  if (VSCP_ERROR_SUCCESS != rv) {
+    return rv;
+  }
+
+  vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
+  httpd_req_t *req                   = (httpd_req_t *) pctx->pdata;
+  if (NULL == req) {
+    return VSCP_ERROR_SUCCESS;
+  }
+
+  int fd = httpd_req_to_sockfd(req);
+  if (ESP_OK != wss_close_client_fd(fd)) {
+    ESP_LOGW(TAG, "QUIT: failed to close websocket fd=%d", fd);
+    return VSCP_ERROR_INTERFACE;
+  }
+
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -767,9 +765,36 @@ vscp_binary_callback_write_client(const void *pdata, const char *msg)
     return VSCP_ERROR_PARAMETER;
   }
 
-  // Send reply with message echoed back
-  size_t len = strlen(msg);
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, (const uint8_t *) msg, len);
+  vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
+
+  vscp_event_t ev = { 0 };
+  ev.vscp_class   = VSCP_CLASS1_PROTOCOL;
+  ev.vscp_type    = 0;
+  memcpy(ev.GUID, pctx->guid, sizeof(ev.GUID));
+
+  size_t msg_len = strlen(msg);
+  if (msg_len > 8) {
+    ESP_LOGW(TAG, "write_client: truncating payload from %u to 8 bytes for TWAI", (unsigned) msg_len);
+    msg_len = 8;
+  }
+
+  ev.sizeData = msg_len;
+  ev.pdata    = (uint8_t *) msg;
+
+  can4vscp_frame_t tx_msg = { 0 };
+  int rv                  = can4vscp_event_to_msg(&tx_msg, &ev);
+  if (VSCP_ERROR_SUCCESS != rv) {
+    return rv;
+  }
+
+  if (ESP_OK != can4vscp_send(&tx_msg, portMAX_DELAY)) {
+    return VSCP_ERROR_INTERFACE;
+  }
+
+  pctx->stats.cntTransmitFrames++;
+  pctx->stats.cntTransmitData += ev.sizeData;
+
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -783,12 +808,11 @@ vscp_binary_callback_get_interface_count(const void *pdata, uint16_t *pcount)
     return VSCP_ERROR_PARAMETER;
   }
 
-  // Send reply with interface count (2 bytes, big-endian)
-  uint8_t count_bytes[2];
-  count_bytes[0] = (*pcount >> 8) & 0xFF;
-  count_bytes[1] = *pcount & 0xFF;
+  // There is only one interface
+  pcount[0] = 0;
+  pcount[1] = 1;
 
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, count_bytes, sizeof(count_bytes));
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -802,8 +826,20 @@ vscp_binary_callback_get_interface(const void *pdata, uint16_t idx, vscp_interfa
     return VSCP_ERROR_PARAMETER;
   }
 
+  if (idx != 0) {
+    return VSCP_ERROR_INDEX_OOB;
+  }
+
+  vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
+
+  pifinfo->idx  = 0;
+  pifinfo->type = VSCP_INTERFACE_TYPE_INTERNAL;
+  memcpy(pifinfo->guid, pctx->guid, sizeof(pifinfo->guid));
+  strncpy(pifinfo->description, "Web socket binary interface", sizeof(pifinfo->description) - 1);
+  pifinfo->description[sizeof(pifinfo->description) - 1] = '\0';
+
   // Send reply with interface info (just confirm for now)
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -817,8 +853,12 @@ vscp_binary_callback_interface_open(const void *pdata, uint16_t idx)
     return VSCP_ERROR_PARAMETER;
   }
 
+  if (idx != 0) {
+    return VSCP_ERROR_INDEX_OOB;
+  }
+
   // Send reply confirming interface opened
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  return vscp_binary_callback_open(pdata);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -828,12 +868,17 @@ vscp_binary_callback_interface_open(const void *pdata, uint16_t idx)
 int
 vscp_binary_callback_interface_close(const void *pdata, uint16_t idx)
 {
+  // Here we need pdata
   if (NULL == pdata) {
     return VSCP_ERROR_PARAMETER;
   }
 
-  // Send reply confirming interface closed
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  if (idx != 0) {
+    return VSCP_ERROR_INDEX_OOB;
+  }
+
+  // Simulate the
+  return vscp_binary_callback_close(pdata);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -841,29 +886,32 @@ vscp_binary_callback_interface_close(const void *pdata, uint16_t idx)
 //
 
 int
-vscp_binary_callback_event_received(const void *pdata, const vscpEvent *pev)
+vscp_binary_callback_event_received(const void *pdata, const vscp_event_t *pev)
 {
-  (void) pdata;
-
-  if (NULL == pev) {
+  // Check pointers
+  if ((NULL == pdata) || (NULL == pev)) {
     return VSCP_ERROR_PARAMETER;
   }
 
-  vscpEventEx ex;
-  int rv = vscp_fwhlp_convertEventToEventEx(&ex, pev);
+  vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
+
+  // Make twai message from event
+  can4vscp_frame_t tx_msg = { 0 };
+  int rv                  = can4vscp_event_to_msg(&tx_msg, pev);
   if (VSCP_ERROR_SUCCESS != rv) {
     return rv;
   }
 
-  vscp_binary_mesh_lazy_init();
-  rv = vscp_mesh_send_eventex(&ex, VSCP_MESH_ADDR_BROADCAST);
-
-  // Preserve existing callback behavior when no mesh TX backend is attached yet.
-  if (VSCP_ERROR_UNSUPPORTED == rv) {
-    return VSCP_ERROR_SUCCESS;
+  // Send on TWAI interface
+  if (ESP_OK != can4vscp_send(&tx_msg, portMAX_DELAY)) {
+    return VSCP_ERROR_INTERFACE;
   }
 
-  return rv;
+  // Update statistics
+  pctx->stats.cntTransmitFrames++;
+  pctx->stats.cntTransmitData += pev->sizeData;
+
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -892,8 +940,10 @@ vscp_binary_callback_statistics(const void *pdata, vscp_statistics_t *pStatistic
     return VSCP_ERROR_PARAMETER;
   }
 
-  // Send reply confirming statistics retrieved
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
+  memcpy(pStatistics, &pctx->stats, sizeof(vscp_statistics_t));
+
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -907,8 +957,11 @@ vscp_binary_callback_info(const void *pdata, vscp_status_t *pstatus)
     return VSCP_ERROR_PARAMETER;
   }
 
-  // Send reply confirming info retrieved
-  return vscp_binary_callback_reply(pdata, 0, VSCP_ERROR_SUCCESS, NULL, 0);
+  // Get pointer to context
+  vscp_ws_connection_context_t *pctx = (vscp_ws_connection_context_t *) pdata;
+  memcpy(pstatus, &pctx->status, sizeof(vscp_status_t));
+
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -922,8 +975,8 @@ vscp_binary_callback_user_command(const void *pdata, uint16_t command, const uin
     return VSCP_ERROR_PARAMETER;
   }
 
-  // Send reply confirming user command executed
-  return vscp_binary_callback_reply(pdata, command, VSCP_ERROR_SUCCESS, parg, len);
+  // There is no user commnds
+  return VSCP_ERROR_SUCCESS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

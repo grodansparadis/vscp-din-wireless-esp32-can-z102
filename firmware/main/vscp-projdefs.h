@@ -205,6 +205,21 @@
 #define VSCP_FWHLP_UDP_FRAME_SUPPORT
 #define VSCP_FWHLP_BINARY_FRAME_SUPPORT
 
+// Crypto backend selection for encryption/decryption
+// PSA (Platform Security Architecture) crypto is only supported on ESP32 hardware
+// when building with ESP-IDF. For other platforms, AES backend is used.
+//
+// On ESP32:
+// 0 = Use AES (default from vscp-aes.h)
+// 1 = Use PSA (Platform Security Architecture) crypto
+//
+// On non-ESP32 platforms, this setting is ignored and AES backend is always used.
+#ifdef ESP_PLATFORM
+  #define VSCP_FWHLP_CRYPTO_USE_PSA_CRYPTO 1
+#else
+  #define VSCP_FWHLP_CRYPTO_USE_PSA_CRYPTO 0
+#endif
+
 // ws1 protocol related defines
 #define VSCP_WS1_DISABLE_USER_FULL_NAME // saves 32 bytes
 #define VSCP_WS1_DISABLE_USER_NOTES     // saves 256 bytes

@@ -166,7 +166,7 @@ extern const uint8_t mqtt_eclipse_io_pem_end[] asm("_binary_mqtt_eclipse_io_pem_
  * @return VSCP_ERROR_SUCCESS on success, VSCP_ERROR_MEMORY if allocation fails
  */
 static int
-mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent *pev)
+mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscp_event_t *pev)
 {
   char workbuf[48];
 
@@ -279,7 +279,7 @@ mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscpEvent
  * @note Updates s_mqtt_statistics.nPub on success or .nPubFailures on failure
  */
 // int
-// mqtt_send_vscp_event(const char *topic, const vscpEvent *pev)
+// mqtt_send_vscp_event(const char *topic, const vscp_event_t *pev)
 // {
 //   int rv             = VSCP_ERROR_SUCCESS;
 //   const char *pTopic = topic;
@@ -473,7 +473,7 @@ mqtt_task_tx(void *pvParameters)
     }
 
     // Create a VSCP event from the received CAN message
-    vscpEvent *pev;
+    vscp_event_t *pev;
     if (VSCP_ERROR_SUCCESS != (rv = can4vscp_msg_to_event(&pev, &rxmsg))) {
       ESP_LOGE(TAG, "Failed to convert CAN message to VSCP event rv=%d", rv);
       vscp_fwhlp_deleteEvent(&pev);
@@ -596,7 +596,7 @@ mqtt_task_rx(void *pvParameters)
     mqtt_rx_msg_t rx = { 0 };
     long status      = xQueueReceive(s_mqtt_rx_queue, (void *) &rx, 500);
     if (status == pdPASS) {
-      vscpEvent ev = { 0 };
+      vscp_event_t ev = { 0 };
       ESP_LOGV(TAG, "Received MQTT message: topic='%s' \npayload='%s'", rx.topic, rx.payload);
 
       switch (rx.payload[0]) {

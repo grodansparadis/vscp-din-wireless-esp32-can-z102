@@ -168,7 +168,7 @@ vscp_ws1_handle_text_protocol_request(vscp_ws_connection_context_t *pctx, const 
 */
 
 int
-vscp_ws1_handle_binary_protocol_request(vscp_ws_connection_context_t *pctx, const uint8_t *packet, uint16_t len);
+vscp_ws1_handle_binary_protocol_request(vscp_ws_connection_context_t *pctx, const uint8_t *packet, size_t len);
 
 /*!
   Function called when a command is received via the WS1 protocol.
@@ -308,7 +308,7 @@ vscp_ws1_callback_validate_user(vscp_ws_connection_context_t *pctx,
   @return Returns VSCP_ERROR_SUCCESS if the user is allowed to send the event, or an appropriate error code if not.
 */
 int
-vscp_ws1_callback_is_allowed_event(vscp_ws_connection_context_t *pctx, vscpEvent *pEvent);
+vscp_ws1_callback_is_allowed_event(vscp_ws_connection_context_t *pctx, vscp_event_t *pEvent);
 
 /*!
   @fn vscp_ws1_callback_is_allowed_connection
@@ -350,7 +350,7 @@ vscp_ws1_callback_reply(vscp_ws_connection_context_t *pctx, const char *response
   or an appropriate error code if there was a failure.
 */
 int
-vscp_ws1_callback_event(vscp_ws_connection_context_t *pctx, vscpEvent *pEvent);
+vscp_ws1_callback_event(vscp_ws_connection_context_t *pctx, vscp_event_t *pEvent);
 
 /*!
   @fn vscp_ws1_callback_copyright

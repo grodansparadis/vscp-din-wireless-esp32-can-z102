@@ -83,11 +83,11 @@ int
 vscp_mesh_decode_header(vscp_mesh_header_t *phdr, const uint8_t *packet, size_t packet_len);
 
 int
-vscp_mesh_send_eventex(const vscpEventEx *pex, uint16_t dst_nick);
+vscp_mesh_send_eventex(const vscp_event_ex_t *pex, uint16_t dst_nick);
 vscp_mesh_rx_result_t
 vscp_mesh_receive_packet(const uint8_t *packet,
                          size_t packet_len,
-                         vscpEventEx *out_eventex,
+                         vscp_event_ex_t *out_eventex,
                          uint16_t *psrc_nick,
                          uint32_t *pmsg_id);
 

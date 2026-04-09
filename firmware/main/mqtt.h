@@ -87,7 +87,7 @@ mqtt_stop(void);
  */
 
 int
-mqtt_send_vscp_event(const char *topic, const vscpEvent *pev);
+mqtt_send_vscp_event(const char *topic, const vscp_event_t *pev);
 
 /**
  * @fn mqtt_log

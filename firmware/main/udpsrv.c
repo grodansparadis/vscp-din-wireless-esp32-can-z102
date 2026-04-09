@@ -326,7 +326,7 @@ sendEvent(int sock, struct sockaddr_in udp_addr, const char *pstrev, bool bEncry
   uint16_t len             = 0;
   uint8_t buf[BUFFER_SIZE] = { 0 };
 
-  vscpEventEx ex;
+  vscp_event_ex_t ex;
   if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_parseStringToEventEx(&ex, pstrev))) {
     fprintf(stderr, "Error parsing event string\n");
     return VSCP_ERROR_SUCCESS;
@@ -618,7 +618,7 @@ udpsrv_rx_task(void *pvParameters)
 
         } // encrypted frame
 
-        // vscpEventEx ex;
+        // vscp_event_ex_t ex;
         // memset(&ex, 0, sizeof(ex));
         // if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_getEventExFromFrame(&ex, rx_buffer, len))) {
         //   fprintf(stderr, "Error reading event from frame. Check encryption key! rv=%d\n", rv);
@@ -636,7 +636,7 @@ udpsrv_rx_task(void *pvParameters)
         //   ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
         //   break;
         // }
-        vscpEvent ev;
+        vscp_event_t ev;
         memset(&ev, 0, sizeof(ev));
         if (VSCP_ERROR_SUCCESS != (rv = vscp_fwhlp_getEventFromFrame(&ev, rx_buffer, len))) {
           ESP_LOGE(TAG, "Error reading event from frame. rv=%d", rv);
@@ -729,7 +729,7 @@ udpsrv_tx_task(void *pvParameters)
       continue;
     }
 
-    vscpEvent *pev = NULL;
+    vscp_event_t *pev = NULL;
     if (VSCP_ERROR_SUCCESS != (rv = can4vscp_msg_to_event(&pev, &rxmsg))) {
       ESP_LOGE(TAG, "Failed to convert CAN message to VSCP event rv=%d", rv);
       vscp_fwhlp_deleteEvent(&pev);

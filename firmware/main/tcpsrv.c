@@ -279,7 +279,7 @@ client_task(void *pvParameters)
       }
 
       // Get event from input fifo
-      // vscpEvent *pev = NULL;
+      // vscp_event_t *pev = NULL;
       // vscp_fifo_read(&fifoEventsIn, &pev);
 
       // pev is NULL if no event is available here

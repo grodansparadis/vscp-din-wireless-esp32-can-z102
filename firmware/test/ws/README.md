@@ -23,6 +23,39 @@ some VSCP ws1 websocket commands and then wait for incoming events. User, passwo
 node.js code to login on the websocket interface and perform
 some VSCP ws2 websocket commands and then wait for incoming events. User, password and key should be set to default values.
 
+## test_vscp_binary.js
+Node.js smoke test for VSCP binary protocol over `ws1`. Authenticates on ws1 (text mode), opens the channel, then tests binary NOOP command with CRC-CCITT validation.
+
+**Flow:**
+1. Receive CHALLENGE from server (extract SID)
+2. Send AUTH command with AES-128-CBC encrypted credentials
+3. Send OPEN command to open communication channel
+4. Send binary NOOP frame (Frame format=14)
+5. Receive and validate binary reply (Frame format=15) with CRC-CCITT
+
+**Frame Format:**
+- Command: `[type(0xE0) | command(2 bytes) | CRC-CCITT(2 bytes)]`
+- Reply: `[type(0xF0) | command(2 bytes) | error(2 bytes) | CRC-CCITT(2 bytes)]`
+- CRC: CRC-CCITT (polynomial 0x1021, initial 0xFFFF, no final XOR)
+
+**Environment Variables:**
+- `WS_BINARY_URL` or `WS1_URL`: WebSocket endpoint (default: ws://192.168.1.100:8884/ws1)
+- `WS_TIMEOUT_MS`: Timeout in milliseconds (default: 5000)
+- `VSCP_USERNAME`: Authentication username (default: vscp)
+- `VSCP_PASSWORD`: Authentication password (default: secret)
+- `VSCP_KEY16`: AES-128 encryption key in hex (default: A4A86F7D7E119BA3F0CD06881E371B98)
+
+## test_vscp_binary.py
+Python 3 smoke test for VSCP binary protocol over `ws1`. Same authentication and binary protocol flow as the JavaScript version.
+
+**Dependencies:**
+- `websockets` (websocket client)
+- `cryptography` (AES-128-CBC encryption)
+
+Install with: `pip install websockets cryptography`
+
+**Environment Variables:** Same as JavaScript test (WS_BINARY_URL, VSCP_USERNAME, etc.)
+
 ## AUTH encryption (JS and Python scripts)
 
 `test_ws1.js`, `test_ws2.js`, `test_ws1.py`, and `test_ws2.py` now build `AUTH` dynamically using:
@@ -97,3 +130,36 @@ Examples:
 - `WS2_URL=ws://192.168.1.50:8884/ws2 node test_ws2.js`
 - `python test_ws1.py ws://192.168.1.50:8884/ws1`
 - `WS2_URL=ws://192.168.1.50:8884/ws2 python test_ws2.py`
+
+Binary protocol smoke test examples:
+
+- `node test_vscp_binary.js --url ws://192.168.1.50:8884/ws1`
+- `WS_BINARY_URL=ws://192.168.1.50:8884/ws1 node test_vscp_binary.js`
+- `python test_vscp_binary.py --url ws://192.168.1.50:8884/ws1`
+- `WS_BINARY_URL=ws://192.168.1.50:8884/ws1 python test_vscp_binary.py`
+
+Binary protocol test with custom credentials:
+
+- `VSCP_USERNAME=admin VSCP_PASSWORD=admin123 VSCP_KEY16=A4A86F7D7E119BA3F0CD06881E371B98 node test_vscp_binary.js`
+- `VSCP_USERNAME=admin VSCP_PASSWORD=admin123 python test_vscp_binary.py ws://192.168.1.50:8884/ws1`
+
+Expected output when test succeeds:
+
+```
+Connecting to ws://192.168.1.100:8884/ws1
+  Connected, waiting for CHALLENGE from server...
+  <- +;CHALLENGE;<sid>
+  SID received: <sid>
+  -> C;AUTH;<sid>;<encrypted>
+  <- +;AUTH
+  Authenticated successfully
+  -> C;OPEN
+  <- +;OPEN
+  Channel opened successfully
+  Switching to binary protocol...
+  -> [binary NOOP frame, 5 bytes]
+  <- [binary reply, 7 bytes]
+     Type: 0xF0, Command: 0x0000, Error: 0x0000
+
+PASS: Binary NOOP protocol test successful
+```
