@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdarg.h>
 #include <sys/param.h>
 #include <sys/unistd.h>
 #include <sys/stat.h>
@@ -54,6 +55,9 @@
 #include <esp_vfs.h>
 #include <esp_spiffs.h>
 #include <network_provisioning/manager.h>
+
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 #include <vscp.h>
 #include <vscp-class.h>
@@ -102,6 +106,26 @@ extern httpd_handle_t g_websocket_srv;
 
 #define TAG __func__
 
+// Keep a short in-memory rolling log for the web UI.
+#define WEB_LOG_RING_SIZE 200
+#define WEB_LOG_LINE_MAX  192
+
+typedef struct {
+  uint32_t seq;
+  char line[WEB_LOG_LINE_MAX];
+} web_log_item_t;
+
+static web_log_item_t g_web_log_ring[WEB_LOG_RING_SIZE];
+static uint32_t g_web_log_seq = 0;
+vprintf_like_t g_stdLogFunc   = NULL;
+static SemaphoreHandle_t g_web_log_mutex = NULL;
+
+static int web_log_vprintf(const char *fmt, va_list args);
+static void web_log_capture_line(const char *line);
+static esp_err_t logs_get_handler(httpd_req_t *req);
+static esp_err_t logstream_get_handler(httpd_req_t *req);
+static void web_log_hook_init(void);
+
 // Max length a file path can have on storage
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + CONFIG_SPIFFS_OBJ_NAME_LEN)
 
@@ -111,6 +135,84 @@ extern httpd_handle_t g_websocket_srv;
 #define IS_FILE_EXT(filename, ext) (strcasecmp(&filename[strlen(filename) - sizeof(ext) + 1], ext) == 0)
 
 // Prototypes
+
+///////////////////////////////////////////////////////////////////////////////
+// web_log_capture_line
+//
+
+static void
+web_log_capture_line(const char *line)
+{
+  if ((NULL == line) || ('\0' == *line) || (NULL == g_web_log_mutex)) {
+    return;
+  }
+
+  if (pdTRUE != xSemaphoreTake(g_web_log_mutex, pdMS_TO_TICKS(5))) {
+    return;
+  }
+
+  uint32_t seq = ++g_web_log_seq;
+  size_t idx   = (size_t) ((seq - 1U) % WEB_LOG_RING_SIZE);
+  g_web_log_ring[idx].seq = seq;
+
+  size_t j = 0;
+  for (size_t i = 0; (line[i] != '\0') && (j < (WEB_LOG_LINE_MAX - 1)); ++i) {
+    char c = line[i];
+    if (('\r' == c) || ('\n' == c)) {
+      if ((j > 0) && (' ' != g_web_log_ring[idx].line[j - 1])) {
+        g_web_log_ring[idx].line[j++] = ' ';
+      }
+      continue;
+    }
+    g_web_log_ring[idx].line[j++] = c;
+  }
+  g_web_log_ring[idx].line[j] = '\0';
+
+  xSemaphoreGive(g_web_log_mutex);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// web_log_vprintf
+//
+
+static int
+web_log_vprintf(const char *fmt, va_list args)
+{
+  if (NULL != fmt) {
+    char line[WEB_LOG_LINE_MAX] = { 0 };
+    va_list copy;
+    va_copy(copy, args);
+    int n = vsnprintf(line, sizeof(line), fmt, copy);
+    va_end(copy);
+
+    if (n > 0) {
+      web_log_capture_line(line);
+    }
+  }
+
+  if (NULL != g_stdLogFunc) {
+    return g_stdLogFunc(fmt, args);
+  }
+
+  return vprintf(fmt, args);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// web_log_hook_init
+//
+
+static void
+web_log_hook_init(void)
+{
+  if (NULL == g_web_log_mutex) {
+    g_web_log_mutex = xSemaphoreCreateMutex();
+  }
+
+  if ((NULL != g_web_log_mutex) && (NULL == g_stdLogFunc)) {
+    g_stdLogFunc = esp_log_set_vprintf(web_log_vprintf);
+    ESP_LOGI(TAG, "Web log capture enabled");
+  }
+}
 
 //-----------------------------------------------------------------------------
 //                               Start Basic Auth
@@ -1264,6 +1366,10 @@ mainpg_get_handler(httpd_req_t *req)
       "<p><form id=but2a class=\"button\" action='canbus' method='get'><button>CAN Bus Console</button></form></p>");
     httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
+    sprintf(buf,
+        "<p><form id=but2b class=\"button\" action='/logs' method='get'><button>Live Logs</button></form></p>");
+    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
   sprintf(buf,
           "<p><form id=but3 class=\"button\" action='upgrade' method='get'><button>Firmware "
           "Upgrade</button></form></p>");
@@ -1487,6 +1593,143 @@ canbus_get_handler(httpd_req_t *req)
   httpd_resp_send_chunk(req, NULL, 0);
 
   free(buf);
+  return ESP_OK;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// logs_get_handler
+//
+// Web page that displays device logs in near real-time.
+//
+
+static esp_err_t
+logs_get_handler(httpd_req_t *req)
+{
+  char *buf = (char *) calloc(CHUNK_BUFSIZE, 1);
+  if (NULL == buf) {
+    return ESP_ERR_NO_MEM;
+  }
+
+  const esp_app_desc_t *appDescr = esp_app_get_description();
+
+  sprintf(buf, WEBPAGE_START_TEMPLATE, g_persistent.nodeName, "Live Log Console");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<p style='font-size:0.95rem;color:#ddd;'>"
+          "Streaming firmware log output from this node in real time."
+          "</p>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<fieldset><legend>Log Stream</legend>"
+          "<div style='display:flex;gap:8px;margin-bottom:8px'>"
+          "<button id='btnPause' type='button'>Pause</button>"
+          "<button id='btnClear' type='button'>Clear</button>"
+          "</div>"
+          "<div id='logbox' style='height:360px;overflow:auto;background:#101110;color:#8df186;"
+          "font-family:monospace;padding:6px;white-space:pre-wrap;border:1px solid #2f3a2f'></div>"
+          "</fieldset>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<script>"
+          "(function(){"
+          "var since=0;var paused=false;"
+          "function el(id){return document.getElementById(id);}"
+          "function addLine(s){var t=el('logbox');if(!t)return;"
+          "var d=document.createElement('div');d.textContent=s;t.appendChild(d);"
+          "while(t.childNodes.length>800){t.removeChild(t.firstChild);}"
+          "t.scrollTop=t.scrollHeight;}"
+          "el('btnPause').onclick=function(){paused=!paused;this.textContent=paused?'Resume':'Pause';};"
+          "el('btnClear').onclick=function(){var t=el('logbox');if(t){t.textContent='';}};"
+          "function poll(){"
+          "if(paused){setTimeout(poll,400);return;}"
+          "fetch('/logstream?since='+since,{method:'GET'})"
+          ".then(function(r){return r.text();})"
+          ".then(function(txt){"
+          "if(!txt){setTimeout(poll,350);return;}"
+          "var lines=txt.split('\\n');"
+          "for(var i=0;i<lines.length;i++){"
+          "if(lines[i].indexOf('NEXT ')==0){since=parseInt(lines[i].substring(5),10)||since;}"
+          "else if(lines[i].length){addLine(lines[i]);}"
+          "}"
+          "setTimeout(poll,120);"
+          "})"
+          ".catch(function(e){addLine('logstream error: '+e);setTimeout(poll,700);});"
+          "}"
+          "poll();"
+          "})();"
+          "</script>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, WEBPAGE_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  httpd_resp_send_chunk(req, NULL, 0);
+
+  free(buf);
+  return ESP_OK;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// logstream_get_handler
+//
+
+static esp_err_t
+logstream_get_handler(httpd_req_t *req)
+{
+  char qbuf[64] = { 0 };
+  char sval[20] = { 0 };
+  uint32_t since = 0;
+
+  if ((httpd_req_get_url_query_len(req) > 0) &&
+      (ESP_OK == httpd_req_get_url_query_str(req, qbuf, sizeof(qbuf))) &&
+      (ESP_OK == httpd_query_key_value(qbuf, "since", sval, sizeof(sval)))) {
+    since = (uint32_t) strtoul(sval, NULL, 10);
+  }
+
+  httpd_resp_set_type(req, "text/plain; charset=utf-8");
+  httpd_resp_set_hdr(req, "Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  httpd_resp_set_hdr(req, "Pragma", "no-cache");
+
+  if (NULL == g_web_log_mutex) {
+    httpd_resp_sendstr(req, "NEXT 0\n");
+    return ESP_OK;
+  }
+
+  if (pdTRUE != xSemaphoreTake(g_web_log_mutex, pdMS_TO_TICKS(50))) {
+    httpd_resp_sendstr(req, "NEXT 0\n");
+    return ESP_OK;
+  }
+
+  uint32_t cur = g_web_log_seq;
+  uint32_t first_available = (cur > WEB_LOG_RING_SIZE) ? (cur - WEB_LOG_RING_SIZE + 1U) : 1U;
+  uint32_t start = since + 1U;
+  if (start < first_available) {
+    start = first_available;
+  }
+
+  char hdr[32] = { 0 };
+  snprintf(hdr, sizeof(hdr), "NEXT %lu\n", (unsigned long) cur);
+  httpd_resp_send_chunk(req, hdr, HTTPD_RESP_USE_STRLEN);
+
+  for (uint32_t seq = start; seq <= cur; ++seq) {
+    size_t idx = (size_t) ((seq - 1U) % WEB_LOG_RING_SIZE);
+    if (g_web_log_ring[idx].seq != seq) {
+      continue;
+    }
+
+    if ('\0' == g_web_log_ring[idx].line[0]) {
+      continue;
+    }
+
+    httpd_resp_send_chunk(req, g_web_log_ring[idx].line, HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send_chunk(req, "\n", 1);
+  }
+
+  xSemaphoreGive(g_web_log_mutex);
+
+  httpd_resp_send_chunk(req, NULL, 0);
   return ESP_OK;
 }
 
@@ -5483,6 +5726,16 @@ default_get_handler(httpd_req_t *req)
     return canbus_get_handler(req);
   }
 
+  if (0 == strncmp(req->uri, "/logstream", 10)) {
+    return logstream_get_handler(req);
+  }
+
+  if ((0 == strncmp(req->uri, "/logs", 5)) &&
+      (('\0' == req->uri[5]) || ('/' == req->uri[5]) || ('?' == req->uri[5]))) {
+    ESP_LOGV(TAG, "--------- logs ---------\n");
+    return logs_get_handler(req);
+  }
+
   if (0 == strncmp(req->uri, "/canapi", 7)) {
     ESP_LOGV(TAG, "--------- canapi ---------\n");
     return canapi_get_handler(req);
@@ -5724,6 +5977,7 @@ start_webserver(void)
 {
   httpd_handle_t srv     = NULL;
   httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
+  web_log_hook_init();
   cfg.server_port = g_persistent.webPort;
 
   // 4096 is to low for OTA
