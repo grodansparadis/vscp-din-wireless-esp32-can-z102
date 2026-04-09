@@ -66,7 +66,7 @@
 
 #include <vscp.h>
 #include <vscp-class.h>
-#include <crc.h>
+#include <vscp-crc.h>
 #include <vscp-firmware-helper.h>
 
 #include "main.h"

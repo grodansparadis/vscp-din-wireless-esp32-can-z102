@@ -48,7 +48,7 @@
 
 #include "main.h"
 
-#include <crc.h>
+#include <vscp-crc.h>
 
 #include <vscp.h>
 #include <vscp-class.h>

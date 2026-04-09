@@ -77,7 +77,7 @@ extern void twai_transmit_task(void *arg);
 
 #include <vscp.h>
 #include <vscp-firmware-helper.h>
-#include <crc.h>
+#include <vscp-crc.h>
 
 #include "can4vscp.h"
 #include "tcpsrv.h"

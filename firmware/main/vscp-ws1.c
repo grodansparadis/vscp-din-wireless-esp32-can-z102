@@ -43,7 +43,7 @@
 #include "vscp-projdefs.h"
 
 #include <vscp.h>
-#include <crc.h>
+#include <vscp-crc.h>
 
 #include <vscp-binary.h>
 #include "vscp-ws1.h"
