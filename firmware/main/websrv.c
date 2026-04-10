@@ -477,7 +477,7 @@ info_get_handler(httpd_req_t *req)
   int64_t time = esp_timer_get_time();
   int64_t seconds = time / 1000000;
   sprintf(buf,
-          "<tr><td class=\"name\">Uptime:</td><td class=\"prop\">%ldT%02ld:%02ld:%02ld</td></tr>",
+          "<tr><td class=\"name\">Uptime:</td><td class=\"prop\">%lldT%02lld:%02lld:%02lld</td></tr>",
           seconds / (3600 * 24),
           (seconds % (3600 * 24)) / 3600,
           (seconds % 3600) / 60,
