@@ -453,7 +453,7 @@ info_get_handler(httpd_req_t *req)
       sprintf(temp, "Reset reason can not be determined.\n");
       break;
   }
-  sprintf(buf, "<tr><td class=\"name\">Last reset reson:</td><td class=\"prop\">%s</td></tr>", temp);
+  sprintf(buf, "<tr><td class=\"name\">Last reset reason:</td><td class=\"prop\">%s</td></tr>", temp);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, "<tr><td class=\"name\">Number of reboots:</td><td class=\"prop\">%lu</td></tr>", g_persistent.bootCnt);
@@ -462,7 +462,7 @@ info_get_handler(httpd_req_t *req)
   char *bufguid = (char *) calloc(50, 1);
   if (NULL != bufguid) {
     vscp_fwhlp_writeGuidToString(bufguid, g_persistent.guid);
-    sprintf(buf, "<tr><td class=\"name\">GUID:</td><td class=\"prop\">%s<br>%s</td></tr>", bufguid, /*temp + 24*/ "1");
+    sprintf(buf, "<tr><td class=\"name\">GUID:</td><td class=\"prop\">%s</td></tr>", bufguid);
     httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
     free(bufguid);
   }
@@ -474,13 +474,14 @@ info_get_handler(httpd_req_t *req)
   sprintf(buf, "<tr><td class='infoheader'>Application</td><td></td></tr>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  int time = esp_timer_get_time();
+  int64_t time = esp_timer_get_time();
+  int64_t seconds = time / 1000000;
   sprintf(buf,
-          "<tr><td class=\"name\">Uptime:</td><td class=\"prop\">%dT%02d:%02d:%02d</td></tr>",
-          ((time / 1000000) / (3600 * 24)),
-          ((time / 1000000) / 3600),
-          ((time / 1000000) / 60),
-          (time / 1000000));
+          "<tr><td class=\"name\">Uptime:</td><td class=\"prop\">%ldT%02ld:%02ld:%02ld</td></tr>",
+          seconds / (3600 * 24),
+          (seconds % (3600 * 24)) / 3600,
+          (seconds % 3600) / 60,
+          seconds % 60);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   if (NULL != appDescr) {

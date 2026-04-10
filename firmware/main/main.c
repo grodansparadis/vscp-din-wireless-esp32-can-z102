@@ -400,7 +400,7 @@ initPersistentStorage(void)
     g_persistent.bootCnt++;
 
     // Write updated counter value to nvs
-    rv = nvs_set_u32(g_nvsHandle, "restart_counter", g_persistent.bootCnt);
+    rv = nvs_set_u32(g_nvsHandle, "bootCnt", g_persistent.bootCnt);
     if (rv != ESP_OK) {
       ESP_LOGI(TAG, "Failed to read restart counter!");
     }
