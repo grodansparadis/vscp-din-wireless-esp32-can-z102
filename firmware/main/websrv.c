@@ -1024,7 +1024,7 @@ info_get_handler(httpd_req_t *req)
   sprintf(buf, "</table>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_END_TEMPLATE_NO_RETURN, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -5370,24 +5370,28 @@ config_udp_get_handler(httpd_req_t *req)
   // EnableUdpRx
   sprintf(buf, "<input type=\"checkbox\" name=\"enablerx\" value=\"true\" ");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-  sprintf(buf, "%s><label for=\"lr\"> Enable RX</label>", g_persistent.enableUdpRx ? "checked" : "");
+    sprintf(buf,
+      "%s><label for=\"lr\"> Enable RX</label><br>",
+      g_persistent.enableUdpRx ? "checked" : "");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   // EnableUdpTx
   sprintf(buf, "<input type=\"checkbox\" name=\"enabletx\" value=\"true\" ");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-  sprintf(buf, "%s><label for=\"lr\"> Enable TX</label>", g_persistent.enableUdpTx ? "checked" : "");
+    sprintf(buf,
+      "%s><label for=\"lr\"> Enable TX</label><br><br>",
+      g_persistent.enableUdpTx ? "checked" : "");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(
     buf,
-    "<br><br>Host <small> (IPv4, hostname or udp://host)</small>:<input type=\"text\" name=\"url\" value=\"%s\" >",
+    "Host <small style=\"display:inline;margin:0\"> (IPv4, hostname or udp://host)</small>:<input type=\"text\" name=\"url\" value=\"%s\" >",
     g_persistent.udpUrl);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf,
-          "Port <small> (default:33333)</small>:<input type=\"text\" name=\"port\" value=\"%d\" >",
-          g_persistent.udpPort);
+    sprintf(buf,
+      "Port <small style=\"display:inline;margin:0\"> (default:33333)</small>:<input type=\"text\" name=\"port\" value=\"%d\" >",
+      g_persistent.udpPort);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   // bUdpEncrypt
