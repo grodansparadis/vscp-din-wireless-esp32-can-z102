@@ -97,7 +97,8 @@
 "YII="
 
 // https://codebeautify.org/css-beautify-minify
-#define WEBPAGE_STYLE_CSS "div,fieldset,input,select{padding: 5px;font-size: 1.0em}fieldset{background: #4b4b4e}p{margin: 0.5em 0}input{width: 100%%;box-sizing: border-box;-webkit-box-sizing: border-box;-moz-box-sizing: border-box;background: #dddddd;color: #000000}input[type=checkbox],input[type=radio]{width: 1em;margin-right: 6px;vertical-align: -1px}input[type=range]{width: 99%%}select{width: 100%%;background: #dddddd;color: #000000}input:disabled,select:disabled,textarea:disabled{background: #8f8f8f !important;color: #3f3f3f !important;border: 2px solid #5f5f5f;cursor: not-allowed;opacity: 1}input:disabled::placeholder,textarea:disabled::placeholder{color: #545454}textarea{resize: vertical;width: 98%%;height: 318px;padding: 5px;overflow: auto;background: #e9e6e6;color: #65c115b6}body{text-align: center;font-family: verdana, sans-serif;background: #252525}button{border: 1;border-radius: 0.5rem;background: #d3d3d0;color: #000000;line-height: 2.4rem;font-size: 1.2rem;width: 100%%;-webkit-transition-duration: 0.7s;transition-duration: 0.7s;cursor: pointer}button:hover{background: #375733}.bred{background: #d43535}.bred:hover{background: #931f1f}.bgrn{background: #47c266}.bgrn:hover{background: #296939}.byell{background: #f0ee81}.byell:hover{background: #68642e}a{color: #1fa3ec;text-decoration: none}.p{float: left;text-align: left}.q{float: right;text-align: right}.r{border-radius: 0.3em;padding: 2px;margin: 6px 2px}.hf{display: none}td{padding-left: 30px;padding-right: 15px;padding-bottom: 10px}.name{font-family: Arial, Helvetica, sans-serif;font-size: small;font-weight: bold;color: #ffffff}.prop{font-family: Arial, Helvetica, sans-serif;font-size: small;font-weight: lighter;color: #a7aca7}.infoheader{font-family: Arial, Helvetica, sans-serif;font-size: normal;font-weight: lighter;color: #ede02c}"
+#define WEBPAGE_STYLE_CSS \
+"*{box-sizing:border-box}html{background:radial-gradient(circle at top,#1c4655 0%%,#10252f 34%%,#09141b 76%%)}body{margin:0;padding:16px;text-align:center;font-family:Trebuchet MS,Verdana,sans-serif;color:#edf6f7;background:#09141b}p{margin:.8em 0}hr{border:0;border-top:1px solid rgba(255,255,255,.12);margin:16px 0}.app-shell{text-align:left;display:inline-block;width:100%%;max-width:900px;padding:18px;border-radius:18px;background:linear-gradient(180deg,rgba(22,50,64,.96),rgba(13,30,39,.98));border:1px solid rgba(144,210,220,.18)}.app-header{text-align:center;padding:4px 0 14px}.app-title{margin:0;font-size:1.8rem}.app-subtitle{margin:8px 0 0;font-size:1rem;font-weight:700;text-transform:uppercase;color:#f7c66b}.app-footer{text-align:right;font-size:11px;color:#9eb4b8}fieldset{margin:0 0 16px;padding:16px 18px 20px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid rgba(144,210,220,.12)}legend{padding:0 8px;font-weight:700;color:#f7c66b}form{margin:0}input,select,textarea{width:100%%;padding:12px;border-radius:10px;border:1px solid #c9d7da;background:#edf4f5;color:#11222a;margin:7px 0 14px}input:focus,select:focus,textarea:focus{outline:none;border-color:#6fcfbe}input[type=file]{padding:8px}input[type=checkbox],input[type=radio]{width:1.1em;height:1.1em;margin:0 8px 0 0;vertical-align:-2px;accent-color:#3cbf9e}input[type=range]{width:99%%;padding:0;margin:8px 0 14px;background:transparent}input:disabled,select:disabled,textarea:disabled{background:#798b90!important;color:#495a5f!important;border:2px solid #5f7075;cursor:not-allowed;opacity:1}textarea{resize:vertical;min-height:318px;overflow:auto;background:#e7f0f2;color:#163240;line-height:1.45}button{border:0;border-radius:12px;background:#dfeaea;color:#11222a;min-height:46px;padding:11px 16px;font-size:1rem;font-weight:700;width:100%%;cursor:pointer;margin-top:6px}button:hover{filter:brightness(1.18)}.bred{background:#d96a60;color:#fff}.bgrn{background:#63bf82;color:#082114}.byell{background:#e8bf63;color:#3c2b00}a{color:#8fdde3;text-decoration:none}.p{text-align:left}.q{text-align:right}.hf{display:none}table{width:100%%;border-collapse:collapse;margin:10px 0 18px}td,th{padding:14px 15px;vertical-align:top;border-bottom:1px solid rgba(255,255,255,.06)}tr:last-child td{border-bottom:0}.name{font-size:.9rem;font-weight:700;color:#edf6f7}.prop{font-size:.9rem;color:#9eb4b8}.infoheader{font-size:1rem;font-weight:600;color:#f7c66b}small{display:block;margin-top:9px}@media (max-width:720px){body{padding:12px}.app-shell{padding:14px}.app-title{font-size:1.45rem}table,tbody,tr,td{display:block;width:100%%}td{padding:10px 8px}.app-footer{text-align:center}}"
 
 
 /*
@@ -188,9 +189,9 @@ function startUpload() {
   "<link rel=\"stylesheet\" href=\"style.css\" /></head><body><div " \
   "<link rel=\"icon\" href=\"favicon.ico\">" \
 */
-#define WEBPAGE_START_TEMPLATE "<!DOCTYPE html><html lang=\"en\" class=\"\"><head><meta charset='utf-8'>" \
+#define WEBPAGE_START_TEMPLATE "<!DOCTYPE html><html lang=\"en\"><head><meta charset='utf-8'>" \
 "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,user-scalable=no\" />" \
-"<title>VSCP can4vscp gateway node - Main Menu</title>"\
+"<title>VSCP Gateway</title>"\
 "<script>" \
 WEBPAGE_JS1 \
 WEBPAGE_JS2 \
@@ -201,34 +202,30 @@ WEBPAGE_STYLE_CSS \
 "<link href=\"data:image/x-icon;base64," \
 WEBPAGE_FAVICON \
 "\" rel=\"icon\" type=\"image/x-icon\" />" \
-"</head><body><div " \
-"style='text-align:left;display:inline-block;color:#eaeaea;min-width:340px;max-width:600px;'>" \
-"<div style='text-align:center;color:#eaeaea;'>" \
-"<h3>%s</h3></div>" \
-"<div style='text-align:center;color:#f7f1a6;'><h4>%s</h4></div>"
+"</head><body><div class='app-shell'>" \
+"<div class='app-header'>" \
+"<h3 class='app-title'>%s</h3>" \
+"<h4 class='app-subtitle'>%s</h4></div>"
 
 /*>>
   Page end HTML
   Parameter 1: Page head
   Parameter 2: Section header
 */
-#define WEBPAGE_END_TEMPLATE "<div style='text-align:right;font-size:11px;'><hr />"\
+#define WEBPAGE_END_TEMPLATE "<div class='app-footer'><hr />"\
 "<form id=but14 style=\"display: block;\" "\
 "action='index.html' method='get'><button class=\"byell\">Main Menu</button></form>"\
-"<hr /><div style='text-align:right;font-size:11px;'>%s - <a href='https://vscp.org' target='_blank' "\
-"style='color:#aaa;'>%s -- vscp.org</a></div>"\
+"<hr /><div>%s - <a href='https://vscp.org' target='_blank'>%s -- vscp.org</a></div>"\
 "</div></body></html>"
 
-#define WEBPAGE_CONFIG_END_TEMPLATE "<div style='text-align:right;font-size:11px;'><hr />"\
+#define WEBPAGE_CONFIG_END_TEMPLATE "<div class='app-footer'><hr />"\
 "<form id=but14 style=\"display: block;\" "\
 "action='config.html' method='get'><button class=\"byell\">Configuration</button></form>"\
-"<hr /><div style='text-align:right;font-size:11px;'>%s - <a href='https://vscp.org' target='_blank' "\
-"style='color:#aaa;'>%s -- vscp.org</a></div>"\
+"<hr /><div>%s - <a href='https://vscp.org' target='_blank'>%s -- vscp.org</a></div>"\
 "</div></body></html>"
 
-#define WEBPAGE_END_TEMPLATE_NO_RETURN "<div style='text-align:right;font-size:11px;'>"\
-"<hr /><div style='text-align:right;font-size:11px;'>%s - <a href='https://vscp.org' target='_blank' "\
-"style='color:#aaa;'>%s -- vscp.org</a></div>"\
+#define WEBPAGE_END_TEMPLATE_NO_RETURN "<div class='app-footer'>"\
+"<hr /><div>%s - <a href='https://vscp.org' target='_blank'>%s -- vscp.org</a></div>"\
 "</div></body></html>"
 
 #define CONFIG_DEFAULT_BASIC_AUTH_USERNAME "vscp"

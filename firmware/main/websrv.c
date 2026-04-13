@@ -73,6 +73,7 @@
 #include "websocksrv.h"
 #include "websrv.h"
 #include "udpsrv.h"
+#include "build/build_counter.h"
 
 #if !CONFIG_HTTPD_WS_SUPPORT
 #error This code cannot be used unless HTTPD_WS_SUPPORT is enabled in esp-http-server component configuration
@@ -107,6 +108,20 @@ extern transport_t tr_monitor;
 extern httpd_handle_t g_websocket_srv;
 
 #define TAG __func__
+
+static const char *
+web_ui_version(const esp_app_desc_t *appDescr)
+{
+  static char s_ui_ver[64];
+  const char *base = "0.0.0";
+
+  if ((NULL != appDescr) && ('\0' != appDescr->version[0])) {
+    base = appDescr->version;
+  }
+
+  snprintf(s_ui_ver, sizeof(s_ui_ver), "%s+b%d", base, BUILD_COUNTER);
+  return s_ui_ver;
+}
 
 // Keep a short in-memory rolling log for the web UI.
 #define WEB_LOG_RING_SIZE 200
@@ -716,7 +731,9 @@ info_get_handler(httpd_req_t *req)
     httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
     // sprintf(temp,"Application ver: %s\n",appDescr->version);
-    sprintf(buf, "<tr><td class=\"name\">Application ver:</td><td class=\"prop\">%s</td></tr>", appDescr->version);
+        sprintf(buf,
+          "<tr><td class=\"name\">Application ver:</td><td class=\"prop\">%s</td></tr>",
+          web_ui_version(appDescr));
     httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
     // sprintf(temp,"Application ver: %s %s\n",appDescr->date,appDescr->time);
@@ -1007,7 +1024,7 @@ info_get_handler(httpd_req_t *req)
   sprintf(buf, "</table>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -1129,7 +1146,7 @@ upgrade_get_handler(httpd_req_t *req)
           "Upgrade</button></fieldset></fform></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -1626,7 +1643,7 @@ mainpg_get_handler(httpd_req_t *req)
           "bred'>Restart</button></form></p>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -1834,7 +1851,7 @@ canbus_get_handler(httpd_req_t *req)
           "</script>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
   httpd_resp_send_chunk(req, NULL, 0);
 
@@ -1909,7 +1926,7 @@ logs_get_handler(httpd_req_t *req)
           "</script>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
   httpd_resp_send_chunk(req, NULL, 0);
 
@@ -2792,6 +2809,9 @@ config_get_handler(httpd_req_t *req)
   sprintf(buf, "<p><form id=but1 class=\"button\" action='cfgmodule' method='get'><button>Module</button></form></p>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
+  sprintf(buf, "<p><form id=but2 class=\"button\" action='cfgwifi' method='get'><button>WiFi</button></form></p>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
   sprintf(buf, "<p><form id=but3 class=\"button\" action='cfgcan' method='get'><button>CAN/TWAI</button></form></p>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
@@ -2822,9 +2842,6 @@ config_get_handler(httpd_req_t *req)
   sprintf(buf, "<p><form id=but3 class=\"button\" action='cfglog' method='get'><button>Logging</button></form></p>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "<p><form id=but2 class=\"button\" action='cfgwifi' method='get'><button>WiFi</button></form></p>");
-  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-
   sprintf(
     buf,
     "<hr /><p><form id=but4 class=\"button\" action='cfgfactorydefaults' method='get'><button name='rst' class='button "
@@ -2839,7 +2856,7 @@ config_get_handler(httpd_req_t *req)
           "bgrn'>Restore</button></form></p>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -3242,7 +3259,7 @@ config_restore_get_handler(httpd_req_t *req)
           "</script>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
   httpd_resp_send_chunk(req, NULL, 0);
   free(buf);
@@ -3508,7 +3525,7 @@ config_can_get_handler(httpd_req_t *req)
   sprintf(buf, "<br><button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -3629,7 +3646,7 @@ config_module_get_handler(httpd_req_t *req)
   sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -4194,7 +4211,7 @@ wifi_scan_done:
   sprintf(buf, "<button class=\"button\">Rescan Networks</button></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -4427,7 +4444,7 @@ config_vscplink_get_handler(httpd_req_t *req)
 
   // Get header value string length and allocate memory for length + 1,
   // extra byte for null termination
-  req_buf_len = httpd_req_get_hdr_value_len(req, "Name") + 1;
+  req_buf_len = httpd_req_get_hdr_value_len(req, "Host") + 1;
   if (req_buf_len > 1) {
     req_buf = (char *) malloc(req_buf_len);
     // Copy null terminated value string into buffer
@@ -4461,7 +4478,7 @@ config_vscplink_get_handler(httpd_req_t *req)
   sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -4741,7 +4758,7 @@ config_mqtt_get_handler(httpd_req_t *req)
   sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -5157,7 +5174,7 @@ config_multicast_get_handler(httpd_req_t *req)
   sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -5382,7 +5399,7 @@ config_udp_get_handler(httpd_req_t *req)
   sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -5580,7 +5597,7 @@ config_websockets_get_handler(httpd_req_t *req)
   sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -5758,7 +5775,7 @@ config_web_get_handler(httpd_req_t *req)
   sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -5983,7 +6000,7 @@ config_log_get_handler(httpd_req_t *req)
       "</script>");
     httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -6072,7 +6089,11 @@ do_config_log_get_handler(httpd_req_t *req)
         ESP_LOGD(TAG, "Found query parameter => url=%s", param);
         strncpy(g_persistent.logUrl, param, sizeof(g_persistent.logUrl));
 
-        rv = nvs_set_str(g_nvsHandle, "log_url", g_persistent.logUrl);
+        rv = nvs_set_str(g_nvsHandle, "logUrl", g_persistent.logUrl);
+        if (rv == ESP_OK) {
+          // Keep legacy key in sync for backward compatibility.
+          rv = nvs_set_str(g_nvsHandle, "log_url", g_persistent.logUrl);
+        }
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to save log URL");
         }
@@ -6148,7 +6169,7 @@ config_factory_defaults_get_handler(httpd_req_t *req)
 
   // Get header value string length and allocate memory for length + 1,
   // extra byte for null termination
-  req_buf_len = httpd_req_get_hdr_value_len(req, "Name") + 1;
+  req_buf_len = httpd_req_get_hdr_value_len(req, "Host") + 1;
   if (req_buf_len > 1) {
     req_buf = (char *) malloc(req_buf_len);
     // Copy null terminated value string into buffer
@@ -6161,7 +6182,9 @@ config_factory_defaults_get_handler(httpd_req_t *req)
   sprintf(buf, WEBPAGE_START_TEMPLATE, g_persistent.nodeName, "Factory Defaults");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "<div><form id=but3 class=\"button\" action='/docfgfactorydefaults' method='get'><fieldset>");
+    sprintf(buf,
+      "<div><form id=but3 class=\"button\" action='/docfgfactorydefaults' method='get' "
+      "onsubmit=\"return confirm('Restore factory defaults and restart the device?');\"><fieldset>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   // Enable
@@ -6173,7 +6196,7 @@ config_factory_defaults_get_handler(httpd_req_t *req)
   sprintf(buf, "<button class=\"bred bred:hover\">Restore factory defaults</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -6215,13 +6238,21 @@ do_config_factory_defaults_get_handler(httpd_req_t *req)
         ESP_LOGW(TAG, "Found query parameter => yesimsure=%s", param);
         if (NULL != strstr(param, "true")) {
           ESP_LOGW(TAG, "Restoring factory defaults...");
-          nvs_erase_all(g_nvsHandle);
-          nvs_commit(g_nvsHandle);
-          const char *resp_str =
-            "<html><head><meta charset='utf-8'><meta http-equiv=\"refresh\" content=\"1;url=reset\" "
-            "/><style>" WEBPAGE_STYLE_CSS
-            "</style></head><body><h2 class=\"name\">Restoring factory defaults...</h2></body></html>";
-          httpd_resp_send(req, resp_str, HTTPD_RESP_USE_STRLEN);
+          esp_err_t erase_rv = nvs_erase_all(g_nvsHandle);
+          esp_err_t commit_rv = nvs_commit(g_nvsHandle);
+          if ((ESP_OK == erase_rv) && (ESP_OK == commit_rv)) {
+            send_restart_info_page(req, "Restoring factory defaults. The device is restarting...");
+            vTaskDelay(pdMS_TO_TICKS(800));
+            esp_restart();
+            free(param);
+            free(buf);
+            return ESP_OK;
+          }
+
+          ESP_LOGE(TAG,
+                   "Failed to restore factory defaults erase=%s commit=%s",
+                   esp_err_to_name(erase_rv),
+                   esp_err_to_name(commit_rv));
         }
       }
 

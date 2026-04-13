@@ -928,6 +928,11 @@ initPersistentStorage(void)
 const int WIFI_CONNECTED_EVENT = BIT0;
 static EventGroupHandle_t wifi_event_group;
 
+#define WIFI_PRIMARY_RETRY_LIMIT 5
+
+static bool s_wifi_use_secondary   = false;
+static uint8_t s_wifi_retry_counter = 0;
+
 #define PROV_QR_VERSION       "v1"
 #define PROV_TRANSPORT_SOFTAP "softap"
 #define PROV_TRANSPORT_BLE    "ble"
@@ -1181,10 +1186,42 @@ event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *ev
   else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
     ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
     ESP_LOGI(TAG, "Connected with IP Address:" IPSTR, IP2STR(&event->ip_info.ip));
+    s_wifi_retry_counter = 0;
     // Signal main application that WiFi connection is established
     xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_EVENT);
   }
   else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+    const wifi_event_sta_disconnected_t *disc = (const wifi_event_sta_disconnected_t *) event_data;
+    s_wifi_retry_counter++;
+
+    if ((NULL != disc) && (disc->reason != WIFI_REASON_NO_AP_FOUND)) {
+      ESP_LOGW(TAG,
+               "WiFi disconnected (reason=%d), retry=%u, profile=%s",
+               disc->reason,
+               s_wifi_retry_counter,
+               s_wifi_use_secondary ? "secondary" : "primary");
+    }
+
+    if (!s_wifi_use_secondary &&
+        (s_wifi_retry_counter >= WIFI_PRIMARY_RETRY_LIMIT) &&
+        ('\0' != g_persistent.wifiSecondarySsid[0])) {
+      wifi_config_t wifi_cfg = { 0 };
+      strncpy((char *) wifi_cfg.sta.ssid, g_persistent.wifiSecondarySsid, sizeof(wifi_cfg.sta.ssid) - 1);
+      strncpy((char *) wifi_cfg.sta.password, g_persistent.wifiSecondaryPassword, sizeof(wifi_cfg.sta.password) - 1);
+
+      if (ESP_OK == esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg)) {
+        s_wifi_use_secondary = true;
+        s_wifi_retry_counter = 0;
+        ESP_LOGW(TAG,
+                 "Primary WiFi failed after %d retries. Switching to secondary SSID: %s",
+                 WIFI_PRIMARY_RETRY_LIMIT,
+                 g_persistent.wifiSecondarySsid);
+      }
+      else {
+        ESP_LOGE(TAG, "Failed to switch to secondary WiFi profile");
+      }
+    }
+
     ESP_LOGI(TAG, "Disconnected. Connecting to the AP again...");
     esp_wifi_connect();
   }
@@ -1204,8 +1241,26 @@ event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *ev
 static void
 wifi_init_sta(void)
 {
+  wifi_config_t wifi_cfg = { 0 };
+
+  s_wifi_use_secondary = false;
+  s_wifi_retry_counter = 0;
+
+  if ('\0' != g_persistent.wifiPrimarySsid[0]) {
+    strncpy((char *) wifi_cfg.sta.ssid, g_persistent.wifiPrimarySsid, sizeof(wifi_cfg.sta.ssid) - 1);
+    strncpy((char *) wifi_cfg.sta.password, g_persistent.wifiPrimaryPassword, sizeof(wifi_cfg.sta.password) - 1);
+    ESP_LOGI(TAG, "Using primary WiFi profile: %s", g_persistent.wifiPrimarySsid);
+  }
+  else if ('\0' != g_persistent.wifiSecondarySsid[0]) {
+    strncpy((char *) wifi_cfg.sta.ssid, g_persistent.wifiSecondarySsid, sizeof(wifi_cfg.sta.ssid) - 1);
+    strncpy((char *) wifi_cfg.sta.password, g_persistent.wifiSecondaryPassword, sizeof(wifi_cfg.sta.password) - 1);
+    s_wifi_use_secondary = true;
+    ESP_LOGW(TAG, "Primary SSID not set. Starting with secondary WiFi profile: %s", g_persistent.wifiSecondarySsid);
+  }
+
   /* Start Wi-Fi in station mode */
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+  ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg));
   ESP_ERROR_CHECK(esp_wifi_start());
 }
 
