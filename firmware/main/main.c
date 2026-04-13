@@ -132,7 +132,6 @@ node_persistent_config_t g_persistent = {
   .logPort         = DEFAULT_LOG_PORT,               // Log server port
   .logUrl          = DEFAULT_LOG_URL,                // Log server address
   .logMqttTopic    = DEFAULT_MQTT_LOG_PUBLISH_TOPIC, // MQTT topic for log messages
-  .logwrite2Stdout = DEFAULT_LOG_WRITE2STDOUT,       // Write log to stdout
 
   .webPort     = DEFAULT_WEBSERVER_PORT,
   .webUser     = DEFAULT_WEBSERVER_USER,
@@ -627,16 +626,6 @@ initPersistentStorage(void)
                          "enableMqttLog",
                          g_persistent.enableMqttLog,
                          DEFAULT_MQTT_LOGGING_ENABLE,
-                         TAG,
-                         "%d");
-
-  NVS_GET_OR_SET_DEFAULT(u8,
-                         nvs_get_u8,
-                         nvs_set_u8,
-                         g_nvsHandle,
-                         "logwrite2Stdout",
-                         g_persistent.logwrite2Stdout,
-                         DEFAULT_LOG_WRITE2STDOUT,
                          TAG,
                          "%d");
 

@@ -55,6 +55,7 @@
 #include <esp_vfs.h>
 #include <esp_spiffs.h>
 #include <network_provisioning/manager.h>
+#include <cJSON.h>
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
@@ -263,6 +264,180 @@ web_log_hook_init(void)
     g_stdLogFunc = esp_log_set_vprintf(web_log_vprintf);
     ESP_LOGI(TAG, "Web log capture enabled");
   }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// backup_add_hex_field
+//
+
+static void
+backup_add_hex_field(cJSON *obj, const char *name, const uint8_t *data, size_t len)
+{
+  if ((NULL == obj) || (NULL == name) || (NULL == data) || (0 == len)) {
+    return;
+  }
+
+  char *hex = (char *) calloc((len * 2) + 1, 1);
+  if (NULL == hex) {
+    return;
+  }
+
+  for (size_t i = 0; i < len; i++) {
+    sprintf(hex + (i * 2), "%02X", data[i]);
+  }
+
+  cJSON_AddStringToObject(obj, name, hex);
+  free(hex);
+}
+
+static uint32_t
+backup_secret_seed(const char *field_name)
+{
+  uint32_t seed     = 2166136261u;
+  const char *fixed = "VSCP-CFG-BACKUP-V1";
+
+  for (size_t i = 0; fixed[i] != '\0'; i++) {
+    seed ^= (uint8_t) fixed[i];
+    seed *= 16777619u;
+  }
+
+  if (NULL != field_name) {
+    for (size_t i = 0; field_name[i] != '\0'; i++) {
+      seed ^= (uint8_t) field_name[i];
+      seed *= 16777619u;
+    }
+  }
+
+  if (0 == seed) {
+    seed = 0x1A2B3C4Du;
+  }
+
+  return seed;
+}
+
+static uint32_t
+backup_secret_next(uint32_t *state)
+{
+  *state ^= (*state << 13);
+  *state ^= (*state >> 17);
+  *state ^= (*state << 5);
+  return *state;
+}
+
+static bool
+backup_encrypt_to_hex(const char *field_name, const uint8_t *in, size_t in_len, char *out, size_t out_len)
+{
+  if ((NULL == in) || (NULL == out)) {
+    return false;
+  }
+
+  if (out_len < ((in_len * 2) + 5)) {
+    return false;
+  }
+
+  memcpy(out, "enc:", 4);
+  uint32_t st = backup_secret_seed(field_name);
+
+  for (size_t i = 0; i < in_len; i++) {
+    uint8_t b = in[i] ^ (uint8_t) (backup_secret_next(&st) & 0xFF);
+    sprintf(out + 4 + (i * 2), "%02X", b);
+  }
+
+  out[4 + (in_len * 2)] = '\0';
+  return true;
+}
+
+static bool
+backup_decrypt_from_hex(const char *field_name, const char *in, uint8_t *out, size_t out_len, size_t *written)
+{
+  if ((NULL == field_name) || (NULL == in) || (NULL == out)) {
+    return false;
+  }
+
+  if (0 != strncmp(in, "enc:", 4)) {
+    return false;
+  }
+
+  const char *hex = in + 4;
+  size_t hex_len  = strlen(hex);
+  if ((0 == hex_len) || (0 != (hex_len % 2))) {
+    return false;
+  }
+
+  size_t need = hex_len / 2;
+  if (need > out_len) {
+    return false;
+  }
+
+  uint32_t st = backup_secret_seed(field_name);
+  for (size_t i = 0; i < need; i++) {
+    char h1 = hex[i * 2];
+    char h2 = hex[(i * 2) + 1];
+    if (!isxdigit((unsigned char) h1) || !isxdigit((unsigned char) h2)) {
+      return false;
+    }
+
+    uint8_t hi = (uint8_t) ((h1 <= '9') ? (h1 - '0') : (10 + (tolower((unsigned char) h1) - 'a')));
+    uint8_t lo = (uint8_t) ((h2 <= '9') ? (h2 - '0') : (10 + (tolower((unsigned char) h2) - 'a')));
+    uint8_t b  = (uint8_t) ((hi << 4) | lo);
+    out[i]     = b ^ (uint8_t) (backup_secret_next(&st) & 0xFF);
+  }
+
+  if (NULL != written) {
+    *written = need;
+  }
+
+  return true;
+}
+
+static void
+backup_add_encrypted_str_field(cJSON *obj, const char *name, const char *plain)
+{
+  if ((NULL == obj) || (NULL == name) || (NULL == plain)) {
+    return;
+  }
+
+  size_t plain_len = strlen(plain);
+  if (0 == plain_len) {
+    cJSON_AddStringToObject(obj, name, "");
+    return;
+  }
+
+  size_t out_len = (plain_len * 2) + 5;
+  char *enc      = (char *) calloc(out_len, 1);
+  if (NULL == enc) {
+    cJSON_AddStringToObject(obj, name, "");
+    return;
+  }
+
+  if (backup_encrypt_to_hex(name, (const uint8_t *) plain, plain_len, enc, out_len)) {
+    cJSON_AddStringToObject(obj, name, enc);
+  }
+  else {
+    cJSON_AddStringToObject(obj, name, "");
+  }
+
+  free(enc);
+}
+
+static void
+backup_add_encrypted_blob_field(cJSON *obj, const char *name, const uint8_t *data, size_t data_len)
+{
+  if ((NULL == obj) || (NULL == name) || (NULL == data)) {
+    return;
+  }
+
+  size_t out_len = (data_len * 2) + 5;
+  char *enc      = (char *) calloc(out_len, 1);
+  if (NULL == enc) {
+    return;
+  }
+
+  if (backup_encrypt_to_hex(name, data, data_len, enc, out_len)) {
+    cJSON_AddStringToObject(obj, name, enc);
+  }
+
+  free(enc);
 }
 
 //-----------------------------------------------------------------------------
@@ -875,6 +1050,25 @@ httpd_uri_t reset = { .uri = "/reset", .method = HTTP_GET, .handler = reset_get_
 //
 // HTTP GET handler for update of firmware
 //
+
+static esp_err_t
+send_restart_info_page(httpd_req_t *req, const char *message)
+{
+  httpd_resp_sendstr_chunk(req, "<html><head><meta charset='utf-8'><meta http-equiv=\"refresh\" content=\"2;url=index.html\" /><style>");
+  httpd_resp_sendstr_chunk(req, WEBPAGE_STYLE_CSS);
+  httpd_resp_sendstr_chunk(req,
+                           "</style></head><body><div style='text-align:left;display:inline-block;color:#eaeaea;min-width:340px;max-width:600px;'>"
+                           "<div style='text-align:center;color:#eaeaea;'><h3>");
+  httpd_resp_sendstr_chunk(req, g_persistent.nodeName);
+  httpd_resp_sendstr_chunk(req,
+                           "</h3></div><div style='text-align:center;color:#f7f1a6;'><h4>");
+  httpd_resp_sendstr_chunk(req, message);
+  httpd_resp_sendstr_chunk(
+    req,
+    "</h4></div><p class=\"prop\" style='text-align:center;'>The page will reconnect automatically after the restart.</p></div></body></html>");
+
+  return httpd_resp_sendstr_chunk(req, NULL);
+}
 // - Server upgrade
 // - Local upgrade
 //
@@ -2652,6 +2846,542 @@ config_get_handler(httpd_req_t *req)
 
   free(buf);
 
+  return ESP_OK;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// config_backup_get_handler
+//
+
+static esp_err_t
+config_backup_get_handler(httpd_req_t *req)
+{
+  cJSON *root = cJSON_CreateObject();
+  if (NULL == root) {
+    httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Unable to create backup JSON");
+    return ESP_FAIL;
+  }
+
+  cJSON *persistent = cJSON_AddObjectToObject(root, "persistent");
+  if (NULL == persistent) {
+    cJSON_Delete(root);
+    httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Unable to create backup object");
+    return ESP_FAIL;
+  }
+
+  cJSON_AddStringToObject(persistent, "nodeName", g_persistent.nodeName);
+  cJSON_AddNumberToObject(persistent, "nodeZone", g_persistent.nodeZone);
+  cJSON_AddNumberToObject(persistent, "nodeSubzone", g_persistent.nodeSubzone);
+  backup_add_hex_field(persistent, "guid", g_persistent.guid, sizeof(g_persistent.guid));
+  cJSON_AddNumberToObject(persistent, "encryptLvl", g_persistent.encryptLvl);
+  backup_add_encrypted_blob_field(persistent, "pmk", g_persistent.pmk, sizeof(g_persistent.pmk));
+  cJSON_AddNumberToObject(persistent, "pmkLen", g_persistent.pmkLen);
+  cJSON_AddNumberToObject(persistent, "bootCnt", g_persistent.bootCnt);
+
+  cJSON_AddNumberToObject(persistent, "canMode", g_persistent.canMode);
+  cJSON_AddNumberToObject(persistent, "canSpeed", g_persistent.canSpeed);
+  cJSON_AddNumberToObject(persistent, "nSent", g_persistent.nSent);
+  cJSON_AddNumberToObject(persistent, "nRecv", g_persistent.nRecv);
+  cJSON_AddNumberToObject(persistent, "nErr", g_persistent.nErr);
+  cJSON_AddNumberToObject(persistent, "lastError", g_persistent.lastError);
+  cJSON_AddNumberToObject(persistent, "canFilter", g_persistent.canFilter);
+  cJSON_AddNumberToObject(persistent, "bRawCan", g_persistent.bRawCan);
+
+  cJSON_AddNumberToObject(persistent, "logType", g_persistent.logType);
+  cJSON_AddNumberToObject(persistent, "logLevel", g_persistent.logLevel);
+  cJSON_AddNumberToObject(persistent, "logRetries", g_persistent.logRetries);
+  cJSON_AddNumberToObject(persistent, "logPort", g_persistent.logPort);
+  cJSON_AddStringToObject(persistent, "logUrl", g_persistent.logUrl);
+  cJSON_AddStringToObject(persistent, "logMqttTopic", g_persistent.logMqttTopic);
+  cJSON_AddNumberToObject(persistent, "enableMqttLog", g_persistent.enableMqttLog);
+
+  cJSON_AddStringToObject(persistent, "wifiPrimarySsid", g_persistent.wifiPrimarySsid);
+  backup_add_encrypted_str_field(persistent, "wifiPrimaryPassword", g_persistent.wifiPrimaryPassword);
+  cJSON_AddStringToObject(persistent, "wifiSecondarySsid", g_persistent.wifiSecondarySsid);
+  backup_add_encrypted_str_field(persistent, "wifiSecondaryPassword", g_persistent.wifiSecondaryPassword);
+  cJSON_AddNumberToObject(persistent, "wifiStaticEnable", g_persistent.wifiStaticEnable);
+  cJSON_AddStringToObject(persistent, "wifiStaticIp", g_persistent.wifiStaticIp);
+  cJSON_AddStringToObject(persistent, "wifiStaticNetmask", g_persistent.wifiStaticNetmask);
+  cJSON_AddStringToObject(persistent, "wifiStaticGateway", g_persistent.wifiStaticGateway);
+  cJSON_AddStringToObject(persistent, "wifiStaticDns", g_persistent.wifiStaticDns);
+
+  cJSON_AddNumberToObject(persistent, "webPort", g_persistent.webPort);
+  cJSON_AddStringToObject(persistent, "webUser", g_persistent.webUser);
+  backup_add_encrypted_str_field(persistent, "webPassword", g_persistent.webPassword);
+
+  cJSON_AddNumberToObject(persistent, "enableVscpLink", g_persistent.enableVscpLink);
+  cJSON_AddNumberToObject(persistent, "vscplinkPort", g_persistent.vscplinkPort);
+  cJSON_AddStringToObject(persistent, "vscplinkUser", g_persistent.vscplinkUser);
+  backup_add_encrypted_str_field(persistent, "vscplinkPw", g_persistent.vscplinkPw);
+
+  cJSON_AddNumberToObject(persistent, "enableMqtt", g_persistent.enableMqtt);
+  cJSON_AddNumberToObject(persistent, "enableMqttTls", g_persistent.enableMqttTls);
+  cJSON_AddStringToObject(persistent, "mqttUrl", g_persistent.mqttUrl);
+  cJSON_AddNumberToObject(persistent, "mqttPort", g_persistent.mqttPort);
+  cJSON_AddStringToObject(persistent, "mqttUser", g_persistent.mqttUser);
+  backup_add_encrypted_str_field(persistent, "mqttPw", g_persistent.mqttPw);
+  cJSON_AddStringToObject(persistent, "mqttPubTopic", g_persistent.mqttPubTopic);
+  cJSON_AddStringToObject(persistent, "mqttSubTopic", g_persistent.mqttSubTopic);
+  cJSON_AddStringToObject(persistent, "mqttPubLogTopic", g_persistent.mqttPubLogTopic);
+  cJSON_AddStringToObject(persistent, "mqttClientId", g_persistent.mqttClientId);
+  backup_add_encrypted_str_field(persistent, "mqttCaCert", g_persistent.mqttCaCert);
+  backup_add_encrypted_str_field(persistent, "mqttClientCert", g_persistent.mqttClientCert);
+  backup_add_encrypted_str_field(persistent, "mqttClientKey", g_persistent.mqttClientKey);
+  cJSON_AddNumberToObject(persistent, "mqttQos", g_persistent.mqttQos);
+  cJSON_AddNumberToObject(persistent, "mqttRetain", g_persistent.mqttRetain);
+  cJSON_AddNumberToObject(persistent, "mqttFormat", g_persistent.mqttFormat);
+
+  cJSON_AddNumberToObject(persistent, "enableMulticast", g_persistent.enableMulticast);
+  cJSON_AddStringToObject(persistent, "multicastUrl", g_persistent.multicastUrl);
+  cJSON_AddNumberToObject(persistent, "multicastPort", g_persistent.multicastPort);
+  cJSON_AddNumberToObject(persistent, "multicastTtl", g_persistent.multicastTtl);
+  cJSON_AddNumberToObject(persistent, "bMcastEncrypt", g_persistent.bMcastEncrypt);
+  cJSON_AddNumberToObject(persistent, "bHeartbeat", g_persistent.bHeartbeat);
+
+  cJSON_AddNumberToObject(persistent, "enableUdpRx", g_persistent.enableUdpRx);
+  cJSON_AddNumberToObject(persistent, "enableUdpTx", g_persistent.enableUdpTx);
+  cJSON_AddStringToObject(persistent, "udpUrl", g_persistent.udpUrl);
+  cJSON_AddNumberToObject(persistent, "udpPort", g_persistent.udpPort);
+  cJSON_AddNumberToObject(persistent, "bUdpEncrypt", g_persistent.bUdpEncrypt);
+
+  cJSON_AddNumberToObject(persistent, "enableWebsock", g_persistent.enableWebsock);
+  cJSON_AddNumberToObject(persistent, "websockPort", g_persistent.websockPort);
+  cJSON_AddStringToObject(persistent, "websockUser", g_persistent.websockUser);
+  backup_add_encrypted_str_field(persistent, "websockPw", g_persistent.websockPw);
+
+  char *json = cJSON_Print(root);
+  cJSON_Delete(root);
+
+  if (NULL == json) {
+    httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Unable to serialize backup JSON");
+    return ESP_FAIL;
+  }
+
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_set_hdr(req, "Content-Disposition", "attachment; filename=\"vscp-persistent-backup.json\"");
+  httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+  esp_err_t rv = httpd_resp_send(req, json, HTTPD_RESP_USE_STRLEN);
+
+  cJSON_free(json);
+  return rv;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// backup_parse_hex_field
+//
+
+static bool
+backup_parse_hex_field(const char *str, uint8_t *out, size_t out_len)
+{
+  if ((NULL == str) || (NULL == out) || (0 == out_len)) {
+    return false;
+  }
+
+  size_t hex_count = 0;
+  for (size_t i = 0; str[i] != '\0'; i++) {
+    if (isxdigit((unsigned char) str[i])) {
+      hex_count++;
+    }
+  }
+
+  if (hex_count != (out_len * 2)) {
+    return false;
+  }
+
+  size_t idx = 0;
+  int hi     = -1;
+  for (size_t i = 0; str[i] != '\0'; i++) {
+    if (!isxdigit((unsigned char) str[i])) {
+      continue;
+    }
+
+    int nibble = 0;
+    if ((str[i] >= '0') && (str[i] <= '9')) {
+      nibble = str[i] - '0';
+    }
+    else if ((str[i] >= 'a') && (str[i] <= 'f')) {
+      nibble = 10 + (str[i] - 'a');
+    }
+    else {
+      nibble = 10 + (str[i] - 'A');
+    }
+
+    if (hi < 0) {
+      hi = nibble;
+    }
+    else {
+      if (idx >= out_len) {
+        return false;
+      }
+      out[idx++] = (uint8_t) ((hi << 4) | nibble);
+      hi         = -1;
+    }
+  }
+
+  return (idx == out_len);
+}
+
+static void backup_json_get_u8(const cJSON *obj, const char *name, uint8_t *target)
+{
+  const cJSON *item = cJSON_GetObjectItemCaseSensitive(obj, name);
+  if ((NULL != item) && cJSON_IsNumber(item) && (NULL != target)) {
+    *target = (uint8_t) item->valueint;
+  }
+}
+
+static void backup_json_get_u16(const cJSON *obj, const char *name, uint16_t *target)
+{
+  const cJSON *item = cJSON_GetObjectItemCaseSensitive(obj, name);
+  if ((NULL != item) && cJSON_IsNumber(item) && (NULL != target)) {
+    *target = (uint16_t) item->valueint;
+  }
+}
+
+static void backup_json_get_u32(const cJSON *obj, const char *name, uint32_t *target)
+{
+  const cJSON *item = cJSON_GetObjectItemCaseSensitive(obj, name);
+  if ((NULL != item) && cJSON_IsNumber(item) && (NULL != target)) {
+    *target = (uint32_t) item->valuedouble;
+  }
+}
+
+static void backup_json_get_str(const cJSON *obj, const char *name, char *target, size_t target_len)
+{
+  const cJSON *item = cJSON_GetObjectItemCaseSensitive(obj, name);
+  if ((NULL != item) && cJSON_IsString(item) && (NULL != item->valuestring) && (NULL != target) && (target_len > 0)) {
+    strncpy(target, item->valuestring, target_len - 1);
+    target[target_len - 1] = '\0';
+  }
+}
+
+static void
+backup_json_get_secret_str(const cJSON *obj, const char *name, char *target, size_t target_len)
+{
+  const cJSON *item = cJSON_GetObjectItemCaseSensitive(obj, name);
+  if ((NULL == item) || !cJSON_IsString(item) || (NULL == item->valuestring) || (NULL == target) || (target_len < 2)) {
+    return;
+  }
+
+  size_t written = 0;
+  if (backup_decrypt_from_hex(name, item->valuestring, (uint8_t *) target, target_len - 1, &written)) {
+    target[written] = '\0';
+    return;
+  }
+
+  strncpy(target, item->valuestring, target_len - 1);
+  target[target_len - 1] = '\0';
+}
+
+static void
+backup_json_get_secret_blob(const cJSON *obj, const char *name, uint8_t *target, size_t target_len)
+{
+  const cJSON *item = cJSON_GetObjectItemCaseSensitive(obj, name);
+  if ((NULL == item) || !cJSON_IsString(item) || (NULL == item->valuestring) || (NULL == target) || (0 == target_len)) {
+    return;
+  }
+
+  size_t written = 0;
+  if (backup_decrypt_from_hex(name, item->valuestring, target, target_len, &written)) {
+    return;
+  }
+
+  // Backward compatibility: old backup used plain hex for PMK.
+  backup_parse_hex_field(item->valuestring, target, target_len);
+}
+
+static esp_err_t save_persistent_to_nvs(void)
+{
+  esp_err_t rv = ESP_OK;
+
+  rv |= nvs_set_str(g_nvsHandle, "nodeName", g_persistent.nodeName);
+  rv |= nvs_set_blob(g_nvsHandle, "guid", g_persistent.guid, sizeof(g_persistent.guid));
+  rv |= nvs_set_blob(g_nvsHandle, "pmk", g_persistent.pmk, sizeof(g_persistent.pmk));
+  rv |= nvs_set_u8(g_nvsHandle, "encryptLvl", g_persistent.encryptLvl);
+  rv |= nvs_set_u8(g_nvsHandle, "zone", g_persistent.nodeZone);
+  rv |= nvs_set_u8(g_nvsHandle, "subzone", g_persistent.nodeSubzone);
+  rv |= nvs_set_u8(g_nvsHandle, "nodeZone", g_persistent.nodeZone);
+  rv |= nvs_set_u8(g_nvsHandle, "nodeSubZone", g_persistent.nodeSubzone);
+
+  rv |= nvs_set_u8(g_nvsHandle, "canMode", g_persistent.canMode);
+  rv |= nvs_set_u8(g_nvsHandle, "canSpeed", g_persistent.canSpeed);
+  rv |= nvs_set_u32(g_nvsHandle, "canFilter", g_persistent.canFilter);
+  rv |= nvs_set_u32(g_nvsHandle, "filter", g_persistent.canFilter);
+  rv |= nvs_set_u8(g_nvsHandle, "canRaw", g_persistent.bRawCan);
+
+  rv |= nvs_set_u8(g_nvsHandle, "logType", g_persistent.logType);
+  rv |= nvs_set_u8(g_nvsHandle, "logRetries", g_persistent.logRetries);
+  rv |= nvs_set_u8(g_nvsHandle, "logLevel", g_persistent.logLevel);
+  rv |= nvs_set_u8(g_nvsHandle, "log_level", g_persistent.logLevel);
+  rv |= nvs_set_u16(g_nvsHandle, "logPort", g_persistent.logPort);
+  rv |= nvs_set_str(g_nvsHandle, "logUrl", g_persistent.logUrl);
+  rv |= nvs_set_str(g_nvsHandle, "log_url", g_persistent.logUrl);
+  rv |= nvs_set_str(g_nvsHandle, "logMqttTopic", g_persistent.logMqttTopic);
+  rv |= nvs_set_u8(g_nvsHandle, "enableMqttLog", g_persistent.enableMqttLog);
+
+  rv |= nvs_set_str(g_nvsHandle, "wifiPriSsid", g_persistent.wifiPrimarySsid);
+  rv |= nvs_set_str(g_nvsHandle, "wifiPriPass", g_persistent.wifiPrimaryPassword);
+  rv |= nvs_set_str(g_nvsHandle, "wifiSecSsid", g_persistent.wifiSecondarySsid);
+  rv |= nvs_set_str(g_nvsHandle, "wifiSecPass", g_persistent.wifiSecondaryPassword);
+  rv |= nvs_set_u8(g_nvsHandle, "wifiStaIpEn", g_persistent.wifiStaticEnable);
+  rv |= nvs_set_str(g_nvsHandle, "wifiStaIp", g_persistent.wifiStaticIp);
+  rv |= nvs_set_str(g_nvsHandle, "wifiStaMask", g_persistent.wifiStaticNetmask);
+  rv |= nvs_set_str(g_nvsHandle, "wifiStaGw", g_persistent.wifiStaticGateway);
+  rv |= nvs_set_str(g_nvsHandle, "wifiStaDns", g_persistent.wifiStaticDns);
+
+  rv |= nvs_set_u16(g_nvsHandle, "webPort", g_persistent.webPort);
+  rv |= nvs_set_str(g_nvsHandle, "webUser", g_persistent.webUser);
+  rv |= nvs_set_str(g_nvsHandle, "webPassword", g_persistent.webPassword);
+
+  rv |= nvs_set_u8(g_nvsHandle, "enableVscpLink", g_persistent.enableVscpLink);
+  rv |= nvs_set_u16(g_nvsHandle, "vscplinkPort", g_persistent.vscplinkPort);
+  rv |= nvs_set_str(g_nvsHandle, "vscplinkUser", g_persistent.vscplinkUser);
+  rv |= nvs_set_str(g_nvsHandle, "vscplinkPw", g_persistent.vscplinkPw);
+
+  rv |= nvs_set_u8(g_nvsHandle, "enableMqtt", g_persistent.enableMqtt);
+  rv |= nvs_set_u8(g_nvsHandle, "enableMqttTls", g_persistent.enableMqttTls);
+  rv |= nvs_set_str(g_nvsHandle, "mqttUrl", g_persistent.mqttUrl);
+  rv |= nvs_set_u16(g_nvsHandle, "mqttPort", g_persistent.mqttPort);
+  rv |= nvs_set_str(g_nvsHandle, "mqttUser", g_persistent.mqttUser);
+  rv |= nvs_set_str(g_nvsHandle, "mqttPw", g_persistent.mqttPw);
+  rv |= nvs_set_str(g_nvsHandle, "mqttPubTopic", g_persistent.mqttPubTopic);
+  rv |= nvs_set_str(g_nvsHandle, "mqttSubTopic", g_persistent.mqttSubTopic);
+  rv |= nvs_set_str(g_nvsHandle, "mqttPubLogTopic", g_persistent.mqttPubLogTopic);
+  rv |= nvs_set_str(g_nvsHandle, "mqttClientId", g_persistent.mqttClientId);
+  rv |= nvs_set_str(g_nvsHandle, "mqttCaCert", g_persistent.mqttCaCert);
+  rv |= nvs_set_str(g_nvsHandle, "mqttClientCert", g_persistent.mqttClientCert);
+  rv |= nvs_set_str(g_nvsHandle, "mqttClientKey", g_persistent.mqttClientKey);
+  rv |= nvs_set_u8(g_nvsHandle, "mqttQos", g_persistent.mqttQos);
+  rv |= nvs_set_u8(g_nvsHandle, "mqttRetain", g_persistent.mqttRetain);
+  rv |= nvs_set_u8(g_nvsHandle, "mqttFormat", g_persistent.mqttFormat);
+
+  rv |= nvs_set_u8(g_nvsHandle, "enableMulticast", g_persistent.enableMulticast);
+  rv |= nvs_set_str(g_nvsHandle, "multicastUrl", g_persistent.multicastUrl);
+  rv |= nvs_set_u16(g_nvsHandle, "multicastPort", g_persistent.multicastPort);
+  rv |= nvs_set_u8(g_nvsHandle, "multicastTtl", g_persistent.multicastTtl);
+  rv |= nvs_set_u8(g_nvsHandle, "bMcastEncrypt", g_persistent.bMcastEncrypt);
+  rv |= nvs_set_u8(g_nvsHandle, "bMcastHbeat", g_persistent.bHeartbeat);
+
+  rv |= nvs_set_u8(g_nvsHandle, "enableUdpRx", g_persistent.enableUdpRx);
+  rv |= nvs_set_u8(g_nvsHandle, "enableUdpTx", g_persistent.enableUdpTx);
+  rv |= nvs_set_str(g_nvsHandle, "udpUrl", g_persistent.udpUrl);
+  rv |= nvs_set_u16(g_nvsHandle, "udpPort", g_persistent.udpPort);
+  rv |= nvs_set_u8(g_nvsHandle, "bUdpEncrypt", g_persistent.bUdpEncrypt);
+
+  rv |= nvs_set_u8(g_nvsHandle, "enableWebsock", g_persistent.enableWebsock);
+  rv |= nvs_set_u16(g_nvsHandle, "websockPort", g_persistent.websockPort);
+  rv |= nvs_set_str(g_nvsHandle, "websockUser", g_persistent.websockUser);
+  rv |= nvs_set_str(g_nvsHandle, "websockPw", g_persistent.websockPw);
+
+  if (ESP_OK != rv) {
+    return rv;
+  }
+
+  return nvs_commit(g_nvsHandle);
+}
+
+static esp_err_t
+config_restore_get_handler(httpd_req_t *req)
+{
+  char *buf;
+  char *req_buf;
+  size_t req_buf_len;
+
+  buf = (char *) calloc(CHUNK_BUFSIZE, 1);
+  if (NULL == buf) {
+    return ESP_ERR_NO_MEM;
+  }
+
+  const esp_app_desc_t *appDescr = esp_app_get_description();
+
+  req_buf_len = httpd_req_get_hdr_value_len(req, "Host") + 1;
+  if (req_buf_len > 1) {
+    req_buf = (char *) malloc(req_buf_len);
+    if (httpd_req_get_hdr_value_str(req, "Host", req_buf, req_buf_len) == ESP_OK) {
+      ESP_LOGD(TAG, "Found header => Host: %s", req_buf);
+    }
+    free(req_buf);
+  }
+
+  sprintf(buf, WEBPAGE_START_TEMPLATE, g_persistent.nodeName, "Restore Configuration");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<div><form id=restoreForm class=\"button\" onsubmit=\"return false;\"><fieldset>"
+          "<label for=\"restorefile\">Backup JSON file:</label>"
+          "<input type=\"file\" id=\"restorefile\" accept=\"application/json,.json\" />"
+          "<button id=\"restorebtn\" class=\"bgrn\" onclick=\"startRestore()\">Restore and Restart</button>"
+          "<p id=\"restorestatus\" class=\"prop\"></p>"
+          "</fieldset></form></div>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf,
+          "<script>"
+          "function startRestore(){"
+          "var f=document.getElementById('restorefile').files;"
+          "var st=document.getElementById('restorestatus');"
+          "if(!f||!f.length){alert('Please select a backup JSON file.');return;}"
+          "document.getElementById('restorebtn').disabled=true;"
+          "st.textContent='Uploading backup...';"
+          "var xhr=new XMLHttpRequest();"
+          "xhr.onreadystatechange=function(){"
+          "if(xhr.readyState===4){"
+          "if(xhr.status===200){"
+          "document.open();"
+          "document.write(xhr.responseText);"
+          "document.close();"
+          "}else{"
+          "st.textContent='Restore failed: '+xhr.status;"
+          "document.getElementById('restorebtn').disabled=false;"
+          "}"
+          "}"
+          "};"
+          "xhr.open('POST','/docfgrestore',true);"
+          "xhr.setRequestHeader('Content-Type','application/json');"
+          "xhr.send(f[0]);"
+          "}"
+          "</script>");
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+  sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
+  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  httpd_resp_send_chunk(req, NULL, 0);
+  free(buf);
+
+  return ESP_OK;
+}
+
+static esp_err_t
+do_config_restore_post_handler(httpd_req_t *req)
+{
+  if ((req->content_len <= 0) || (req->content_len > 32768)) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid backup size");
+    return ESP_FAIL;
+  }
+
+  char *json_buf = (char *) calloc(req->content_len + 1, 1);
+  if (NULL == json_buf) {
+    httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Out of memory");
+    return ESP_FAIL;
+  }
+
+  int remaining = req->content_len;
+  int offset    = 0;
+  while (remaining > 0) {
+    int recv_len = httpd_req_recv(req, json_buf + offset, MIN(remaining, 1024));
+    if (recv_len <= 0) {
+      free(json_buf);
+      httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to receive backup data");
+      return ESP_FAIL;
+    }
+    remaining -= recv_len;
+    offset += recv_len;
+  }
+  json_buf[offset] = '\0';
+
+  cJSON *root = cJSON_Parse(json_buf);
+  free(json_buf);
+  if (NULL == root) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON backup file");
+    return ESP_FAIL;
+  }
+
+  const cJSON *persistent = cJSON_GetObjectItemCaseSensitive(root, "persistent");
+  if ((NULL == persistent) || !cJSON_IsObject(persistent)) {
+    persistent = root;
+  }
+
+  backup_json_get_str(persistent, "nodeName", g_persistent.nodeName, sizeof(g_persistent.nodeName));
+  backup_json_get_u8(persistent, "nodeZone", &g_persistent.nodeZone);
+  backup_json_get_u8(persistent, "nodeSubzone", &g_persistent.nodeSubzone);
+  backup_json_get_u8(persistent, "nodeSubZone", &g_persistent.nodeSubzone);
+
+  const cJSON *guid = cJSON_GetObjectItemCaseSensitive(persistent, "guid");
+  if ((NULL != guid) && cJSON_IsString(guid) && (NULL != guid->valuestring)) {
+    backup_parse_hex_field(guid->valuestring, g_persistent.guid, sizeof(g_persistent.guid));
+  }
+
+  backup_json_get_u8(persistent, "encryptLvl", &g_persistent.encryptLvl);
+
+  backup_json_get_secret_blob(persistent, "pmk", g_persistent.pmk, sizeof(g_persistent.pmk));
+
+  backup_json_get_u8(persistent, "pmkLen", &g_persistent.pmkLen);
+  backup_json_get_u32(persistent, "bootCnt", &g_persistent.bootCnt);
+  backup_json_get_u8(persistent, "canMode", &g_persistent.canMode);
+  backup_json_get_u8(persistent, "canSpeed", &g_persistent.canSpeed);
+  backup_json_get_u32(persistent, "canFilter", &g_persistent.canFilter);
+  backup_json_get_u8(persistent, "bRawCan", &g_persistent.bRawCan);
+  backup_json_get_u8(persistent, "logType", &g_persistent.logType);
+  backup_json_get_u8(persistent, "logLevel", &g_persistent.logLevel);
+  backup_json_get_u8(persistent, "logRetries", &g_persistent.logRetries);
+  backup_json_get_u16(persistent, "logPort", &g_persistent.logPort);
+  backup_json_get_str(persistent, "logUrl", g_persistent.logUrl, sizeof(g_persistent.logUrl));
+  backup_json_get_str(persistent, "logMqttTopic", g_persistent.logMqttTopic, sizeof(g_persistent.logMqttTopic));
+  backup_json_get_u8(persistent, "enableMqttLog", &g_persistent.enableMqttLog);
+  backup_json_get_str(persistent, "wifiPrimarySsid", g_persistent.wifiPrimarySsid, sizeof(g_persistent.wifiPrimarySsid));
+  backup_json_get_secret_str(
+    persistent, "wifiPrimaryPassword", g_persistent.wifiPrimaryPassword, sizeof(g_persistent.wifiPrimaryPassword));
+  backup_json_get_str(persistent, "wifiSecondarySsid", g_persistent.wifiSecondarySsid, sizeof(g_persistent.wifiSecondarySsid));
+  backup_json_get_secret_str(persistent,
+                             "wifiSecondaryPassword",
+                             g_persistent.wifiSecondaryPassword,
+                             sizeof(g_persistent.wifiSecondaryPassword));
+  backup_json_get_u8(persistent, "wifiStaticEnable", &g_persistent.wifiStaticEnable);
+  backup_json_get_str(persistent, "wifiStaticIp", g_persistent.wifiStaticIp, sizeof(g_persistent.wifiStaticIp));
+  backup_json_get_str(persistent, "wifiStaticNetmask", g_persistent.wifiStaticNetmask, sizeof(g_persistent.wifiStaticNetmask));
+  backup_json_get_str(persistent, "wifiStaticGateway", g_persistent.wifiStaticGateway, sizeof(g_persistent.wifiStaticGateway));
+  backup_json_get_str(persistent, "wifiStaticDns", g_persistent.wifiStaticDns, sizeof(g_persistent.wifiStaticDns));
+  backup_json_get_u16(persistent, "webPort", &g_persistent.webPort);
+  backup_json_get_str(persistent, "webUser", g_persistent.webUser, sizeof(g_persistent.webUser));
+  backup_json_get_secret_str(persistent, "webPassword", g_persistent.webPassword, sizeof(g_persistent.webPassword));
+  backup_json_get_u8(persistent, "enableVscpLink", &g_persistent.enableVscpLink);
+  backup_json_get_u16(persistent, "vscplinkPort", &g_persistent.vscplinkPort);
+  backup_json_get_str(persistent, "vscplinkUser", g_persistent.vscplinkUser, sizeof(g_persistent.vscplinkUser));
+  backup_json_get_secret_str(persistent, "vscplinkPw", g_persistent.vscplinkPw, sizeof(g_persistent.vscplinkPw));
+  backup_json_get_u8(persistent, "enableMqtt", &g_persistent.enableMqtt);
+  backup_json_get_u8(persistent, "enableMqttTls", &g_persistent.enableMqttTls);
+  backup_json_get_str(persistent, "mqttUrl", g_persistent.mqttUrl, sizeof(g_persistent.mqttUrl));
+  backup_json_get_u16(persistent, "mqttPort", &g_persistent.mqttPort);
+  backup_json_get_str(persistent, "mqttUser", g_persistent.mqttUser, sizeof(g_persistent.mqttUser));
+  backup_json_get_secret_str(persistent, "mqttPw", g_persistent.mqttPw, sizeof(g_persistent.mqttPw));
+  backup_json_get_str(persistent, "mqttPubTopic", g_persistent.mqttPubTopic, sizeof(g_persistent.mqttPubTopic));
+  backup_json_get_str(persistent, "mqttSubTopic", g_persistent.mqttSubTopic, sizeof(g_persistent.mqttSubTopic));
+  backup_json_get_str(persistent, "mqttPubLogTopic", g_persistent.mqttPubLogTopic, sizeof(g_persistent.mqttPubLogTopic));
+  backup_json_get_str(persistent, "mqttClientId", g_persistent.mqttClientId, sizeof(g_persistent.mqttClientId));
+  backup_json_get_secret_str(persistent, "mqttCaCert", g_persistent.mqttCaCert, sizeof(g_persistent.mqttCaCert));
+  backup_json_get_secret_str(
+    persistent, "mqttClientCert", g_persistent.mqttClientCert, sizeof(g_persistent.mqttClientCert));
+  backup_json_get_secret_str(
+    persistent, "mqttClientKey", g_persistent.mqttClientKey, sizeof(g_persistent.mqttClientKey));
+  backup_json_get_u8(persistent, "mqttQos", &g_persistent.mqttQos);
+  backup_json_get_u8(persistent, "mqttRetain", &g_persistent.mqttRetain);
+  backup_json_get_u8(persistent, "mqttFormat", &g_persistent.mqttFormat);
+  backup_json_get_u8(persistent, "enableMulticast", &g_persistent.enableMulticast);
+  backup_json_get_str(persistent, "multicastUrl", g_persistent.multicastUrl, sizeof(g_persistent.multicastUrl));
+  backup_json_get_u16(persistent, "multicastPort", &g_persistent.multicastPort);
+  backup_json_get_u8(persistent, "multicastTtl", &g_persistent.multicastTtl);
+  backup_json_get_u8(persistent, "bMcastEncrypt", &g_persistent.bMcastEncrypt);
+  backup_json_get_u8(persistent, "bHeartbeat", &g_persistent.bHeartbeat);
+  backup_json_get_u8(persistent, "enableUdpRx", &g_persistent.enableUdpRx);
+  backup_json_get_u8(persistent, "enableUdpTx", &g_persistent.enableUdpTx);
+  backup_json_get_str(persistent, "udpUrl", g_persistent.udpUrl, sizeof(g_persistent.udpUrl));
+  backup_json_get_u16(persistent, "udpPort", &g_persistent.udpPort);
+  backup_json_get_u8(persistent, "bUdpEncrypt", &g_persistent.bUdpEncrypt);
+  backup_json_get_u8(persistent, "enableWebsock", &g_persistent.enableWebsock);
+  backup_json_get_u16(persistent, "websockPort", &g_persistent.websockPort);
+  backup_json_get_str(persistent, "websockUser", g_persistent.websockUser, sizeof(g_persistent.websockUser));
+  backup_json_get_secret_str(persistent, "websockPw", g_persistent.websockPw, sizeof(g_persistent.websockPw));
+
+  cJSON_Delete(root);
+
+  esp_err_t rv = save_persistent_to_nvs();
+  if (ESP_OK != rv) {
+    httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to save restored configuration");
+    return ESP_FAIL;
+  }
+
+  send_restart_info_page(req, "Restore complete. The device is restarting...");
+  vTaskDelay(pdMS_TO_TICKS(800));
+  esp_restart();
   return ESP_OK;
 }
 
@@ -5548,6 +6278,13 @@ echo_post_handler(httpd_req_t *req)
 
 static const httpd_uri_t echo = { .uri = "/echo", .method = HTTP_POST, .handler = echo_post_handler, .user_ctx = NULL };
 
+static const httpd_uri_t cfgrestorepost = {
+  .uri      = "/docfgrestore",
+  .method   = HTTP_POST,
+  .handler  = do_config_restore_post_handler,
+  .user_ctx = NULL
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 // http_404_error_handler
 //
@@ -5829,6 +6566,16 @@ default_get_handler(httpd_req_t *req)
     return config_factory_defaults_get_handler(req);
   }
 
+  if (0 == strncmp(req->uri, "/cfgbackup", 10)) {
+    ESP_LOGV(TAG, "--------- cfgbackup ---------\n");
+    return config_backup_get_handler(req);
+  }
+
+  if (0 == strncmp(req->uri, "/cfgrestore", 11)) {
+    ESP_LOGV(TAG, "--------- cfgrestore ---------\n");
+    return config_restore_get_handler(req);
+  }
+
   if (0 == strncmp(req->uri, "/docfgfactorydefaults", 10)) {
     ESP_LOGV(TAG, "--------- docfgfactorydefaults ---------\n");
     return do_config_factory_defaults_get_handler(req);
@@ -6096,6 +6843,7 @@ start_webserver(void)
 
     httpd_register_uri_handler(srv, &upgrdlocal);
     httpd_register_uri_handler(srv, &upgrdsiblinglocal);
+    httpd_register_uri_handler(srv, &cfgrestorepost);
 
     // httpd_register_uri_handler(srv, &config);
     //  httpd_register_uri_handler(srv, &cfgModule);

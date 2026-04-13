@@ -192,7 +192,6 @@ typedef struct {
 #define DEFAULT_LOG_TYPE         LOG_TYPE_STD
 #define DEFAULT_LOG_LEVEL        0
 #define DEFAULT_LOG_RETRIES      3
-#define DEFAULT_LOG_WRITE2STDOUT false
 
 #define DEFAULT_WEBSERVER_PORT     80
 #define DEFAULT_WEBSERVER_USER     "vscp"
@@ -275,7 +274,6 @@ typedef struct {
   char logUrl[80];         // Log server address
   char logMqttTopic[128];  // MQTT topic for log messages
   uint8_t enableMqttLog;   // Enable MQTT logging
-  uint8_t logwrite2Stdout; // Write log to stdout
 
   // WiFi configuration
   char wifiPrimarySsid[33];       // Primary WiFi SSID
