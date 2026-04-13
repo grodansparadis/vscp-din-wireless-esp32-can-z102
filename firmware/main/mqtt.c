@@ -396,48 +396,52 @@ mqtt_topic_subst(char *newTopic, size_t len, const char *pTopic, const vscp_even
 int
 mqtt_log(char *msg)
 {
-  char *pbuf = msg;
-
   // Nothing to do if message is empty
-  if (!strlen(msg)) {
+  if ((NULL == msg) || ('\0' == *msg)) {
     return VSCP_ERROR_SUCCESS;
   }
 
-  // Only publish if log topic is configured
-  if (strlen(g_persistent.mqttPubLogTopic)) {
-
-    char *newTopic = calloc(MQTT_SUBST_BUF_LEN, 1);
-    if (NULL == newTopic) {
-      ESP_LOGE(TAG, "Unable to allocate memory.");
-      free(pbuf);
-      return VSCP_ERROR_MEMORY;
-    }
-
-    // Expand log topic template (no event context)
-    const char *pTopic = g_persistent.mqttPubLogTopic;
-    mqtt_topic_subst(newTopic, MQTT_SUBST_BUF_LEN, pTopic, NULL);
-
-    // Publish log message with configured QoS and retain flag
-    int msgid = esp_mqtt_client_publish(g_mqtt_client,
-                                        newTopic,
-                                        pbuf,
-                                        strlen(pbuf),
-                                        g_persistent.mqttQos,
-                                        g_persistent.mqttRetain);
-    if (-1 != msgid) {
-      s_mqtt_statistics.nPubLog++;
-    }
-    else {
-      s_mqtt_statistics.nPubLogFailures++;
-      ESP_LOGE(TAG,
-               "Failed to publish MQTT log message. id=%d Topic=%s outbox-size = %d",
-               msgid,
-               g_persistent.mqttPubLogTopic,
-               esp_mqtt_client_get_outbox_size(g_mqtt_client));
-    }
-
-    free(newTopic);
+  // Only publish if MQTT is selected as logging type and topic is configured
+  if (!g_persistent.enableMqtt || (LOG_TYPE_MQTT != g_persistent.logType) || !strlen(g_persistent.logMqttTopic)) {
+    return VSCP_ERROR_SUCCESS;
   }
+
+  // MQTT log publishing can be called very early during boot via log hooks.
+  // Silently skip until the client is initialized and connected.
+  if ((NULL == g_mqtt_client) || !s_mqtt_connected) {
+    return VSCP_ERROR_SUCCESS;
+  }
+
+  char *newTopic = calloc(MQTT_SUBST_BUF_LEN, 1);
+  if (NULL == newTopic) {
+    ESP_LOGE(TAG, "Unable to allocate memory.");
+    return VSCP_ERROR_MEMORY;
+  }
+
+  // Expand log topic template (no event context)
+  const char *pTopic = g_persistent.logMqttTopic;
+  mqtt_topic_subst(newTopic, MQTT_SUBST_BUF_LEN, pTopic, NULL);
+
+  // Publish log message with configured QoS and retain flag
+  int msgid = esp_mqtt_client_publish(g_mqtt_client,
+                                      newTopic,
+                                      msg,
+                                      strlen(msg),
+                                      g_persistent.mqttQos,
+                                      g_persistent.mqttRetain);
+  if (-1 != msgid) {
+    s_mqtt_statistics.nPubLog++;
+  }
+  else {
+    s_mqtt_statistics.nPubLogFailures++;
+    ESP_LOGE(TAG,
+             "Failed to publish MQTT log message. id=%d Topic=%s outbox-size = %d",
+             msgid,
+             g_persistent.logMqttTopic,
+             esp_mqtt_client_get_outbox_size(g_mqtt_client));
+  }
+
+  free(newTopic);
 
   return VSCP_ERROR_SUCCESS;
 }

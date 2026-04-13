@@ -71,6 +71,7 @@
 #include "vscp-ws1.h"
 #include "websocksrv.h"
 #include "websrv.h"
+#include "udpsrv.h"
 
 #if !CONFIG_HTTPD_WS_SUPPORT
 #error This code cannot be used unless HTTPD_WS_SUPPORT is enabled in esp-http-server component configuration
@@ -119,6 +120,7 @@ static web_log_item_t g_web_log_ring[WEB_LOG_RING_SIZE];
 static uint32_t g_web_log_seq = 0;
 vprintf_like_t g_stdLogFunc   = NULL;
 static SemaphoreHandle_t g_web_log_mutex = NULL;
+static volatile bool s_web_log_route_in_progress = false;
 
 static int web_log_vprintf(const char *fmt, va_list args);
 static void web_log_capture_line(const char *line);
@@ -172,6 +174,48 @@ web_log_capture_line(const char *line)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// web_log_route_message
+//
+// Route log message to configured destination based on logType setting
+//
+
+static void
+web_log_route_message(const char *message)
+{
+  if (NULL == message || '\0' == message[0]) {
+    return;
+  }
+
+  // Route based on configured log type
+  switch (g_persistent.logType) {
+    
+    case LOG_TYPE_UDP:
+      // Send log message via configured logging destination.
+      udpsrv_broadcast_message((const uint8_t *) message,
+                               strlen(message),
+                               g_persistent.logUrl,
+                               g_persistent.logPort);
+      break;
+
+    case LOG_TYPE_MQTT:
+      // Send log message via MQTT (if enabled)
+      if (g_persistent.enableMqtt && strlen(g_persistent.logMqttTopic)) {
+        mqtt_log((char *) message);
+      }
+      break;
+
+    case LOG_TYPE_STD:
+    case LOG_TYPE_TCP:
+    case LOG_TYPE_HTTP:
+    case LOG_TYPE_VSCP:
+    case LOG_TYPE_NONE:
+    default:
+      // These are handled by the default logging mechanism or not used for syslog
+      break;
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // web_log_vprintf
 //
 
@@ -187,6 +231,13 @@ web_log_vprintf(const char *fmt, va_list args)
 
     if (n > 0) {
       web_log_capture_line(line);
+
+      // Prevent recursive routing when transport code itself logs.
+      if (!s_web_log_route_in_progress) {
+        s_web_log_route_in_progress = true;
+        web_log_route_message(line);
+        s_web_log_route_in_progress = false;
+      }
     }
   }
 
@@ -5096,6 +5147,7 @@ config_log_get_handler(httpd_req_t *req)
   // esp_err_t rv;
   char *buf;
   // char *temp;
+  uint8_t uiLogType;
 
   char *req_buf;
   size_t req_buf_len;
@@ -5123,34 +5175,27 @@ config_log_get_handler(httpd_req_t *req)
   sprintf(buf, WEBPAGE_START_TEMPLATE, g_persistent.nodeName, "Logging Configuration");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
+  uiLogType = g_persistent.logType;
+  if ((LOG_TYPE_STD != uiLogType) && (LOG_TYPE_UDP != uiLogType) && (LOG_TYPE_MQTT != uiLogType)) {
+    uiLogType = LOG_TYPE_STD;
+  }
+
   sprintf(buf, "<div><form id=but3 class=\"button\" action='/docfglog' method='get'><fieldset>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "<input type=\"checkbox\" id=\"stdout\"name=\"stdout\" value=\"true\" ");
+  sprintf(buf, "<br /><br />Log to:<select name=\"type\">");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-  sprintf(buf, "%s><label for=\"stdout\"> Log to stdout</label>", g_persistent.logwrite2Stdout ? "checked" : "");
+    sprintf(buf, "<option value=\"1\" %s>default</option>", (LOG_TYPE_STD == uiLogType) ? "selected" : "");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-
-  sprintf(buf, "<br /><br />Log to:<select  name=\"type\" ");
+    sprintf(buf, "<option value=\"2\" %s>UDP</option>", (LOG_TYPE_UDP == uiLogType) ? "selected" : "");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-  sprintf(buf, "<option value=\"0\" %s>none</option>", (LOG_TYPE_NONE == g_persistent.logType) ? "selected" : "");
+  sprintf(buf, "<option value=\"5\" %s>MQTT</option>", 
+      (LOG_TYPE_MQTT == uiLogType) ? "selected" : "");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-  sprintf(buf, "<option value=\"1\" %s>stdout</option>", (LOG_TYPE_STD == g_persistent.logType) ? "selected" : "");
-  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-  sprintf(buf, "<option value=\"2\" %s>UDP</option>", (LOG_TYPE_UDP == g_persistent.logType) ? "selected" : "");
-  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-  sprintf(buf, "<option value=\"3\" %s>TCP</option>", (LOG_TYPE_TCP == g_persistent.logType) ? "selected" : "");
-  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-  sprintf(buf, "<option value=\"4\" %s>HTTP</option>", (LOG_TYPE_HTTP == g_persistent.logType) ? "selected" : "");
-  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-  sprintf(buf, "<option value=\"5\" %s>MQTT</option>", (LOG_TYPE_MQTT == g_persistent.logType) ? "selected" : "");
-  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-  sprintf(buf, "<option value=\"6\" %s>VSCP</option>", (LOG_TYPE_VSCP == g_persistent.logType) ? "selected" : "");
-  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-  sprintf(buf, "></select>");
+  sprintf(buf, "</select>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "Log level:<select name=\"level\" ");
+  sprintf(buf, "Log level:<select name=\"level\">");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
   sprintf(buf, "<option value=\"1\" %s>error</option>", (ESP_LOG_ERROR == g_persistent.logLevel) ? "selected" : "");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
@@ -5162,10 +5207,7 @@ config_log_get_handler(httpd_req_t *req)
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
   sprintf(buf, "<option value=\"5\" %s>verbose</option>", (ESP_LOG_VERBOSE == g_persistent.logLevel) ? "selected" : "");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-  sprintf(buf, "></select>");
-  httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
-
-  sprintf(buf, "Max retries:<input type=\"text\" name=\"retries\" value=\"%d\" >", g_persistent.logRetries);
+  sprintf(buf, "</select>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, "Destination (IP Addr):<input type=\"text\" name=\"url\" value=\"%s\" >", g_persistent.logUrl);
@@ -5177,8 +5219,39 @@ config_log_get_handler(httpd_req_t *req)
   sprintf(buf, "MQTT log Topic:<input type=\"text\" name=\"topic\" value=\"%s\" >", g_persistent.logMqttTopic);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, "<button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
+  // Show warnings if MQTT is not properly configured
+  if (!g_persistent.enableMqtt) {
+    sprintf(buf, "<br /><small style=\"color:#ff9800;\">⚠ MQTT is not enabled. Please enable MQTT in the MQTT configuration.</small>");
+    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  }
+  else if (!strlen(g_persistent.logMqttTopic)) {
+    sprintf(buf, "<br /><small style=\"color:#ff9800;\">⚠ MQTT log topic is not configured. Please set a topic for MQTT logging.</small>");
+    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+  }
+
+  sprintf(buf, "<br /><button class=\"bgrn bgrn:hover\">Save</button></fieldset></form></div>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
+
+    sprintf(buf,
+      "<script>"
+      "(function(){"
+      "var typeSel=document.querySelector('select[name=\\\"type\\\"]');"
+      "if(!typeSel)return;"
+      "function sync(){"
+      "var isDefault=(typeSel.value==='1');"
+      "var isUdp=(typeSel.value==='2');"
+      "var urlEl=document.querySelector('[name=\\\"url\\\"]');"
+      "var portEl=document.querySelector('[name=\\\"port\\\"]');"
+      "var topicEl=document.querySelector('[name=\\\"topic\\\"]');"
+      "if(urlEl){urlEl.disabled=isDefault;}"
+      "if(portEl){portEl.disabled=isDefault;}"
+      "if(topicEl){topicEl.disabled=(isDefault||isUdp);}"
+      "}"
+      "typeSel.addEventListener('change',sync);"
+      "sync();"
+      "})();"
+      "</script>");
+    httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   sprintf(buf, WEBPAGE_CONFIG_END_TEMPLATE, appDescr->version, g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
@@ -5215,33 +5288,19 @@ do_config_log_get_handler(httpd_req_t *req)
         free(param);
       }
 
-      // stdout
-      if (ESP_OK == (rv = httpd_query_key_value(buf, "stdout", param, WEBPAGE_PARAM_SIZE))) {
-
-        ESP_LOGD(TAG, "Found query parameter => stdout=%s", param);
-
-        if (NULL != strstr(param, "true")) {
-          g_persistent.logwrite2Stdout = 1;
-        }
-        else {
-          g_persistent.logwrite2Stdout = 0;
-        }
-      }
-      else {
-        g_persistent.logwrite2Stdout = 0;
-      }
-
-      rv = nvs_set_u8(g_nvsHandle, "logwrite2Stdout", g_persistent.logwrite2Stdout);
-      if (rv != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to update log-stdout");
-      }
-
       // type
       if (ESP_OK == (rv = httpd_query_key_value(buf, "type", param, WEBPAGE_PARAM_SIZE))) {
+        int type;
         ESP_LOGD(TAG, "Found query parameter => type=%s", param);
-        g_persistent.logType = atoi(param);
+        type = atoi(param);
+        if ((LOG_TYPE_STD == type) || (LOG_TYPE_UDP == type) || (LOG_TYPE_MQTT == type)) {
+          g_persistent.logType = type;
+        }
+        else {
+          g_persistent.logType = LOG_TYPE_STD;
+        }
 
-        rv = nvs_set_u8(g_nvsHandle, "log_type", g_persistent.logType);
+        rv = nvs_set_u8(g_nvsHandle, "logType", g_persistent.logType);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update log type");
         }
@@ -5264,26 +5323,12 @@ do_config_log_get_handler(httpd_req_t *req)
         ESP_LOGE(TAG, "Error getting log level => rv=%d", rv);
       }
 
-      // retries
-      if (ESP_OK == (rv = httpd_query_key_value(buf, "retries", param, WEBPAGE_PARAM_SIZE))) {
-        ESP_LOGD(TAG, "Found query parameter => retries=%s", param);
-        g_persistent.logRetries = atoi(param);
-
-        rv = nvs_set_u8(g_nvsHandle, "log_retries", g_persistent.logRetries);
-        if (rv != ESP_OK) {
-          ESP_LOGE(TAG, "Failed to update log retries");
-        }
-      }
-      else {
-        ESP_LOGE(TAG, "Error getting log retries => rv=%d", rv);
-      }
-
       // port
       if (ESP_OK == (rv = httpd_query_key_value(buf, "port", param, WEBPAGE_PARAM_SIZE))) {
         ESP_LOGD(TAG, "Found query parameter => port=%s", param);
         g_persistent.logPort = atoi(param);
 
-        rv = nvs_set_u8(g_nvsHandle, "log_port", g_persistent.logPort);
+        rv = nvs_set_u16(g_nvsHandle, "logPort", g_persistent.logPort);
         if (rv != ESP_OK) {
           ESP_LOGE(TAG, "Failed to update log port [%s]", esp_err_to_name(rv));
         }
@@ -5325,6 +5370,13 @@ do_config_log_get_handler(httpd_req_t *req)
       }
       else {
         ESP_LOGE(TAG, "Error getting log topic => rv=%d", rv);
+      }
+
+      // MQTT logging follows selected logging type
+      g_persistent.enableMqttLog = (LOG_TYPE_MQTT == g_persistent.logType) ? 1 : 0;
+      rv = nvs_set_u8(g_nvsHandle, "enableMqttLog", g_persistent.enableMqttLog);
+      if (rv != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to update MQTT logging enable");
       }
 
       free(param);

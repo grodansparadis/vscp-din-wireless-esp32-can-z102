@@ -3,9 +3,9 @@ HISTORY
 260128 - Changed to "rev C" on board and on drawing.
 230424 - Rev C
 230424 - Added scotty diod to USB power input.
-230423 - Added connector for reset button
-220925 - Added connector and resistor for BUS_OFF LED connector.
-220923 - Changed Diod connecter ro common catode
+230423 - Added connector for reset button (J9)
+220925 - Added connector and resistor for BUS_OFF LED connector. (J8)
+220923 - Changed Diod connecter to common catode
 220923 - Populated J7 (IO3/IO4/IO5/RX/TX)
 220923 - rxcan moved back to IO10 from IO3
 220923 - Added J7 expansion connector (pairs with J1)

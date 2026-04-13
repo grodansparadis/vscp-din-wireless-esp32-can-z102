@@ -2,7 +2,7 @@
 
 [![ESP-IDF Build](https://github.com/grodansparadis/vscp-din-wireless-esp32-can-z102/actions/workflows/esp-idf-build.yml/badge.svg)](https://github.com/grodansparadis/vscp-din-wireless-esp32-can-z102/actions/workflows/esp-idf-build.yml)
 
-This board has secure wireless wifi and Bluetooth BLE functionality for a remote **CAN4VSCP** bus.
+This board has secure wireless wifi gateway functionality for a remote **CAN4VSCP** bus.
 
 ![](images/schema-rev-b.png)
 

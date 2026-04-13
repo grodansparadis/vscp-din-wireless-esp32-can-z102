@@ -572,6 +572,21 @@ initPersistentStorage(void)
                          nvs_get_u8,
                          nvs_set_u8,
                          g_nvsHandle,
+                         "logType",
+                         g_persistent.logType,
+                         DEFAULT_LOG_TYPE,
+                         TAG,
+                         "%d");
+
+  if (g_persistent.logType > LOG_TYPE_VSCP) {
+    g_persistent.logType = DEFAULT_LOG_TYPE;
+    nvs_set_u8(g_nvsHandle, "logType", g_persistent.logType);
+  }
+
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
                          "logRetries",
                          g_persistent.logRetries,
                          DEFAULT_LOG_RETRIES,
@@ -604,6 +619,16 @@ initPersistentStorage(void)
                              g_persistent.logMqttTopic,
                              DEFAULT_MQTT_LOG_PUBLISH_TOPIC,
                              TAG);
+
+  NVS_GET_OR_SET_DEFAULT(u8,
+                         nvs_get_u8,
+                         nvs_set_u8,
+                         g_nvsHandle,
+                         "enableMqttLog",
+                         g_persistent.enableMqttLog,
+                         DEFAULT_MQTT_LOGGING_ENABLE,
+                         TAG,
+                         "%d");
 
   NVS_GET_OR_SET_DEFAULT(u8,
                          nvs_get_u8,

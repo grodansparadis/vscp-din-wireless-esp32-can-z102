@@ -204,6 +204,7 @@ typedef struct {
 #define DEFAULT_VSCP_LINK_PASSWORD "secret"
 
 #define DEFAULT_MQTT_ENABLE            false
+#define DEFAULT_MQTT_LOGGING_ENABLE    false
 #define DEFAULT_MQTT_TLS_ENABLE        false
 #define DEFAULT_MQTT_URL               "mqtt://"
 #define DEFAULT_MQTT_PORT              1883
@@ -273,6 +274,7 @@ typedef struct {
   uint16_t logPort;        // Log server port
   char logUrl[80];         // Log server address
   char logMqttTopic[128];  // MQTT topic for log messages
+  uint8_t enableMqttLog;   // Enable MQTT logging
   uint8_t logwrite2Stdout; // Write log to stdout
 
   // WiFi configuration
