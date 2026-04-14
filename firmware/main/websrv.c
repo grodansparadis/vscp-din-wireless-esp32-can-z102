@@ -1024,7 +1024,7 @@ info_get_handler(httpd_req_t *req)
   sprintf(buf, "</table>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_END_TEMPLATE_NO_RETURN, web_ui_version(appDescr), g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
@@ -1643,7 +1643,7 @@ mainpg_get_handler(httpd_req_t *req)
           "bred'>Restart</button></form></p>");
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
-  sprintf(buf, WEBPAGE_END_TEMPLATE, web_ui_version(appDescr), g_persistent.nodeName);
+  sprintf(buf, WEBPAGE_END_TEMPLATE_NO_RETURN, web_ui_version(appDescr), g_persistent.nodeName);
   httpd_resp_send_chunk(req, buf, HTTPD_RESP_USE_STRLEN);
 
   httpd_resp_send_chunk(req, NULL, 0);
