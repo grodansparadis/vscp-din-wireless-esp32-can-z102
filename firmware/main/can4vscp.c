@@ -609,7 +609,17 @@ can4vscp_send(can4vscp_frame_t *message, TickType_t ticks_to_wait)
   };
 
   int timeout_ms = (ticks_to_wait == portMAX_DELAY) ? -1 : (int) (ticks_to_wait * portTICK_PERIOD_MS);
-  return twai_node_transmit(s_twai_node, &tx_frame, timeout_ms);
+  esp_err_t rv = twai_node_transmit(s_twai_node, &tx_frame, timeout_ms);
+
+  // Update statistics
+  if (ESP_OK == rv) {
+    g_persistent.nSent++;
+  } else {
+    g_persistent.nErr++;
+    g_persistent.lastError = (uint32_t) rv;
+  }
+
+  return rv;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -634,6 +644,9 @@ twai_receive_task(void *arg)
     if (ESP_OK == (rv = can4vscp_receive(&rxmsg, portMAX_DELAY))) {
 
       ESP_LOGI(TAG, "TWAI msg received id= %X", (unsigned int) rxmsg.identifier);
+
+      // Update statistics
+      g_persistent.nRecv++;
 
       // Must be extended msg to be VSCP event
       if (rxmsg.extd) {

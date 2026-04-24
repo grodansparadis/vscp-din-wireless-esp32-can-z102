@@ -48,7 +48,7 @@
         "color": "cyan",
         "singleInstance": true,
         "tooltip": "idf.py flash  (/dev/ttyACM0)",
-        "command": "./tools/idf-safe.sh -p /dev/ttyACM0 flash"
+        "command": "./tools/idf-flash-artifacts.sh -p /dev/ttyACM0"
       },
       {
         "name": "$(terminal)Monitor",
@@ -62,7 +62,7 @@
         "color": "green",
         "singleInstance": true,
         "tooltip": "idf.py flash monitor  (/dev/ttyACM0)",
-        "command": "./tools/idf-safe.sh -p /dev/ttyACM0 flash monitor"
+        "command": "./tools/idf-flash-artifacts.sh -p /dev/ttyACM0 --monitor"
       },
       {
         "name": "$(settings-gear)MenuConfig",
@@ -111,6 +111,7 @@
   "chat.tools.terminal.autoApprove": {
     "idf.py": true,
     "./tools/idf-safe.sh": true,
+    "./tools/idf-flash-artifacts.sh": true,
     "/^source /home/akhe/development/esp/esp-idf/export\\.sh && idf\\.py build 2>&1 \\| tail -30$/": {
       "approve": true,
       "matchCommandLine": true
