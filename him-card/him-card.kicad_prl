@@ -101,7 +101,10 @@
     "sort_ascending": true,
     "sorting_column": -1
   },
-  "open_jobsets": [],
+  "open_jobsets": [
+    "notes.txt.kicad_jobset",
+    "notes.kicad_jobset"
+  ],
   "project": {
     "files": []
   },

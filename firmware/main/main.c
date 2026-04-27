@@ -1,4 +1,5 @@
-extern void twai_transmit_task(void *arg);
+extern void
+twai_transmit_task(void *arg);
 /*
   File: main.c
 
@@ -66,6 +67,10 @@ extern void twai_transmit_task(void *arg);
 
 #include <network_provisioning/manager.h>
 
+// Components
+#include "led_indicator_blink_default.h"
+#include "led_indicator_gpio.h"
+
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_BLE
 #include <network_provisioning/scheme_ble.h>
 #endif /* CONFIG_WCANG_PROV_TRANSPORT_BLE */
@@ -126,12 +131,12 @@ node_persistent_config_t g_persistent = {
   .canMode   = DEFAULT_CAN_MODE,
   .canFilter = DEFAULT_CAN_FILTER,
 
-  .logType         = DEFAULT_LOG_TYPE,               // Log type
-  .logLevel        = DEFAULT_LOG_LEVEL,              // Log level
-  .logRetries      = DEFAULT_LOG_RETRIES,            // Number of retries for log message send
-  .logPort         = DEFAULT_LOG_PORT,               // Log server port
-  .logUrl          = DEFAULT_LOG_URL,                // Log server address
-  .logMqttTopic    = DEFAULT_MQTT_LOG_PUBLISH_TOPIC, // MQTT topic for log messages
+  .logType      = DEFAULT_LOG_TYPE,               // Log type
+  .logLevel     = DEFAULT_LOG_LEVEL,              // Log level
+  .logRetries   = DEFAULT_LOG_RETRIES,            // Number of retries for log message send
+  .logPort      = DEFAULT_LOG_PORT,               // Log server port
+  .logUrl       = DEFAULT_LOG_URL,                // Log server address
+  .logMqttTopic = DEFAULT_MQTT_LOG_PUBLISH_TOPIC, // MQTT topic for log messages
 
   .webPort     = DEFAULT_WEBSERVER_PORT,
   .webUser     = DEFAULT_WEBSERVER_USER,
@@ -192,6 +197,9 @@ node_persistent_config_t g_persistent = {
   .websockPw     = DEFAULT_WEBSOCKETS_PASSWORD,
 };
 
+static led_indicator_handle_t led_handle_wifi = NULL;
+static led_indicator_handle_t led_handle_status = NULL;
+
 /**
  * @brief Transport layer message queue structures
  *
@@ -206,7 +214,7 @@ transport_t tr_udp                         = {}; // UDP broadcast transport
 transport_t tr_websockets                  = {}; // WebSocket server transport
 
 // Dedicated monitor/command-reply transport - always fed by twai_receive_task
-transport_t tr_canapi = {};
+transport_t tr_canapi  = {};
 transport_t tr_monitor = {};
 
 // Semaphore for controlling access to main event distribution task
@@ -930,7 +938,7 @@ static EventGroupHandle_t wifi_event_group;
 
 #define WIFI_PRIMARY_RETRY_LIMIT 5
 
-static bool s_wifi_use_secondary   = false;
+static bool s_wifi_use_secondary    = false;
 static uint8_t s_wifi_retry_counter = 0;
 
 #define PROV_QR_VERSION       "v1"
@@ -1202,8 +1210,7 @@ event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *ev
                s_wifi_use_secondary ? "secondary" : "primary");
     }
 
-    if (!s_wifi_use_secondary &&
-        (s_wifi_retry_counter >= WIFI_PRIMARY_RETRY_LIMIT) &&
+    if (!s_wifi_use_secondary && (s_wifi_retry_counter >= WIFI_PRIMARY_RETRY_LIMIT) &&
         ('\0' != g_persistent.wifiSecondarySsid[0])) {
       wifi_config_t wifi_cfg = { 0 };
       strncpy((char *) wifi_cfg.sta.ssid, g_persistent.wifiSecondarySsid, sizeof(wifi_cfg.sta.ssid) - 1);
@@ -1535,6 +1542,30 @@ wifi_prov_print_qr(const char *name, const char *username, const char *pop, cons
            payload);
 }
 
+/**
+ * @brief Init indicator LED device on specified GPIO
+ *
+ * @param LED indicator handle to initialize
+ * @param gpio_num GPIO number for the LED
+ */
+void led_indicator_init(led_indicator_handle_t *handle, int gpio_num)
+{
+    led_indicator_gpio_config_t led_indicator_gpio_config = {
+        .is_active_level_high = 1,
+        .gpio_num = gpio_num,              /**< num of GPIO */
+    };
+
+    led_indicator_config_t config = {
+        .blink_lists = (void *)NULL,
+        .blink_list_num = 0,
+    };
+
+    esp_err_t ret = led_indicator_new_gpio_device(&config, &led_indicator_gpio_config, handle);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize LED indicator: %s", esp_err_to_name(ret));
+    }
+}
+
 // ============================================================================
 //                      Application Entry Point
 // ============================================================================
@@ -1562,6 +1593,8 @@ wifi_prov_print_qr(const char *name, const char *username, const char *pop, cons
 void
 app_main(void)
 {
+  esp_err_t ret;
+
   // Initialize the Task Watchdog Timer
   init_watchdog_timer();
 
@@ -1634,8 +1667,21 @@ app_main(void)
   gpio_config(&io_conf);
 
   // Initialize status LEDs (active high)
-  gpio_set_level(CONNECTED_LED_GPIO_NUM, 1); // Connection status LED
-  gpio_set_level(ACTIVE_LED_GPIO_NUM, 1);    // Activity indicator LED
+  gpio_set_level(LED_WIFI_GPIO, 1);   // Connection status LED
+  gpio_set_level(LED_STATUS_GPIO, 1); // Activity indicator LED
+
+  // const blink_step_t test_blink_loop[] = {
+  //   { LED_BLINK_HOLD, LED_STATE_ON, 50 },   // step1: turn on LED 50 ms
+  //   { LED_BLINK_HOLD, LED_STATE_OFF, 100 }, // step2: turn off LED 100 ms
+  //   { LED_BLINK_LOOP, 0, 0 },               // step3: loop from step1
+  // };
+
+  led_indicator_init(&led_handle_wifi, LED_WIFI_GPIO);
+  ret = led_indicator_start(led_handle_wifi, BLINK_CONNECTING);
+
+  led_indicator_init(&led_handle_status, LED_STATUS_GPIO);
+  ret = led_indicator_start(led_handle_status, BLINK_FACTORY_RESET);
+
 
   // ============================================================================
   //                      FreeRTOS Message Queue Creation
@@ -1878,7 +1924,8 @@ app_main(void)
     network_prov_mgr_endpoint_create("VSCP-WCANG");
 
     // Start provisioning service with configured security and service name
-    ESP_ERROR_CHECK(network_prov_mgr_start_provisioning(security, (const void *) sec_params, service_name, service_key));
+    ESP_ERROR_CHECK(
+      network_prov_mgr_start_provisioning(security, (const void *) sec_params, service_name, service_key));
 
     /**
      * Register handler for custom endpoint

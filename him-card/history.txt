@@ -1,0 +1,3 @@
+
+
+2026-04-27 AKHE - Changed value of R3 to 200 ohm. Set final colors for LED's.

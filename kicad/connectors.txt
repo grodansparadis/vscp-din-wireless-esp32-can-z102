@@ -1,0 +1,66 @@
+
+J1 (HIM-card/SPI)
+==============================
+1 - MISO
+2 - SCK     --  Input Button
+3 - MOSI    --  Input Button
+4 - +3V     --  +3V to HIM card
+5 - GND     --  GND to HIM card
+
+J2 (HIM-card/SPI)
+==============================
+1 - MISO
+2 - SCK
+3 - MOSI
+4 - +3V
+5 - GND
+
+
+J3 (programming()
+==============================
+1 - Flash
+2 - RX
+3 - TX
+4 - Reser
+5 - +5V
+6 - GND
+
+J4  (CAN)
+==============================
+1 - Power
+2 - CANH
+3 - CANL
+4 - GND
+
+J5 (Debug) 
+==============================
+1 - Power (NOT 5V !!!!!!!!)
+2 - USB D-
+3 - USB D+
+4 - GND
+
+J6 LED's
+==============================
+LED A - J6, 1  WiFi (green)
+LED B - J6, 3  Status (blue)
+GND   - J6, 2
+
+J7 (Expansion)
+==============================
+1 - IO4
+2 - IO5
+3 - IO3
+4 - RX
+5 - TX
+
+J8 Bus off LED
+==============================
+1 - LED power
+2 - GND
+
+J9 REST
+==============================
+1 - Reset
+2 - GND
+
+

@@ -1,5 +1,6 @@
 HISTORY
 -------
+260427 - Added legend for LED's
 260128 - Changed to "rev C" on board and on drawing.
 230424 - Rev C
 230424 - Added scotty diod to USB power input.

@@ -2102,7 +2102,7 @@
 		(fields_autoplaced yes)
 		(uuid "378ab8b6-bd6c-44e0-b1e5-573fe5b08f2c")
 		(property "Reference" "R3"
-			(at 107.95 93.7641 90)
+			(at 107.95 92.6295 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -2111,8 +2111,8 @@
 				)
 			)
 		)
-		(property "Value" "10K"
-			(at 107.95 95.6851 90)
+		(property "Value" "470R"
+			(at 107.95 95.0538 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -2345,8 +2345,8 @@
 				(justify left)
 			)
 		)
-		(property "Value" "Status"
-			(at 57.15 93.98 90)
+		(property "Value" "Status (Green)"
+			(at 50.038 93.98 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -2590,7 +2590,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "CAN"
+		(property "Value" "CAN (Blue)"
 			(at 73.66 93.98 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -2897,7 +2897,7 @@
 		(fields_autoplaced yes)
 		(uuid "cf6762ee-1217-4c76-a3b7-a4d41263a6ae")
 		(property "Reference" "D3"
-			(at 97.4725 93.5101 0)
+			(at 97.4725 92.3755 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -2906,8 +2906,8 @@
 				)
 			)
 		)
-		(property "Value" "Power"
-			(at 97.4725 95.4311 0)
+		(property "Value" "Power (Red)"
+			(at 97.4725 94.7998 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
