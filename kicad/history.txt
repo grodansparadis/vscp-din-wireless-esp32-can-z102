@@ -1,5 +1,6 @@
 HISTORY
 -------
+260428 - Changed D4 from 1N5822 to 1N5819
 260427 - Added legend for LED's
 260128 - Changed to "rev C" on board and on drawing.
 230424 - Rev C

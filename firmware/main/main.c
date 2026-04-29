@@ -67,9 +67,13 @@ twai_transmit_task(void *arg);
 
 #include <network_provisioning/manager.h>
 
-// Components
+// Components: LED indicator
 #include "led_indicator_blink_default.h"
 #include "led_indicator_gpio.h"
+
+// Components: Buttons
+#include "iot_button.h"
+#include "button_gpio.h"
 
 #ifdef CONFIG_WCANG_PROV_TRANSPORT_BLE
 #include <network_provisioning/scheme_ble.h>
@@ -197,7 +201,7 @@ node_persistent_config_t g_persistent = {
   .websockPw     = DEFAULT_WEBSOCKETS_PASSWORD,
 };
 
-static led_indicator_handle_t led_handle_wifi = NULL;
+static led_indicator_handle_t led_handle_wifi   = NULL;
 static led_indicator_handle_t led_handle_status = NULL;
 
 /**
@@ -1548,22 +1552,23 @@ wifi_prov_print_qr(const char *name, const char *username, const char *pop, cons
  * @param LED indicator handle to initialize
  * @param gpio_num GPIO number for the LED
  */
-void led_indicator_init(led_indicator_handle_t *handle, int gpio_num)
+void
+led_indicator_init(led_indicator_handle_t *handle, int gpio_num)
 {
-    led_indicator_gpio_config_t led_indicator_gpio_config = {
-        .is_active_level_high = 1,
-        .gpio_num = gpio_num,              /**< num of GPIO */
-    };
+  led_indicator_gpio_config_t led_indicator_gpio_config = {
+    .is_active_level_high = 1,
+    .gpio_num             = gpio_num, /**< num of GPIO */
+  };
 
-    led_indicator_config_t config = {
-        .blink_lists = (void *)NULL,
-        .blink_list_num = 0,
-    };
+  led_indicator_config_t config = {
+    .blink_lists    = (void *) NULL,
+    .blink_list_num = 0,
+  };
 
-    esp_err_t ret = led_indicator_new_gpio_device(&config, &led_indicator_gpio_config, handle);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize LED indicator: %s", esp_err_to_name(ret));
-    }
+  esp_err_t ret = led_indicator_new_gpio_device(&config, &led_indicator_gpio_config, handle);
+  if (ret != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to initialize LED indicator: %s", esp_err_to_name(ret));
+  }
 }
 
 // ============================================================================
@@ -1599,6 +1604,46 @@ app_main(void)
   init_watchdog_timer();
 
   crcInit(); // For calculating CRC of VSCP events
+
+  // ============================================================================
+  //                GPIO Configuration (Status LEDs) ande buttons
+  // ============================================================================
+
+  gpio_config_t io_conf = {};
+
+  // Configure LED GPIO pins as outputs without interrupts
+  io_conf.intr_type    = GPIO_INTR_DISABLE;   // No interrupts
+  io_conf.mode         = GPIO_MODE_OUTPUT;    // Output mode
+  io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL; // LED pin mask
+  io_conf.pull_down_en = 0;                   // No pull-down
+  io_conf.pull_up_en   = 0;                   // No pull-up
+
+  // Apply GPIO configuration
+  gpio_config(&io_conf);
+
+  // Initialize status LEDs (active high)
+  gpio_set_level(LED_WIFI_GPIO, 1);   // Connection status LED
+  gpio_set_level(LED_STATUS_GPIO, 1); // Activity indicator LED
+
+  led_indicator_init(&led_handle_wifi, LED_WIFI_GPIO);
+  ret = led_indicator_start(led_handle_wifi, BLINK_CONNECTING);
+
+  led_indicator_init(&led_handle_status, LED_STATUS_GPIO);
+  ret = led_indicator_start(led_handle_status, BLINK_FACTORY_RESET);
+
+  // --------------------------------------------------------------------------
+
+  // create gpio button
+  const button_config_t btn_cfg           = { 0 };
+  const button_gpio_config_t btn_gpio_cfg = {
+    .gpio_num     = 0,
+    .active_level = 0,
+  };
+  button_handle_t gpio_btn = NULL;
+  ret                      = iot_button_new_gpio_device(&btn_cfg, &btn_gpio_cfg, &gpio_btn);
+  if (NULL == gpio_btn) {
+    ESP_LOGE(TAG, "Button create failed");
+  }
 
   // vscp_event_t ev = { 0 };
   // ;
@@ -1649,39 +1694,6 @@ app_main(void)
 
   // Create event group for WiFi connection synchronization
   wifi_event_group = xEventGroupCreate();
-
-  // ============================================================================
-  //                      GPIO Configuration (Status LEDs)
-  // ============================================================================
-
-  gpio_config_t io_conf = {};
-
-  // Configure LED GPIO pins as outputs without interrupts
-  io_conf.intr_type    = GPIO_INTR_DISABLE;   // No interrupts
-  io_conf.mode         = GPIO_MODE_OUTPUT;    // Output mode
-  io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL; // LED pin mask
-  io_conf.pull_down_en = 0;                   // No pull-down
-  io_conf.pull_up_en   = 0;                   // No pull-up
-
-  // Apply GPIO configuration
-  gpio_config(&io_conf);
-
-  // Initialize status LEDs (active high)
-  gpio_set_level(LED_WIFI_GPIO, 1);   // Connection status LED
-  gpio_set_level(LED_STATUS_GPIO, 1); // Activity indicator LED
-
-  // const blink_step_t test_blink_loop[] = {
-  //   { LED_BLINK_HOLD, LED_STATE_ON, 50 },   // step1: turn on LED 50 ms
-  //   { LED_BLINK_HOLD, LED_STATE_OFF, 100 }, // step2: turn off LED 100 ms
-  //   { LED_BLINK_LOOP, 0, 0 },               // step3: loop from step1
-  // };
-
-  led_indicator_init(&led_handle_wifi, LED_WIFI_GPIO);
-  ret = led_indicator_start(led_handle_wifi, BLINK_CONNECTING);
-
-  led_indicator_init(&led_handle_status, LED_STATUS_GPIO);
-  ret = led_indicator_start(led_handle_status, BLINK_FACTORY_RESET);
-
 
   // ============================================================================
   //                      FreeRTOS Message Queue Creation

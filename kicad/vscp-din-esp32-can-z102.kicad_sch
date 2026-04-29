@@ -7542,7 +7542,7 @@
 		(fields_autoplaced yes)
 		(uuid "289a84cc-e41a-4ac4-8e59-2157537f1200")
 		(property "Reference" "D2"
-			(at 85.852 166.4878 90)
+			(at 85.852 166.1103 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7552,8 +7552,8 @@
 				(justify left)
 			)
 		)
-		(property "Value" "1N5822"
-			(at 85.852 169.0247 90)
+		(property "Value" "1N5819"
+			(at 85.852 168.5346 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -12562,7 +12562,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "100nF"
+		(property "Value" "0.1uF"
 			(at 170.561 98.933 0)
 			(show_name no)
 			(do_not_autoplace no)
