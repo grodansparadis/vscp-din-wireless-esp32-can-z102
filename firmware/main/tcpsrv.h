@@ -81,6 +81,10 @@ typedef struct _ctx {
 
 #define MSG_MAX_CLIENTS "Max number of clients reached. Disconnecting.\r\n"
 
+// This text is displayed when the user types "HELP" or "?" in the command line interface.
+#define TCPIPSRV_HELP "See https://grodansparadis.github.io/vscp-doc-spec/#/./vscp_tcpiplink for help\r\n"
+
+
 /**
  * @brief Set defaults for the Context Defaults object
  * 

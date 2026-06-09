@@ -148,6 +148,7 @@ vscp_link_callback_help(const void *pdata, const char *arg)
   // Get pointer to context
   ctx_t *pctx = (ctx_t *) pdata;
 
+  send(pctx->sock, TCPIPSRV_HELP, strlen(TCPIPSRV_HELP), 0);
   send(pctx->sock, VSCP_LINK_MSG_OK, strlen(VSCP_LINK_MSG_OK), 0);
   return VSCP_ERROR_SUCCESS;
 }
