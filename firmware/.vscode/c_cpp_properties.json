@@ -8,7 +8,7 @@
         "${env:IDF_PATH}/components/**",
         "${workspaceFolder}/firmware/managed_components/**",
         "${workspaceFolder}/firmware/main/**",
-        "${workspaceFolder}/firmware/third_party/vscp-firmware/**",
+        "${workspaceFolder}/firmware/build/_deps/vscp_firmware-src/**",
         "${workspaceFolder}/build/**"
       ],
       "defines": [],

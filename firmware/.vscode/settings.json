@@ -129,7 +129,6 @@
       "approve": true,
       "matchCommandLine": true
     },
-    "git -C /home/akhe/development/VSCP/vscp-din-wireless-esp32-can-z102/firmware/third_party/vscp-firmware": true,
     "git -C /home/akhe/development/VSCP/vscp-din-wireless-esp32-can-z102": true
   },
   "files.watcherExclude": {

@@ -11,6 +11,30 @@ endif()
 math(EXPR BUILD_COUNTER_NEXT "${BUILD_COUNTER} + 1")
 set(PROJECT_VER "0.0.1.${BUILD_COUNTER_NEXT}")
 
+# ---------------------------------------------------------------------------
+# External dependency: vscp-firmware (common VSCP firmware sources)
+#
+# Fetched at configure time into ${CMAKE_BINARY_DIR}/_deps/vscp_firmware-src.
+# To build against a local checkout instead, configure with
+#   -DFETCHCONTENT_SOURCE_DIR_VSCP_FIRMWARE=/path/to/vscp-firmware
+# ---------------------------------------------------------------------------
+include(FetchContent)
+
+set(VSCP_FIRMWARE_GIT_TAG "5ce94f90e316459b6a417106781dbdb9cf35fdd2"
+    CACHE STRING "vscp-firmware git tag/branch/commit to fetch")
+
+FetchContent_Declare(
+    vscp_firmware
+    GIT_REPOSITORY https://github.com/grodansparadis/vscp-firmware.git
+    GIT_TAG        ${VSCP_FIRMWARE_GIT_TAG}
+    # Sources are compiled by the main component; don't add_subdirectory() it.
+    SOURCE_SUBDIR  _no_cmake_
+)
+FetchContent_MakeAvailable(vscp_firmware)
+
+# Used by main/CMakeLists.txt
+set(VSCP_FIRMWARE_DIR "${vscp_firmware_SOURCE_DIR}")
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(vscp_can4vscp_gw)
 

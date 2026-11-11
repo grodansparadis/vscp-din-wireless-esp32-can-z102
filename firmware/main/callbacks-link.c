@@ -95,7 +95,7 @@ vscp_link_callback_welcome(const void *pdata)
 int
 vscp_link_callback_write_client(const void *pdata, const char *msg)
 {
-  if ((NULL == pdata) && (NULL == msg)) {
+  if ((NULL == pdata) || (NULL == msg)) {
     return VSCP_ERROR_INVALID_POINTER;
   }
 
@@ -141,7 +141,7 @@ vscp_link_callback_quit(const void *pdata)
 int
 vscp_link_callback_help(const void *pdata, const char *arg)
 {
-  if ((NULL == pdata) && (NULL == arg)) {
+  if ((NULL == pdata) || (NULL == arg)) {
     return VSCP_ERROR_INVALID_POINTER;
   }
 
@@ -171,7 +171,7 @@ vscp_link_callback_get_interface_count(const void *pdata)
 int
 vscp_link_callback_get_interface(const void *pdata, uint16_t index, struct vscp_interface_info *pif)
 {
-  if ((NULL == pdata) && (NULL == pif)) {
+  if ((NULL == pdata) || (NULL == pif)) {
     return VSCP_ERROR_UNKNOWN_ITEM;
   }
 
@@ -231,7 +231,7 @@ vscp_link_callback_close_interface(const void *pdata, uint8_t *pguid)
 int
 vscp_link_callback_check_user(const void *pdata, const char *arg)
 {
-  if ((NULL == pdata) && (NULL == arg)) {
+  if ((NULL == pdata) || (NULL == arg)) {
     ESP_LOGE(TAG, "Invalid context pointer or user arg\n");
     return VSCP_ERROR_INVALID_POINTER;
   }
@@ -261,7 +261,7 @@ vscp_link_callback_check_user(const void *pdata, const char *arg)
 int
 vscp_link_callback_check_password(const void *pdata, const char *arg)
 {
-  if ((NULL == pdata) && (NULL == arg)) {
+  if ((NULL == pdata) || (NULL == arg)) {
     ESP_LOGE(TAG, "Invalid context pointer or password arg\n");
     return VSCP_ERROR_INVALID_POINTER;
   }
@@ -313,7 +313,7 @@ vscp_link_callback_challenge(const void *pdata, const char *arg)
 {
   char buf[80];
   char random_data[32];
-  if ((NULL == pdata) && (NULL == arg)) {
+  if ((NULL == pdata) || (NULL == arg)) {
     return VSCP_ERROR_INVALID_POINTER;
   }
 
@@ -406,7 +406,7 @@ vscp_link_callback_check_privilege(const void *pdata, uint8_t priv)
 int
 vscp_link_callback_test(const void *pdata, const char *arg)
 {
-  if ((NULL == pdata) && (NULL == arg)) {
+  if ((NULL == pdata) || (NULL == arg)) {
     return VSCP_ERROR_INVALID_POINTER;
   }
 
@@ -689,7 +689,7 @@ vscp_link_callback_clrAll(const void *pdata)
 int
 vscp_link_callback_get_channel_id(const void *pdata, uint16_t *pchid)
 {
-  if ((NULL == pdata) && (NULL == pchid)) {
+  if ((NULL == pdata) || (NULL == pchid)) {
     return VSCP_ERROR_INVALID_POINTER;
   }
 

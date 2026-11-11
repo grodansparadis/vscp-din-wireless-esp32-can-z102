@@ -21,7 +21,7 @@
   case one should check the max data size for events that are of
   interest and set the max size accordingly
 */
-#define VSCP_LINK_MAX_BUF (2680)
+#define VSCP_LINK_MAX_BUF (2680u)
 
 /*!
   Define to show custom help. The callback is called so you can respond
@@ -41,8 +41,8 @@
   Size for inout buffer and outputbuffer.
   Must be at least one for each fifo
 */
-#define VSCP_LINK_MAX_IN_FIFO_SIZE  (10)
-#define VSCP_LINK_MAX_OUT_FIFO_SIZE (10)
+#define VSCP_LINK_MAX_IN_FIFO_SIZE  (16u)
+#define VSCP_LINK_MAX_OUT_FIFO_SIZE (16u)
 
 /**
  * Enable command also when rcvloop is active
@@ -60,6 +60,7 @@
 
 /*!
   Name of device for level II capabilities announcement event.
+  Max 32 characters.
 */
 #define THIS_FIRMWARE_DEVICE_NAME "VSCP Wireless CAN Gateway"
 
@@ -187,14 +188,16 @@
 #define THIS_FIRMWARE_FAMILY_TYPE (0)
 
 /**
- * @brief Maximum number of simultanonus TCP/IP connections
+ * @brief Maximum number of simultaneous TCP/IP connections
  * This is the maximum simultaneous number
  * of connections to the server
  */
 #define MAX_TCP_CONNECTIONS 2
 
-/// TODO !!!!!!!!!
-#define THIS_FIRMWARE_TCPIP_LINK_MAX_BUFFER         2048
+/// tcp/ip data buffer size for link protocol
+#define THIS_FIRMWARE_TCPIP_LINK_MAX_BUFFER         2048u
+
+// Enable rcvloop command in link protocol
 #define THIS_FIRMWARE_TCPIP_LINK_ENABLE_RCVLOOP_CMD 1
 
 // Firmware helper functionality switches

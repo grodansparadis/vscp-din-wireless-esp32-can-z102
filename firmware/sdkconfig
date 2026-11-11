@@ -1,6 +1,6 @@
 #
 # Automatically generated file. DO NOT EDIT.
-# Espressif IoT Development Framework (ESP-IDF) 6.0.1 Project Configuration
+# Espressif IoT Development Framework (ESP-IDF) 6.0.3 Project Configuration
 #
 # default:
 CONFIG_SOC_ADC_SUPPORTED=y
@@ -670,6 +670,10 @@ CONFIG_SECURE_BOOT_V2_PREFERRED=y
 # default:
 # CONFIG_SECURE_SIGNED_APPS_NO_SECURE_BOOT is not set
 # default:
+CONFIG_SECURE_BOOT_IMAGE_DIGEST_LEN=32
+# default:
+CONFIG_SECURE_BOOT_ROM_FAST_WAKE_RESERVE_SIZE=0
+# default:
 # CONFIG_SECURE_BOOT is not set
 # default:
 # CONFIG_SECURE_FLASH_ENC_ENABLED is not set
@@ -947,6 +951,44 @@ CONFIG_BT_CONTROLLER_ENABLED=y
 # CONFIG_BT_CONTROLLER_DISABLED is not set
 
 #
+# Common Options
+#
+# default:
+CONFIG_BT_ALARM_MAX_NUM=50
+# default:
+CONFIG_BT_BLE_HOST_ALLOW_SUB_SPEC_MIN_CONN_INT=y
+# default:
+CONFIG_BT_SMP_CRYPTO_STACK_TINYCRYPT=y
+# default:
+# CONFIG_BT_SMP_CRYPTO_STACK_MBEDTLS is not set
+
+#
+# BT Logs
+#
+
+#
+# Log Sources
+#
+# end of Log Sources
+
+# default:
+# CONFIG_BT_LOG_CRITICAL_ONLY is not set
+# default:
+# CONFIG_BLE_LOG_ENABLED is not set
+
+#
+# Legacy SPI Log Output (Deprecated - use BT Log Async Output instead)
+#
+# default:
+# CONFIG_BT_BLE_LOG_SPI_OUT_ENABLED is not set
+# end of Legacy SPI Log Output (Deprecated - use BT Log Async Output instead)
+# end of BT Logs
+
+# default:
+# CONFIG_BT_LE_USED_MEM_STATISTICS_ENABLED is not set
+# end of Common Options
+
+#
 # NimBLE Options
 #
 
@@ -1038,6 +1080,8 @@ CONFIG_BT_NIMBLE_HS_STOP_TIMEOUT_MS=2000
 CONFIG_BT_NIMBLE_USE_ESP_TIMER=y
 # default:
 # CONFIG_BT_NIMBLE_HS_FLOW_CTRL is not set
+# default:
+CONFIG_BT_NIMBLE_DEFER_CONN_EVENTS_UNTIL_CONNECT=y
 # end of GAP
 
 #
@@ -1153,6 +1197,10 @@ CONFIG_BT_NIMBLE_DIS_SERVICE=y
 # CONFIG_BT_NIMBLE_SVC_DIS_SYSTEM_ID is not set
 # default:
 # CONFIG_BT_NIMBLE_SVC_DIS_PNP_ID is not set
+# default:
+CONFIG_BT_NIMBLE_SVC_DIS_IEEE=y
+# default:
+CONFIG_BT_NIMBLE_SVC_DIS_UDI=y
 # default:
 # CONFIG_BT_NIMBLE_SVC_DIS_INCLUDED is not set
 # default:
@@ -1331,6 +1379,8 @@ CONFIG_BT_NIMBLE_EXTRA_ADV_FIELDS=y
 # default:
 CONFIG_BT_CTRL_MODE_EFF=1
 # default:
+CONFIG_BT_CTRL_CHECK_CONFIG_EFF=1
+# default:
 CONFIG_BT_CTRL_BLE_MAX_ACT=6
 # default:
 CONFIG_BT_CTRL_BLE_MAX_ACT_EFF=6
@@ -1492,37 +1542,16 @@ CONFIG_BT_CTRL_BLE_SECURITY_ENABLE=y
 CONFIG_BT_CTRL_BLE_ADV=y
 # default:
 # CONFIG_BT_CTRL_CHECK_CONNECT_IND_ACCESS_ADDRESS is not set
+# default:
+CONFIG_BT_CTRL_BLE_MIN_CONN_INTERVAL_ENABLE=y
 
 #
 # Controller debug log Options (Experimental)
 #
+# default:
+# CONFIG_BT_CTRL_LE_LOG_EN is not set
 # end of Controller debug log Options (Experimental)
 # end of Controller Options
-
-#
-# Common Options
-#
-# default:
-CONFIG_BT_ALARM_MAX_NUM=50
-# default:
-CONFIG_BT_SMP_CRYPTO_STACK_TINYCRYPT=y
-# default:
-# CONFIG_BT_SMP_CRYPTO_STACK_MBEDTLS is not set
-
-#
-# BLE Log
-#
-# default:
-# CONFIG_BLE_LOG_ENABLED is not set
-# end of BLE Log
-
-# default:
-# CONFIG_BT_BLE_LOG_SPI_OUT_ENABLED is not set
-# default:
-# CONFIG_BT_BLE_LOG_UHCI_OUT_ENABLED is not set
-# default:
-# CONFIG_BT_LE_USED_MEM_STATISTICS_ENABLED is not set
-# end of Common Options
 
 # default:
 # CONFIG_BT_HCI_LOG_DEBUG_EN is not set
@@ -1581,8 +1610,6 @@ CONFIG_EFUSE_MAX_BLK_LEN=256
 CONFIG_ESP_TLS_USING_MBEDTLS=y
 # default:
 # CONFIG_ESP_TLS_CUSTOM_STACK is not set
-# default:
-# CONFIG_ESP_TLS_USE_SECURE_ELEMENT is not set
 # default:
 CONFIG_ESP_TLS_USE_DS_PERIPHERAL=y
 # default:
@@ -1862,6 +1889,8 @@ CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=y
 CONFIG_ESP_HTTP_CLIENT_EVENT_POST_TIMEOUT=2000
 # default:
 # CONFIG_ESP_HTTP_CLIENT_SAVE_RESPONSE_HEADERS is not set
+# default:
+CONFIG_ESP_HTTP_CLIENT_STRICT_HEADER_BUFFER=y
 # end of ESP HTTP client
 
 #
@@ -1880,6 +1909,8 @@ CONFIG_HTTPD_PURGE_BUF_LEN=32
 CONFIG_HTTPD_WS_SUPPORT=y
 # default:
 # CONFIG_HTTPD_QUEUE_WORK_BLOCKING is not set
+# default:
+CONFIG_HTTPD_ENABLE_EVENTS=y
 # default:
 CONFIG_HTTPD_SERVER_EVENT_POST_TIMEOUT=2000
 # default:
@@ -1906,8 +1937,6 @@ CONFIG_ESP_HTTPS_OTA_EVENT_POST_TIMEOUT=2000
 #
 # default:
 # CONFIG_ESP_HTTPS_SERVER_ENABLE is not set
-# default:
-CONFIG_ESP_HTTPS_SERVER_EVENT_POST_TIMEOUT=2000
 # default:
 # CONFIG_ESP_HTTPS_SERVER_CERT_SELECT_HOOK is not set
 # end of ESP HTTPS server
@@ -2192,6 +2221,8 @@ CONFIG_ESP_PHY_PLL_TRACK_PERIOD_MS=1000
 CONFIG_ESP_PHY_IRAM_OPT=y
 # default:
 # CONFIG_ESP_PHY_DEBUG is not set
+# default:
+CONFIG_ESP_PHY_ENABLE_VERSION_PRINT=y
 # end of PHY
 
 #
@@ -3210,6 +3241,8 @@ CONFIG_MBEDTLS_COMPILER_OPTIMIZATION_SIZE=y
 # default:
 CONFIG_MBEDTLS_FS_IO=y
 # default:
+# CONFIG_MBEDTLS_PSA_ITS_CUSTOM_STORAGE_BACKEND is not set
+# default:
 CONFIG_MBEDTLS_THREADING_C=y
 # default:
 # CONFIG_MBEDTLS_THREADING_ALT is not set
@@ -3329,8 +3362,6 @@ CONFIG_MBEDTLS_TLS_SERVER_AND_CLIENT=y
 # default:
 # CONFIG_MBEDTLS_TLS_CLIENT_ONLY is not set
 # default:
-# CONFIG_MBEDTLS_TLS_DISABLED is not set
-# default:
 # CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE is not set
 # default:
 # CONFIG_MBEDTLS_SSL_CONTEXT_SERIALIZATION is not set
@@ -3415,8 +3446,6 @@ CONFIG_MBEDTLS_CMAC_C=y
 #
 # Asymmetric Ciphers
 #
-# default:
-CONFIG_MBEDTLS_BIGNUM_C=y
 # default:
 CONFIG_MBEDTLS_RSA_C=y
 # default:
@@ -3507,6 +3536,14 @@ CONFIG_MBEDTLS_LARGE_KEY_SOFTWARE_MPI=y
 CONFIG_MBEDTLS_MPI_USE_INTERRUPT=y
 # default:
 CONFIG_MBEDTLS_MPI_INTERRUPT_LEVEL=0
+
+#
+# Security hardening
+#
+# default:
+# CONFIG_MBEDTLS_CONSTANT_TIME_PRIME_GEN is not set
+# end of Security hardening
+
 # default:
 CONFIG_MBEDTLS_HARDWARE_AES=y
 # default:
@@ -3519,10 +3556,7 @@ CONFIG_MBEDTLS_AES_USE_INTERRUPT=y
 CONFIG_MBEDTLS_AES_INTERRUPT_LEVEL=0
 # default:
 CONFIG_MBEDTLS_AES_HW_SMALL_DATA_LEN_OPTIM=y
-# default:
-# CONFIG_MBEDTLS_ATCA_HW_ECDSA_SIGN is not set
-# default:
-# CONFIG_MBEDTLS_ATCA_HW_ECDSA_VERIFY is not set
+# CONFIG_MBEDTLS_SECURE_ELEMENT_DRIVER_ENABLED is not set
 # default:
 CONFIG_MBEDTLS_HARDWARE_RSA_DS_PERIPHERAL=y
 # end of Hardware Acceleration
@@ -4215,6 +4249,8 @@ CONFIG_TCPIP_TASK_AFFINITY_NO_AFFINITY=y
 # CONFIG_TCPIP_TASK_AFFINITY_CPU0 is not set
 CONFIG_TCPIP_TASK_AFFINITY=0x7FFFFFFF
 # CONFIG_PPP_SUPPORT is not set
+# CONFIG_MBEDTLS_ATCA_HW_ECDSA_SIGN is not set
+# CONFIG_MBEDTLS_ATCA_HW_ECDSA_VERIFY is not set
 CONFIG_ESP32_PTHREAD_TASK_PRIO_DEFAULT=5
 CONFIG_ESP32_PTHREAD_TASK_STACK_SIZE_DEFAULT=3072
 CONFIG_ESP32_PTHREAD_STACK_MIN=768

@@ -16,13 +16,13 @@ idf_component_register(SRCS "main.c"
                             "callbacks-ws1.c"
                             "vscp-binary.c"
                             "callbacks-binary.c"
-                            "../third_party/vscp-firmware/common/vscp-link-protocol.c"
-                            "../third_party/vscp-firmware/common/vscp-firmware-helper.c"
-                            "../third_party/vscp-firmware/common/vscp-crc.c"
-                            "../third_party/vscp-firmware/common/vscp-aes.c"
+                            "${VSCP_FIRMWARE_DIR}/common/vscp-link-protocol.c"
+                            "${VSCP_FIRMWARE_DIR}/common/vscp-firmware-helper.c"
+                            "${VSCP_FIRMWARE_DIR}/common/vscp-crc.c"
+                            "${VSCP_FIRMWARE_DIR}/common/vscp-aes.c"
 
                     INCLUDE_DIRS "." 
-                                  "../third_party/vscp-firmware/common/"
+                                  "${VSCP_FIRMWARE_DIR}/common/"
                     REQUIRES mbedtls
                              esp_driver_twai
                              spi_flash

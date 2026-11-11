@@ -82,7 +82,7 @@ This firmware workspace includes a Codacy CLI wrapper script:
 ./tools/codacy-cli.sh analyze
 ```
 
-The wrapper uses the bundled launcher at `third_party/vscp-firmware/.codacy/cli.sh` and downloads Codacy CLI v2 on first use.
+The wrapper uses the launcher from the vscp-firmware dependency (fetched by CMake FetchContent into `build/_deps/vscp_firmware-src/.codacy/cli.sh`, so run `idf.py reconfigure` once first) and downloads Codacy CLI v2 on first use. Set `CODACY_LAUNCHER` to override the launcher path.
 The default local configuration is in `.codacy/codacy.yaml` and is tuned for this ESP-IDF firmware workspace.
 
 Available VS Code tasks:

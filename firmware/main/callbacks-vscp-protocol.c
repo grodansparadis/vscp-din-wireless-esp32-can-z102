@@ -127,6 +127,7 @@ vscp_frmw2_callback_write_guid(void* const puserdata, uint8_t pos, uint8_t val)
 
   // Commit changes to 'eeprom'
   // TODO eeprom_commit(&eeprom);
+  
 
   return VSCP_ERROR_SUCCESS;
 }
