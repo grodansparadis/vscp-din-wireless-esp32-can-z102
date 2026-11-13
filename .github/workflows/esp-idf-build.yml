@@ -63,6 +63,19 @@ jobs:
 
           idf.py -D SDKCONFIG=sdkconfig.ci build
 
+      - name: Write SHA256SUMS
+        id: sha256sums_67
+        continue-on-error: true
+        shell: bash
+        run: |
+          bash .github/scripts/write-sha256sums.sh "SHA256SUMS-firmware-build-artifacts" <<'SHA256SUMS_PATTERNS'
+          firmware/build/*.bin
+          firmware/build/*.elf
+          firmware/build/*.map
+          firmware/build/bootloader/*.bin
+          firmware/build/partition_table/*.bin
+          SHA256SUMS_PATTERNS
+
       - name: Upload firmware build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -73,6 +86,7 @@ jobs:
             firmware/build/*.map
             firmware/build/bootloader/*.bin
             firmware/build/partition_table/*.bin
+            ${{ steps.sha256sums_67.outputs.file }}
           if-no-files-found: warn
 
   build-twai-network-master:
@@ -94,6 +108,17 @@ jobs:
           idf.py set-target esp32c3
           idf.py build
 
+      - name: Write SHA256SUMS
+        id: sha256sums_98
+        continue-on-error: true
+        shell: bash
+        run: |
+          bash .github/scripts/write-sha256sums.sh "SHA256SUMS-twai-network-master-build-artifacts" <<'SHA256SUMS_PATTERNS'
+          firmware/twai_network_master/build/*.bin
+          firmware/twai_network_master/build/*.elf
+          firmware/twai_network_master/build/*.map
+          SHA256SUMS_PATTERNS
+
       - name: Upload twai_network_master artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -102,6 +127,7 @@ jobs:
             firmware/twai_network_master/build/*.bin
             firmware/twai_network_master/build/*.elf
             firmware/twai_network_master/build/*.map
+            ${{ steps.sha256sums_98.outputs.file }}
           if-no-files-found: warn
 
   build-twai-network-slave:
@@ -123,6 +149,17 @@ jobs:
           idf.py set-target esp32c3
           idf.py build
 
+      - name: Write SHA256SUMS
+        id: sha256sums_127
+        continue-on-error: true
+        shell: bash
+        run: |
+          bash .github/scripts/write-sha256sums.sh "SHA256SUMS-twai-network-slave-build-artifacts" <<'SHA256SUMS_PATTERNS'
+          firmware/twai_network_slave/build/*.bin
+          firmware/twai_network_slave/build/*.elf
+          firmware/twai_network_slave/build/*.map
+          SHA256SUMS_PATTERNS
+
       - name: Upload twai_network_slave artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -131,6 +168,7 @@ jobs:
             firmware/twai_network_slave/build/*.bin
             firmware/twai_network_slave/build/*.elf
             firmware/twai_network_slave/build/*.map
+            ${{ steps.sha256sums_127.outputs.file }}
           if-no-files-found: warn
 
   build-twai-network-listen-only:
@@ -152,6 +190,17 @@ jobs:
           idf.py set-target esp32c3
           idf.py build
 
+      - name: Write SHA256SUMS
+        id: sha256sums_156
+        continue-on-error: true
+        shell: bash
+        run: |
+          bash .github/scripts/write-sha256sums.sh "SHA256SUMS-twai-network-listen-only-build-artifacts" <<'SHA256SUMS_PATTERNS'
+          firmware/twai_network_listen_only/build/*.bin
+          firmware/twai_network_listen_only/build/*.elf
+          firmware/twai_network_listen_only/build/*.map
+          SHA256SUMS_PATTERNS
+
       - name: Upload twai_network_listen_only artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -160,4 +209,5 @@ jobs:
             firmware/twai_network_listen_only/build/*.bin
             firmware/twai_network_listen_only/build/*.elf
             firmware/twai_network_listen_only/build/*.map
+            ${{ steps.sha256sums_156.outputs.file }}
           if-no-files-found: warn

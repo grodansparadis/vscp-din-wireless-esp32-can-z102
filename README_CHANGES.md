@@ -7,6 +7,8 @@ tagged, rename **Unreleased** to the version and date, and start a new
 
 ## Unreleased
 
+- Add scripts/download-artifacts.sh to download and verify the newest CI build artifacts
+- CI writes a SHA256SUMS-<artifact> checksum file into every uploaded build artifact
 - Removed third_party folder (97b168d)
 - Bump ws from 8.19.0 to 8.21.0 in /firmware/test/ws (d544917)
 - Added simplified help message (c82726f)
