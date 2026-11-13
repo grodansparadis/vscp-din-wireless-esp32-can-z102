@@ -1,0 +1,62 @@
+# Changes in vscp-din-wireless-esp32-can-z102
+
+Every change that goes into a release is listed here, newest release first.
+Add each change under **Unreleased** when it is made. When a release is
+tagged, rename **Unreleased** to the version and date, and start a new
+**Unreleased** section above it.
+
+## Unreleased
+
+- Removed third_party folder (97b168d)
+- Bump ws from 8.19.0 to 8.21.0 in /firmware/test/ws (d544917)
+- Added simplified help message (c82726f)
+- Updated schema (aa4ee68)
+- Defined status LED colors (73eb688)
+- Fixed statistics for CAN (d2ae6e6)
+- removed main menu button from start page (b4c95d1)
+- Minor layout fix (cb40ccc)
+- improved wev i/f looks (e295463)
+- Backup/restore of persistent data added (266b079)
+- strengthened the disabled styling (597997a)
+- Option to log to MQTT and UDP (c8d7798)
+- Fixed printf format error (bb71e93)
+- Fixed som info values (21930a1)
+- Fixed minor possible problems (35c2a06)
+- Added codacy cli support (2c31bce)
+- Log view added to web interface (fa41c63)
+- Binary protocol all tests pass (09b9afd)
+- firmware: pin vscp-firmware CRC macro fix (445645a)
+- firmware: migrate CRC refs to vscp-crc names (5a5d138)
+- chore: update vscode approved commands (94c1df5)
+- Binary test written in C (8ac0410)
+- test: add C binary WS1 smoke test (scenarios A/B/C) (7926ae7)
+- Added binary tests (f5732f6)
+- build: track dependencies lock and untrack managed components (1b64863)
+- ws1: fix encrypted binary frame parsing and length recovery (64c3819)
+- Added code of conduct (95d3aad)
+- Initial code added for binary callbacks (61a0a9a)
+- Moved the context pointer to the first argument of functions to be consistent (c3ebd96)
+- Document example certificate key convention (ae3c4d4)
+- Add focused Codacy workflow and remove tracked key (0cd374e)
+- Removed backup files from git (bb062c1)
+- Added label for z102 (6aaf04d)
+- All callback embryous in place (7ca3d22)
+- All binary calls in place (bfa6261)
+- All binary function codes handled. (de9ce65)
+- Updated coded for esp-idf v6.0 (563dc39)
+- Removed some warnings (27dc6b8)
+- Fixed workflow (edeafe5)
+- Added python increment file (a3466a8)
+- Added build versioning (4b97168)
+- Added CAN console with discovery (7a2781f)
+- Added CAN console <-> ws1 (b17fb7c)
+- Fixed memory leak (e167665)
+- Authentication callback fixed (43f8a05)
+- Actually using sdkconfig (8a568e7)
+- Added missing include file (cfd32e0)
+- Added hook for websocket and enabled functionality (5372f0c)
+- Added initial websockets ws1 functionality (d8b3424)
+- Multicast interface fully in place (e801a54)
+- ...and 50 earlier commits (see `git log`)
+
+No release has been tagged yet.
